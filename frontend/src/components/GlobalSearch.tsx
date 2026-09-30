@@ -4,6 +4,11 @@ import { useNavigate } from 'react-router-dom'
 import { apiRequest } from '../api/client'
 
 type SearchResult = { id: string; module: string; type: string; title: string; snippet: string; path: string }
+const visibleModules = new Set(['today', 'learning', 'diet', 'games'])
+
+export function visibleSearchResults(results: SearchResult[]) {
+  return results.filter((item) => visibleModules.has(item.module))
+}
 
 export function GlobalSearch() {
   const [open, setOpen] = useState(false)
@@ -16,7 +21,7 @@ export function GlobalSearch() {
     const clean = value.trim()
     if (!clean) return
     setQuery(clean); setOpen(true); setLoading(true)
-    try { setResults(await apiRequest<SearchResult[]>(`/search?q=${encodeURIComponent(clean)}`)) }
+    try { setResults(visibleSearchResults(await apiRequest<SearchResult[]>(`/search?q=${encodeURIComponent(clean)}`))) }
     finally { setLoading(false) }
   }
 

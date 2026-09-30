@@ -23,7 +23,7 @@ describe('core pages', () => {
     vi.restoreAllMocks()
   })
 
-  it('renders home statistics, agenda, notes and six summaries', async () => {
+  it('renders home statistics, agenda, notes and only three retained summaries', async () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(() => json({
       date: '2026-09-30',
       stats: { total: 1, completed: 0, completion_rate: 0, must: 1, overdue: 0, due_soon: 0 },
@@ -38,8 +38,12 @@ describe('core pages', () => {
     render(<MemoryRouter><HomePage /></MemoryRouter>)
     expect(await screen.findByText('完成核心闭环')).toBeInTheDocument()
     expect(screen.getByText('记录灵感')).toBeInTheDocument()
-    for (const label of ['自媒体', '开发工作', '咨询工作', '学习计划', '饮食计划', '游戏娱乐']) {
+    expect(screen.getByText('其他事项')).toBeInTheDocument()
+    for (const label of ['学习计划', '饮食计划', '游戏娱乐']) {
       expect(screen.getAllByText(label).length).toBeGreaterThan(0)
+    }
+    for (const removed of ['自媒体', '开发工作', '咨询工作']) {
+      expect(screen.queryByText(removed)).not.toBeInTheDocument()
     }
   })
 

@@ -11,14 +11,16 @@ class DocumentationContractTests(unittest.TestCase):
         self.assertTrue(path.exists(), f"missing contract document: {relative}")
         return path.read_text(encoding="utf-8")
 
-    def test_ui_has_all_primary_routes(self):
+    def test_ui_has_only_the_six_retained_primary_routes(self):
         text = self.read("docs/UI_SPEC.md")
         for route in [
-            "`/`", "`/today`", "`/media`", "`/development`",
-            "`/consulting`", "`/learning`", "`/diet`", "`/games`",
-            "`/settings`",
+            "| 首页总览 | `/` |", "| 今日计划 | `/today` |",
+            "| 学习计划 | `/learning` |", "| 饮食计划 | `/diet` |",
+            "| 游戏娱乐 | `/games` |", "| 数据与设置 | `/settings` |",
         ]:
             self.assertIn(route, text)
+        for removed_route in ["| 自媒体 |", "| 开发工作 |", "| 咨询工作 |"]:
+            self.assertNotIn(removed_route, text)
 
     def test_data_model_has_all_domains(self):
         text = self.read("docs/DATA_MODEL.md")

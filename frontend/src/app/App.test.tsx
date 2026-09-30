@@ -20,13 +20,15 @@ describe('application shell', () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation((input) => String(input).includes('/home') ? json(emptyHome) : json([]))
   })
 
-  it('shows all nine primary navigation items', async () => {
+  it('shows only the six retained primary navigation items', async () => {
     render(<MemoryRouter><App /></MemoryRouter>)
     for (const label of [
-      '首页总览', '今日计划', '自媒体', '开发工作', '咨询工作',
-      '学习计划', '饮食计划', '游戏娱乐', '数据与设置',
+      '首页总览', '今日计划', '学习计划', '饮食计划', '游戏娱乐', '数据与设置',
     ]) {
       expect(screen.getAllByText(label).length).toBeGreaterThan(0)
+    }
+    for (const removed of ['自媒体', '开发工作', '咨询工作']) {
+      expect(screen.queryByRole('link', { name: removed })).not.toBeInTheDocument()
     }
     expect(await screen.findByText('今天，专注最重要的事')).toBeInTheDocument()
   })
@@ -34,9 +36,15 @@ describe('application shell', () => {
   it('navigates between primary pages', async () => {
     const user = userEvent.setup()
     render(<MemoryRouter><App /></MemoryRouter>)
-    await user.click(screen.getByRole('link', { name: /开发工作/ }))
-    expect(await screen.findByRole('heading', { name: '开发工作', level: 3 })).toBeInTheDocument()
-    expect(await screen.findByText('按项目管理功能需求、任务、问题、里程碑和开发日志')).toBeInTheDocument()
+    await user.click(screen.getByRole('link', { name: /学习计划/ }))
+    expect(await screen.findByRole('heading', { name: '学习计划', level: 3 })).toBeInTheDocument()
+    expect(await screen.findByText('从长期目标拆到章节、任务和每次学习记录')).toBeInTheDocument()
+  })
+
+  it.each(['/media', '/development', '/consulting'])('redirects removed route %s to the overview', async (route) => {
+    render(<MemoryRouter initialEntries={[route]}><App /></MemoryRouter>)
+    expect(await screen.findByText('今天，专注最重要的事')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '首页总览', level: 3 })).toBeInTheDocument()
   })
 
   it('refreshes the current page after quick-create succeeds', async () => {
@@ -51,7 +59,7 @@ describe('application shell', () => {
     expect(await screen.findByText('今天，专注最重要的事')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: '快速新增' }))
     const title = await screen.findByLabelText('标题或内容')
-    await user.type(title, '快速创建事项')
+    await user.type(title, '新事项')
     await user.click(screen.getByRole('button', { name: /创\s*建/ }))
     await waitFor(() => expect(fetchMock.mock.calls.some(([input, init]) => String(input).endsWith('/agenda') && init?.method === 'POST')).toBe(true))
     await waitFor(() => expect(homeReads).toBeGreaterThanOrEqual(2))

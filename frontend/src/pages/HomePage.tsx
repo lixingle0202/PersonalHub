@@ -8,9 +8,6 @@ import { ErrorPanel, LoadingPanel } from '../components/StatePanels'
 import type { AgendaItem, HomeData } from '../types'
 
 const summaryMeta = {
-  media: ['自媒体', '/media'],
-  development: ['开发工作', '/development'],
-  consulting: ['咨询工作', '/consulting'],
   learning: ['学习计划', '/learning'],
   diet: ['饮食计划', '/diet'],
   games: ['游戏娱乐', '/games'],

@@ -4,7 +4,7 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { setLocalToken } from '../api/client'
 import { GlobalSearch } from '../components/GlobalSearch'
-import { quickCreateEndpoint } from '../components/QuickCreate'
+import { quickCreateEndpoint, quickCreateTargets } from '../components/QuickCreate'
 import { SettingsPage } from './SettingsPage'
 
 function json(body: unknown, status = 200) {
@@ -26,30 +26,30 @@ describe('system-wide features', () => {
     document.documentElement.style.removeProperty('--primary-color')
   })
 
-  it('maps every quick-create target to its own domain endpoint', () => {
+  it('maps every retained quick-create target to its own domain endpoint', () => {
+    expect(quickCreateTargets.map((item) => item.value)).toEqual(['agenda', 'note', 'learning', 'diet', 'games'])
     expect(quickCreateEndpoint('agenda', {})).toBe('/agenda')
     expect(quickCreateEndpoint('note', {})).toBe('/quick-notes')
-    expect(quickCreateEndpoint('media', {})).toBe('/media')
-    expect(quickCreateEndpoint('development', { parent_id: 'p1' })).toBe('/dev/projects/p1/tasks')
-    expect(quickCreateEndpoint('consulting', {})).toBe('/consultations')
     expect(quickCreateEndpoint('learning', { parent_id: 'g1' })).toBe('/learning/goals/g1/tasks')
     expect(quickCreateEndpoint('diet', {})).toBe('/diet/meals')
     expect(quickCreateEndpoint('games', {})).toBe('/games')
   })
 
-  it('searches across modules and navigates to the selected result', async () => {
+  it('filters removed modules from search and opens a retained result', async () => {
     const user = userEvent.setup()
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(() => json([
       { id: 'p1', module: 'development', type: '项目', title: '个人中心', snippet: '本地应用', path: '/development?project=p1' },
+      { id: 'g1', module: 'learning', type: '学习目标', title: 'Python 入门', snippet: '每天练习', path: '/learning?item=g1' },
     ]))
     render(<MemoryRouter initialEntries={['/']}><GlobalSearch /><LocationProbe /></MemoryRouter>)
 
-    await user.type(screen.getByRole('searchbox', { name: '全局搜索' }), '个人中心')
+    await user.type(screen.getByRole('searchbox', { name: '全局搜索' }), '计划')
     await user.keyboard('{Enter}')
-    expect(await screen.findByText('个人中心')).toBeInTheDocument()
-    expect(fetchMock).toHaveBeenCalledWith('/api/v1/search?q=%E4%B8%AA%E4%BA%BA%E4%B8%AD%E5%BF%83', expect.any(Object))
-    await user.click(screen.getByText('个人中心'))
-    expect(screen.getByTestId('location')).toHaveTextContent('/development')
+    expect(await screen.findByText('Python 入门')).toBeInTheDocument()
+    expect(screen.queryByText('个人中心')).not.toBeInTheDocument()
+    expect(fetchMock).toHaveBeenCalledWith('/api/v1/search?q=%E8%AE%A1%E5%88%92', expect.any(Object))
+    await user.click(screen.getByText('Python 入门'))
+    expect(screen.getByTestId('location')).toHaveTextContent('/learning')
   })
 
   it('loads, applies and saves local preferences', async () => {

@@ -5,18 +5,15 @@ import type { AgendaItem } from '../types'
 
 const moduleNames: Record<string, string> = {
   general: '手动添加',
-  media: '自媒体',
-  development: '开发工作',
-  consulting: '咨询工作',
+  media: '其他事项',
+  development: '其他事项',
+  consulting: '其他事项',
   learning: '学习计划',
   diet: '饮食计划',
   games: '游戏娱乐',
 }
 
 function sourceLink(item: AgendaItem) {
-  if (item.module === 'development') return `/development?task=${item.source_id ?? ''}`
-  if (item.module === 'media') return `/media?item=${item.source_id ?? ''}`
-  if (item.module === 'consulting') return `/consulting?item=${item.source_id ?? ''}`
   if (item.module === 'learning') return `/learning?item=${item.source_id ?? ''}`
   if (item.module === 'diet') return `/diet?item=${item.source_id ?? ''}`
   if (item.module === 'games') return `/games?item=${item.source_id ?? ''}`

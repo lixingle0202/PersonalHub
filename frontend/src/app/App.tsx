@@ -1,13 +1,10 @@
 import {
   AppstoreOutlined,
   CalendarOutlined,
-  CodeOutlined,
   CoffeeOutlined,
-  CustomerServiceOutlined,
   DashboardOutlined,
   ReadOutlined,
   SettingOutlined,
-  VideoCameraOutlined,
 } from '@ant-design/icons'
 import { Button, Layout, Menu, Space, Typography } from 'antd'
 import { lazy, Suspense, useState } from 'react'
@@ -17,9 +14,6 @@ import { LoadingPanel } from '../components/StatePanels'
 
 const HomePage = lazy(() => import('../pages/HomePage').then((module) => ({ default: module.HomePage })))
 const TodayPage = lazy(() => import('../pages/TodayPage').then((module) => ({ default: module.TodayPage })))
-const DevelopmentPage = lazy(() => import('../pages/DevelopmentPage').then((module) => ({ default: module.DevelopmentPage })))
-const MediaPage = lazy(() => import('../pages/MediaPage').then((module) => ({ default: module.MediaPage })))
-const ConsultingPage = lazy(() => import('../pages/ConsultingPage').then((module) => ({ default: module.ConsultingPage })))
 const LearningPage = lazy(() => import('../pages/LearningPage').then((module) => ({ default: module.LearningPage })))
 const DietPage = lazy(() => import('../pages/DietPage').then((module) => ({ default: module.DietPage })))
 const GamesPage = lazy(() => import('../pages/GamesPage').then((module) => ({ default: module.GamesPage })))
@@ -32,9 +26,6 @@ const { Header, Sider, Content } = Layout
 const pages = [
   { path: '/', label: '首页总览', icon: <DashboardOutlined /> },
   { path: '/today', label: '今日计划', icon: <CalendarOutlined /> },
-  { path: '/media', label: '自媒体', icon: <VideoCameraOutlined /> },
-  { path: '/development', label: '开发工作', icon: <CodeOutlined /> },
-  { path: '/consulting', label: '咨询工作', icon: <CustomerServiceOutlined /> },
   { path: '/learning', label: '学习计划', icon: <ReadOutlined /> },
   { path: '/diet', label: '饮食计划', icon: <CoffeeOutlined /> },
   { path: '/games', label: '游戏娱乐', icon: <AppstoreOutlined /> },
@@ -74,9 +65,6 @@ export function App() {
           <Suspense fallback={<LoadingPanel />}><Routes key={dataVersion}>
             <Route path="/" element={<HomePage />} />
             <Route path="/today" element={<TodayPage />} />
-            <Route path="/development" element={<DevelopmentPage />} />
-            <Route path="/media" element={<MediaPage />} />
-            <Route path="/consulting" element={<ConsultingPage />} />
             <Route path="/learning" element={<LearningPage />} />
             <Route path="/diet" element={<DietPage />} />
             <Route path="/games" element={<GamesPage />} />
