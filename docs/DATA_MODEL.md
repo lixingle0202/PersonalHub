@@ -1,0 +1,98 @@
+# PersonalHub 数据模型
+
+## 1. 通用约定
+
+- 主键为 UUID 字符串。
+- 日期为 `YYYY-MM-DD`，时间为 `HH:mm`，时间戳为 ISO 8601。
+- 可归档记录包含 `archived_at`；可删除记录包含 `deleted_at`。
+- 所有用户可编辑记录包含 `created_at` 和 `updated_at`。
+- SQLite 开启外键约束。
+- 多表写入必须使用事务。
+
+## 2. 核心表
+
+### settings
+
+键值式设置：`key`、`value_json`、`updated_at`。
+
+### agenda_items
+
+`id`、`title`、`plan_date`、`start_time`、`end_time`、`priority`、`bucket`、`status`、`sort_order`、`module`、`source_type`、`source_id`、`notes`、`completed_at`、通用时间字段。
+
+`source_type + source_id` 在需要一对一计划关联的来源上保持唯一。日期和完成状态以本表为准，模块表不重复保存。
+
+### quick_notes
+
+`id`、`content`、`is_important`、`is_archived`、`converted_type`、`converted_id`、通用时间字段。
+
+### daily_reviews
+
+`id`、`review_date`（唯一）、`summary`、通用时间字段。
+
+## 3. 自媒体
+
+- `media_contents`：标题、平台、内容形式、阶段、大纲、正文、参考链接、发布链接、实际发布日期、备注、关联计划 ID、通用时间字段。
+- `media_metrics`：内容 ID、记录日期、阅读、点赞、评论、收藏。
+
+删除内容时表现数据跟随进入不可见状态；永久删除内容时级联删除表现数据。
+
+## 4. 开发工作
+
+- `dev_projects`：名称、目标、说明、状态、开始日期、截止日期、通用时间字段。
+- `dev_requirements`：项目 ID、标题、说明、状态、优先级、通用时间字段。
+- `dev_tasks`：项目 ID、标题、说明、工作流状态、关联计划 ID、通用时间字段。
+- `dev_issues`：项目 ID、标题、类型、严重程度、是否阻塞、状态、处理记录、通用时间字段。
+- `dev_milestones`：项目 ID、名称、目标日期、是否完成、通用时间字段。
+- `dev_logs`：项目 ID、日志日期、完成内容、问题、重要决定、通用时间字段。
+
+项目进度由未删除开发任务中 `done` 的数量除以任务总数得到。
+
+## 5. 咨询工作
+
+- `consultations`：标题、咨询人、联系方式、原始问题、收到时间、阶段、背景、目标、当前情况、限制、总体建议、推荐资料、备注、通用时间字段。
+- `consultation_stages`：咨询 ID、标题、目标、步骤、时间安排、排序、通用时间字段。
+- `consultation_communications`：咨询 ID、沟通时间、内容、反馈、修改、通用时间字段。
+- `consultation_followups`：咨询 ID、标题、关联计划 ID、通用时间字段。
+
+咨询方案复制内容由咨询主记录、阶段和推荐资料即时组合，不保存第二份完整正文。
+
+## 6. 学习计划
+
+- `learning_goals`：名称、目标、开始日期、计划完成日期、预计投入分钟、通用时间字段。
+- `learning_sections`：目标 ID、父章节 ID、名称、排序、是否完成、通用时间字段。
+- `learning_tasks`：目标 ID、章节 ID、标题、关联计划 ID、通用时间字段。
+- `study_sessions`：目标 ID、学习日期、实际分钟、笔记、问题、下一步、通用时间字段。
+- `learning_resources`：目标 ID、名称、链接、备注、通用时间字段。
+
+目标进度由未删除叶子章节的完成数量计算。
+
+## 7. 饮食计划
+
+- `dishes`：名称、做法、营养备注、备注、通用时间字段。
+- `dish_ingredients`：菜品 ID、食材名、数量、单位。
+- `meal_plans`：日期、餐次、菜品 ID、实际饮食、关联计划 ID、通用时间字段。
+- `daily_health_logs`：日期（唯一）、饮水毫升、体重、感受、通用时间字段。
+- `shopping_lists`：名称、开始日期、结束日期、通用时间字段。
+- `shopping_items`：清单 ID、食材名、数量文本、是否完成、是否手动添加、通用时间字段。
+
+购物清单按规范化后的食材名称和单位合并；无法合并的数量保留为文本条目。
+
+## 8. 游戏娱乐
+
+- `games`：名称、平台、类型、状态、当前进度、下一步目标、笔记、评分、通用时间字段。
+- `game_plans`：游戏 ID、关联计划 ID、计划分钟、通用时间字段。
+- `game_sessions`：游戏 ID、游玩日期、实际分钟、备注、通用时间字段。
+- `entertainment_budgets`：周期类型、分钟上限、起始日期、通用时间字段。
+
+## 9. 关系规则
+
+- 首页只读取和计算，不持有独立业务副本。
+- 计划日期、计划完成状态和计划排序统一保存在 `agenda_items`。
+- 模块业务记录通过计划 ID 关联计划事项。
+- 修改计划日期不复制业务记录。
+- 完成模块任务时通过同一事务更新计划状态及必要的业务工作流状态。
+- 软删除父记录时，子记录在正常查询中不可见；恢复父记录后仍未永久删除的子记录重新可见。
+
+## 10. 索引
+
+至少为计划日期、计划状态、模块、来源、各模块状态、项目外键、咨询跟进日期、学习日期、饮食日期、游戏日期和所有 `deleted_at` 建立索引。
