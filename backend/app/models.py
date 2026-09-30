@@ -233,6 +233,7 @@ class LearningGoal(LifecycleMixin, Base):
     start_date: Mapped[date | None] = mapped_column(Date)
     target_date: Mapped[date | None] = mapped_column(Date)
     estimated_minutes: Mapped[int] = mapped_column(Integer, default=0)
+    progress_override: Mapped[int | None] = mapped_column(Integer)
 
 
 class LearningSection(LifecycleMixin, Base):

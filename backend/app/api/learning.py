@@ -26,6 +26,15 @@ class GoalIn(BaseModel):
     estimated_minutes: int = Field(default=0, ge=0)
 
 
+class GoalUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1)
+    goal: str | None = None
+    start_date: date | None = None
+    target_date: date | None = None
+    estimated_minutes: int | None = Field(default=None, ge=0)
+    progress: int | None = Field(default=None, ge=0, le=100)
+
+
 class SectionIn(BaseModel):
     name: str = Field(min_length=1)
     parent_id: str | None = None
@@ -56,12 +65,15 @@ class ResourceIn(BaseModel):
 
 def goal_out(session: Session, goal: LearningGoal, detail: bool = False) -> dict:
     data = model_dict(goal)
+    manual_progress = data.pop("progress_override", None)
     sections = session.scalars(select(LearningSection).where(
         LearningSection.goal_id == goal.id, LearningSection.deleted_at.is_(None)
     ).order_by(LearningSection.sort_order)).all()
     parent_ids = {item.parent_id for item in sections if item.parent_id}
     leaves = [item for item in sections if item.id not in parent_ids]
-    data["progress"] = round(sum(item.is_completed for item in leaves) * 100 / len(leaves)) if leaves else 0
+    automatic_progress = round(sum(item.is_completed for item in leaves) * 100 / len(leaves)) if leaves else 0
+    data["progress"] = manual_progress if manual_progress is not None else automatic_progress
+    data["progress_is_manual"] = manual_progress is not None
     if detail:
         data["sections"] = [model_dict(item) for item in sections]
         tasks = session.scalars(select(LearningTask).where(
@@ -108,9 +120,12 @@ def get_goal(goal_id: str, session: Session = Depends(get_session)):
 
 
 @router.patch("/goals/{goal_id}")
-def update_goal(goal_id: str, payload: GoalIn, session: Session = Depends(get_session)):
+def update_goal(goal_id: str, payload: GoalUpdate, session: Session = Depends(get_session)):
     goal = active_record(session, LearningGoal, goal_id, "学习目标")
-    apply_changes(goal, payload.model_dump(), set(GoalIn.model_fields)); session.flush()
+    changes = payload.model_dump(exclude_unset=True)
+    if "progress" in changes:
+        goal.progress_override = changes.pop("progress")
+    apply_changes(goal, changes, {"name", "goal", "start_date", "target_date", "estimated_minutes"}); session.flush()
     return goal_out(session, goal, True)
 
 

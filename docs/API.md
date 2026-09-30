@@ -75,6 +75,8 @@
 - `GET|POST /api/v1/learning/goals/{id}/resources`
 - `PATCH|DELETE /api/v1/learning/{resource}/{id}`
 
+更新学习目标时允许按需提交名称、目标、日期、预计分钟和 `progress`；`progress` 必须在 0—100 之间。
+
 ## 8. 饮食计划
 
 - `GET|POST /api/v1/diet/dishes`

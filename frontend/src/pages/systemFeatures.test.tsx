@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -53,7 +53,6 @@ describe('system-wide features', () => {
   })
 
   it('loads, applies and saves local preferences', async () => {
-    const user = userEvent.setup()
     const settings = {
       nickname: '我', theme_mode: 'light', theme_color: '#1677ff', week_starts_on: 1,
       default_work_start: '09:00', default_work_end: '18:00', default_study_minutes: 60,
@@ -70,19 +69,17 @@ describe('system-wide features', () => {
 
     render(<MemoryRouter initialEntries={['/settings']}><Routes><Route path="/settings" element={<SettingsPage />} /></Routes></MemoryRouter>)
     expect(await screen.findByDisplayValue('D:/data/personal_hub.db')).toBeInTheDocument()
-    await user.click(screen.getByText('个性化设置'))
+    fireEvent.click(screen.getByText('个性化设置'))
     const nickname = await screen.findByLabelText('昵称')
-    await user.clear(nickname)
-    await user.type(nickname, '新名字')
-    await user.click(screen.getByRole('switch', { name: '深色模式' }))
-    await user.click(screen.getByRole('button', { name: '保存设置' }))
+    fireEvent.change(nickname, { target: { value: '新名字' } })
+    fireEvent.click(screen.getByRole('switch', { name: '深色模式' }))
+    fireEvent.click(screen.getByRole('button', { name: '保存设置' }))
 
     await waitFor(() => expect(fetchMock.mock.calls.some(([input, init]) => String(input).endsWith('/settings') && init?.method === 'PATCH')).toBe(true))
     expect(document.body).toHaveClass('dark-mode')
   })
 
-  it('shows verified backups and trash actions in data management', async () => {
-    const user = userEvent.setup()
+  it('shows verified backups and creates a manual backup', async () => {
     const settings = {
       nickname: '', theme_mode: 'light', theme_color: '#1677ff', week_starts_on: 1,
       default_work_start: '09:00', default_work_end: '18:00', default_study_minutes: 60,
@@ -105,11 +102,32 @@ describe('system-wide features', () => {
     expect(screen.getByText('已删除事项')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '恢复此备份' })).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: '立即备份' }))
+    fireEvent.click(screen.getByRole('button', { name: '立即备份' }))
     await waitFor(() => expect(fetchMock.mock.calls.some(([input, init]) => String(input).endsWith('/backups') && init?.method === 'POST')).toBe(true))
+  })
 
-    await waitFor(() => expect(screen.getByRole('button', { name: /^恢\s*复$/ })).toBeEnabled())
-    await user.click(screen.getByRole('button', { name: /^恢\s*复$/ }))
+  it('restores a trash item from data management', async () => {
+    const settings = {
+      nickname: '', theme_mode: 'light', theme_color: '#1677ff', week_starts_on: 1,
+      default_work_start: '09:00', default_work_end: '18:00', default_study_minutes: 60,
+      custom_categories: {},
+    }
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation((input, init) => {
+      const url = String(input)
+      if (url.endsWith('/bootstrap')) return json({ app_name: 'Personal Hub', version: '0.1.0', local_token: 'new-token', database_path: 'D:/data/personal_hub.db' })
+      if (url.endsWith('/settings')) return json(settings)
+      if (url.endsWith('/backups')) return json([])
+      if (url.includes('/trash/') && init?.method === 'POST') return json({})
+      if (url.endsWith('/trash')) return json([{ type: 'agenda', id: 'a1', module: 'today', label: '计划', title: '已删除事项', deleted_at: '2026-09-30T09:00:00Z' }])
+      return json({}, 404)
+    })
+
+    render(<MemoryRouter initialEntries={['/settings']}><Routes><Route path="/settings" element={<SettingsPage />} /></Routes></MemoryRouter>)
+    expect(await screen.findByText('已删除事项')).toBeInTheDocument()
+
+    const restore = screen.getByRole('button', { name: /^恢\s*复$/ })
+    expect(restore).toBeEnabled()
+    fireEvent.click(restore)
     await waitFor(() => expect(fetchMock.mock.calls.some(([input, init]) => String(input).endsWith('/trash/agenda/a1/restore') && init?.method === 'POST')).toBe(true))
   })
 })

@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { setLocalToken } from '../api/client'
@@ -36,12 +36,66 @@ describe('domain-specific module pages', () => {
   })
 
   it('renders learning route, tasks, sessions and resources with progress', async () => {
-    const goal = { id: 'g1', name: '学习 Python', goal: '完成项目', start_date: null, target_date: null, estimated_minutes: 2400, progress: 50 }
+    const goal = { id: 'g1', name: '学习 Python', goal: '完成项目', start_date: null, target_date: null, estimated_minutes: 2400, progress: 50, progress_is_manual: false }
     vi.spyOn(globalThis, 'fetch').mockImplementation((input) => String(input).endsWith('/goals') ? json([goal]) : json({ ...goal, sections: [{ id: 's1', name: '语法基础', is_completed: true }], tasks: [], sessions: [], resources: [] }))
     render(<MemoryRouter><LearningPage /></MemoryRouter>)
     expect((await screen.findAllByText('学习 Python')).length).toBeGreaterThan(0)
     for (const label of ['学习路线', '学习任务', '学习记录', '笔记与资料']) expect(await screen.findByText(label)).toBeInTheDocument()
-    expect(screen.getAllByText('50%').length).toBeGreaterThanOrEqual(2)
+    expect(screen.getByText('50%')).toBeInTheDocument()
+    expect(screen.getByText('50% · 点击修改')).toBeInTheDocument()
+  })
+
+  it('edits a selected learning goal', async () => {
+    let goal = { id: 'g1', name: '学习 Python', goal: '完成项目', start_date: null, target_date: null, estimated_minutes: 2400, progress: 20, progress_is_manual: false }
+    const details = () => ({ ...goal, sections: [], tasks: [], sessions: [], resources: [] })
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation((input, init) => {
+      const url = String(input)
+      if (init?.method === 'PATCH') {
+        const body = JSON.parse(String(init.body)) as Record<string, unknown>
+        goal = { ...goal, ...body, progress_is_manual: 'progress' in body ? true : goal.progress_is_manual }
+        return json(details())
+      }
+      return url.endsWith('/goals') ? json([goal]) : json(details())
+    })
+    render(<MemoryRouter><LearningPage /></MemoryRouter>)
+
+    fireEvent.click(await screen.findByRole('button', { name: '编辑学习目标 学习 Python' }))
+    const name = await screen.findByLabelText('学习主题')
+    fireEvent.change(name, { target: { value: 'Python 实战' } })
+    fireEvent.click(screen.getByRole('button', { name: '保存修改' }))
+
+    await waitFor(() => expect(fetchMock.mock.calls.some(([input, init]) => {
+      if (!String(input).endsWith('/learning/goals/g1') || init?.method !== 'PATCH') return false
+      return JSON.parse(String(init.body)).name === 'Python 实战'
+    })).toBe(true))
+    expect((await screen.findAllByText('Python 实战')).length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('saves manual learning progress from the right panel', async () => {
+    let goal = { id: 'g1', name: '学习 Python', goal: '完成项目', start_date: null, target_date: null, estimated_minutes: 2400, progress: 20, progress_is_manual: false }
+    const details = () => ({ ...goal, sections: [], tasks: [], sessions: [], resources: [] })
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation((input, init) => {
+      const url = String(input)
+      if (init?.method === 'PATCH') {
+        const body = JSON.parse(String(init.body)) as Record<string, unknown>
+        goal = { ...goal, ...body, progress_is_manual: 'progress' in body ? true : goal.progress_is_manual }
+        return json(details())
+      }
+      return url.endsWith('/goals') ? json([goal]) : json(details())
+    })
+    render(<MemoryRouter><LearningPage /></MemoryRouter>)
+
+    const progress = await screen.findByLabelText('学习进度')
+    fireEvent.change(progress, { target: { value: '65' } })
+    fireEvent.click(screen.getByRole('button', { name: '保存进度' }))
+
+    await waitFor(() => expect(fetchMock.mock.calls.some(([input, init]) => {
+      if (!String(input).endsWith('/learning/goals/g1') || init?.method !== 'PATCH') return false
+      return JSON.parse(String(init.body)).progress === 65
+    })).toBe(true))
+    expect(await screen.findByText('65%')).toBeInTheDocument()
+    expect(screen.getByText('65% · 点击修改')).toBeInTheDocument()
+    expect(screen.getByText('手动进度')).toBeInTheDocument()
   })
 
   it('renders a weekly meal grid plus dishes, shopping and daily records', async () => {

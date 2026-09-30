@@ -101,8 +101,22 @@ def test_learning_route_progress_tasks_sessions_and_resources(client):
     }).status_code == 201
     detail = client.get(f"/api/v1/learning/goals/{goal['id']}").json()
     assert detail["progress"] == 100
+    assert detail["progress_is_manual"] is False
     assert detail["sessions"][0]["actual_minutes"] == 60
     assert client.get("/api/v1/agenda", params={"date": "2026-09-30"}).json()[0]["module"] == "learning"
+
+    updated = client.patch(f"/api/v1/learning/goals/{goal['id']}", json={
+        "name": "Python 实战计划", "goal": "完成两个自动化项目",
+        "start_date": "2026-09-01", "target_date": "2026-12-31",
+        "estimated_minutes": 3600, "progress": 65,
+    })
+    assert updated.status_code == 200
+    assert updated.json()["name"] == "Python 实战计划"
+    assert updated.json()["estimated_minutes"] == 3600
+    assert updated.json()["progress"] == 65
+    assert updated.json()["progress_is_manual"] is True
+    assert client.get("/api/v1/learning/goals").json()[0]["progress"] == 65
+    assert client.patch(f"/api/v1/learning/goals/{goal['id']}", json={"progress": 101}).status_code == 422
 
 
 def test_diet_week_plan_health_and_generated_shopping_list(client):

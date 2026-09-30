@@ -1,4 +1,5 @@
 from datetime import date
+import sqlite3
 
 import pytest
 from sqlalchemy import inspect, select
@@ -33,6 +34,7 @@ def database(tmp_path):
 
 def test_migration_creates_complete_schema(database):
     assert EXPECTED_TABLES == set(inspect(database.engine).get_table_names())
+    assert "progress_override" in {column["name"] for column in inspect(database.engine).get_columns("learning_goals")}
 
 
 def test_migration_is_idempotent(tmp_path):
@@ -40,6 +42,23 @@ def test_migration_is_idempotent(tmp_path):
     migrate_database(path)
     migrate_database(path)
     assert "agenda_items" in inspect(Database(path).engine).get_table_names()
+
+
+def test_migration_adds_manual_progress_to_an_existing_database(tmp_path):
+    path = tmp_path / "existing.db"
+    with sqlite3.connect(path) as connection:
+        connection.execute("CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL PRIMARY KEY)")
+        connection.execute("INSERT INTO alembic_version (version_num) VALUES ('0001')")
+        connection.execute("CREATE TABLE learning_goals (id VARCHAR(36) NOT NULL PRIMARY KEY)")
+
+    migrate_database(path)
+
+    database = Database(path)
+    try:
+        columns = {column["name"] for column in inspect(database.engine).get_columns("learning_goals")}
+        assert "progress_override" in columns
+    finally:
+        database.dispose()
 
 
 def test_foreign_keys_are_enforced(database):

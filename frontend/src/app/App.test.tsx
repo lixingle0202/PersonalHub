@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -48,7 +48,6 @@ describe('application shell', () => {
   })
 
   it('refreshes the current page after quick-create succeeds', async () => {
-    const user = userEvent.setup()
     let homeReads = 0
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation((input, init) => {
       if (String(input).includes('/home')) { homeReads += 1; return json(emptyHome) }
@@ -57,10 +56,10 @@ describe('application shell', () => {
     })
     render(<MemoryRouter><App /></MemoryRouter>)
     expect(await screen.findByText('今天，专注最重要的事')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: '快速新增' }))
+    fireEvent.click(screen.getByRole('button', { name: '快速新增' }))
     const title = await screen.findByLabelText('标题或内容')
-    await user.type(title, '新事项')
-    await user.click(screen.getByRole('button', { name: /创\s*建/ }))
+    fireEvent.change(title, { target: { value: '新事项' } })
+    fireEvent.click(screen.getByRole('button', { name: /创\s*建/ }))
     await waitFor(() => expect(fetchMock.mock.calls.some(([input, init]) => String(input).endsWith('/agenda') && init?.method === 'POST')).toBe(true))
     await waitFor(() => expect(homeReads).toBeGreaterThanOrEqual(2))
   })
