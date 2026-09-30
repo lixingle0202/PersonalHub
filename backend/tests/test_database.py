@@ -41,7 +41,13 @@ def test_migration_is_idempotent(tmp_path):
     path = tmp_path / "test.db"
     migrate_database(path)
     migrate_database(path)
-    assert "agenda_items" in inspect(Database(path).engine).get_table_names()
+    database = Database(path)
+    try:
+        assert "agenda_items" in inspect(database.engine).get_table_names()
+        with database.engine.connect() as connection:
+            assert connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one() == "0002"
+    finally:
+        database.dispose()
 
 
 def test_migration_adds_manual_progress_to_an_existing_database(tmp_path):
@@ -57,6 +63,50 @@ def test_migration_adds_manual_progress_to_an_existing_database(tmp_path):
     try:
         columns = {column["name"] for column in inspect(database.engine).get_columns("learning_goals")}
         assert "progress_override" in columns
+        with database.engine.connect() as connection:
+            assert connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one() == "0002"
+    finally:
+        database.dispose()
+
+
+def test_migration_recovers_an_unversioned_database_without_losing_learning_goals(tmp_path):
+    path = tmp_path / "unversioned.db"
+    with sqlite3.connect(path) as connection:
+        connection.execute("CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL PRIMARY KEY)")
+        connection.execute("""
+            CREATE TABLE learning_goals (
+                id VARCHAR(36) NOT NULL PRIMARY KEY,
+                name VARCHAR(200) NOT NULL,
+                goal TEXT NOT NULL,
+                start_date DATE,
+                target_date DATE,
+                estimated_minutes INTEGER NOT NULL,
+                archived_at DATETIME,
+                deleted_at DATETIME,
+                created_at DATETIME NOT NULL,
+                updated_at DATETIME NOT NULL
+            )
+        """)
+        connection.execute("""
+            INSERT INTO learning_goals (
+                id, name, goal, estimated_minutes, created_at, updated_at
+            ) VALUES (
+                'legacy-goal', '安卓', '完成项目', 1200,
+                '2026-09-30 08:00:00', '2026-09-30 08:00:00'
+            )
+        """)
+
+    migrate_database(path)
+
+    database = Database(path)
+    try:
+        columns = {column["name"] for column in inspect(database.engine).get_columns("learning_goals")}
+        assert "progress_override" in columns
+        with database.engine.connect() as connection:
+            assert connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one() == "0002"
+            assert connection.exec_driver_sql(
+                "SELECT name FROM learning_goals WHERE id = 'legacy-goal'"
+            ).scalar_one() == "安卓"
     finally:
         database.dispose()
 
