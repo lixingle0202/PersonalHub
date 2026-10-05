@@ -11,15 +11,16 @@ import { lazy, Suspense, useState } from 'react'
 import { Link, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { SaveStatus } from '../components/SaveStatus'
 import { LoadingPanel } from '../components/StatePanels'
+import { loadPageModule, PageLoadErrorBoundary } from './pageLoadRecovery'
 
-const HomePage = lazy(() => import('../pages/HomePage').then((module) => ({ default: module.HomePage })))
-const TodayPage = lazy(() => import('../pages/TodayPage').then((module) => ({ default: module.TodayPage })))
-const LearningPage = lazy(() => import('../pages/LearningPage').then((module) => ({ default: module.LearningPage })))
-const DietPage = lazy(() => import('../pages/DietPage').then((module) => ({ default: module.DietPage })))
-const GamesPage = lazy(() => import('../pages/GamesPage').then((module) => ({ default: module.GamesPage })))
-const SettingsPage = lazy(() => import('../pages/SettingsPage').then((module) => ({ default: module.SettingsPage })))
-const QuickCreate = lazy(() => import('../components/QuickCreate').then((module) => ({ default: module.QuickCreate })))
-const GlobalSearch = lazy(() => import('../components/GlobalSearch').then((module) => ({ default: module.GlobalSearch })))
+const HomePage = lazy(() => loadPageModule(() => import('../pages/HomePage').then((module) => ({ default: module.HomePage }))))
+const TodayPage = lazy(() => loadPageModule(() => import('../pages/TodayPage').then((module) => ({ default: module.TodayPage }))))
+const LearningPage = lazy(() => loadPageModule(() => import('../pages/LearningPage').then((module) => ({ default: module.LearningPage }))))
+const DietPage = lazy(() => loadPageModule(() => import('../pages/DietPage').then((module) => ({ default: module.DietPage }))))
+const GamesPage = lazy(() => loadPageModule(() => import('../pages/GamesPage').then((module) => ({ default: module.GamesPage }))))
+const SettingsPage = lazy(() => loadPageModule(() => import('../pages/SettingsPage').then((module) => ({ default: module.SettingsPage }))))
+const QuickCreate = lazy(() => loadPageModule(() => import('../components/QuickCreate').then((module) => ({ default: module.QuickCreate }))))
+const GlobalSearch = lazy(() => loadPageModule(() => import('../components/GlobalSearch').then((module) => ({ default: module.GlobalSearch }))))
 
 const { Header, Sider, Content } = Layout
 
@@ -62,15 +63,17 @@ export function App() {
           </Space>
         </Header>
         <Content className="app-content">
-          <Suspense fallback={<LoadingPanel />}><Routes key={dataVersion}>
-            <Route path="/" element={<HomePage />} />
-            <Route path="/today" element={<TodayPage />} />
-            <Route path="/learning" element={<LearningPage />} />
-            <Route path="/diet" element={<DietPage />} />
-            <Route path="/games" element={<GamesPage />} />
-            <Route path="/settings" element={<SettingsPage />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes></Suspense>
+          <PageLoadErrorBoundary resetKey={location.pathname}>
+            <Suspense fallback={<LoadingPanel />}><Routes key={dataVersion}>
+              <Route path="/" element={<HomePage />} />
+              <Route path="/today" element={<TodayPage />} />
+              <Route path="/learning" element={<LearningPage />} />
+              <Route path="/diet" element={<DietPage />} />
+              <Route path="/games" element={<GamesPage />} />
+              <Route path="/settings" element={<SettingsPage />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes></Suspense>
+          </PageLoadErrorBoundary>
         </Content>
       </Layout>
       {quickOpen ? <Suspense fallback={null}><QuickCreate open onClose={() => setQuickOpen(false)} onCreated={() => setDataVersion((value) => value + 1)} /></Suspense> : null}
