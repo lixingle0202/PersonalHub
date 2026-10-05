@@ -39,7 +39,7 @@ export type HomeData = {
   }
   agenda: AgendaItem[]
   quick_notes: QuickNote[]
-  summaries: Record<'media' | 'development' | 'consulting' | 'learning' | 'diet' | 'games', ModuleSummary>
+  summaries: Record<'media' | 'development' | 'consulting' | 'learning' | 'diet', ModuleSummary>
 }
 
 export type DevProject = {

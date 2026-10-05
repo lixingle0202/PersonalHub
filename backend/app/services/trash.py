@@ -10,8 +10,8 @@ from sqlalchemy.orm import Session
 from ..models import (
     AgendaItem, Consultation, ConsultationCommunication, ConsultationFollowup,
     ConsultationStage, DailyHealthLog, DevIssue, DevLog, DevMilestone,
-    DevProject, DevRequirement, DevTask, Dish, EntertainmentBudget, Game,
-    GamePlan, GameSession, LearningGoal, LearningResource, LearningSection,
+    DevProject, DevRequirement, DevTask, Dish,
+    LearningGoal, LearningResource, LearningSection,
     LearningTask, MealPlan, MediaContent, QuickNote, ShoppingItem, ShoppingList,
     StudySession,
 )
@@ -49,10 +49,6 @@ TRASH_TYPES: dict[str, TrashType] = {
     "health_log": TrashType(DailyHealthLog, "diet", "每日健康记录", lambda item: str(item.log_date)),
     "shopping_list": TrashType(ShoppingList, "diet", "购物清单", "name"),
     "shopping_item": TrashType(ShoppingItem, "diet", "购物项", "ingredient_name"),
-    "game": TrashType(Game, "games", "游戏", "name"),
-    "game_plan": TrashType(GamePlan, "games", "娱乐计划", lambda item: f"游戏计划 {item.planned_minutes} 分钟"),
-    "game_session": TrashType(GameSession, "games", "游玩记录", lambda item: str(item.played_on)),
-    "entertainment_budget": TrashType(EntertainmentBudget, "games", "娱乐预算", lambda item: f"{item.period_type} {item.minute_limit} 分钟"),
 }
 
 
@@ -70,8 +66,6 @@ PARENTS: dict[str, tuple[type, str]] = {
     "study_session": (LearningGoal, "goal_id"),
     "learning_resource": (LearningGoal, "goal_id"),
     "shopping_item": (ShoppingList, "shopping_list_id"),
-    "game_plan": (Game, "game_id"),
-    "game_session": (Game, "game_id"),
 }
 
 
@@ -97,7 +91,7 @@ def list_trash(session: Session) -> list[dict[str, str]]:
     for item_type, descriptor in TRASH_TYPES.items():
         query = select(descriptor.model).where(descriptor.model.deleted_at.is_not(None))
         if descriptor.model is AgendaItem:
-            query = query.where(AgendaItem.source_type.is_(None))
+            query = query.where(AgendaItem.source_type.is_(None), AgendaItem.module != "games")
         records = session.scalars(query).all()
         items.extend(trash_item(item_type, record) for record in records)
     return sorted(items, key=lambda item: item["deleted_at"], reverse=True)
@@ -109,6 +103,10 @@ def get_deleted(session: Session, item_type: str, item_id: str):
         raise KeyError("未知的回收站类型")
     record = session.get(descriptor.model, item_id)
     if not record or record.deleted_at is None:
+        raise LookupError("回收站项目不存在")
+    if descriptor.model is AgendaItem and (
+        record.module == "games" or record.source_type == "game_plan"
+    ):
         raise LookupError("回收站项目不存在")
     return descriptor, record
 
@@ -146,8 +144,6 @@ def _delete_descendant_agendas(session: Session, item_type: str, record: Any) ->
         ids = session.scalars(select(ConsultationFollowup.agenda_id).where(ConsultationFollowup.consultation_id == record.id)).all()
     elif item_type == "learning_goal":
         ids = session.scalars(select(LearningTask.agenda_id).where(LearningTask.goal_id == record.id)).all()
-    elif item_type == "game":
-        ids = session.scalars(select(GamePlan.agenda_id).where(GamePlan.game_id == record.id)).all()
     else:
         ids = []
     _delete_agenda_ids(session, list(ids))

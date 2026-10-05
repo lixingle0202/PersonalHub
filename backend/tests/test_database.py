@@ -2,12 +2,13 @@ from datetime import date
 import sqlite3
 
 import pytest
+from alembic import command
 from sqlalchemy import inspect, select
 from sqlalchemy.exc import IntegrityError
 
 from app.database import Database
-from app.migrations import migrate_database
-from app.models import AgendaItem, DevProject, DevTask
+from app.migrations import migrate_database, migration_config
+from app.models import AgendaItem, DevProject, DevTask, Game, GamePlan
 
 
 EXPECTED_TABLES = {
@@ -45,7 +46,7 @@ def test_migration_is_idempotent(tmp_path):
     try:
         assert "agenda_items" in inspect(database.engine).get_table_names()
         with database.engine.connect() as connection:
-            assert connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one() == "0002"
+            assert connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one() == "0003"
     finally:
         database.dispose()
 
@@ -64,7 +65,7 @@ def test_migration_adds_manual_progress_to_an_existing_database(tmp_path):
         columns = {column["name"] for column in inspect(database.engine).get_columns("learning_goals")}
         assert "progress_override" in columns
         with database.engine.connect() as connection:
-            assert connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one() == "0002"
+            assert connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one() == "0003"
     finally:
         database.dispose()
 
@@ -103,10 +104,57 @@ def test_migration_recovers_an_unversioned_database_without_losing_learning_goal
         columns = {column["name"] for column in inspect(database.engine).get_columns("learning_goals")}
         assert "progress_override" in columns
         with database.engine.connect() as connection:
-            assert connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one() == "0002"
+            assert connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one() == "0003"
             assert connection.exec_driver_sql(
                 "SELECT name FROM learning_goals WHERE id = 'legacy-goal'"
             ).scalar_one() == "安卓"
+    finally:
+        database.dispose()
+
+
+def test_migration_retires_existing_game_plans_without_touching_other_agenda(tmp_path):
+    path = tmp_path / "existing-games.db"
+    command.upgrade(migration_config(path), "0002")
+    database = Database(path)
+    try:
+        with database.session() as session:
+            session.add(Game(id="game-1", name="示例游戏"))
+            session.add_all([
+                AgendaItem(
+                    id="linked-game-agenda", title="历史关联计划", plan_date=date(2026, 10, 5),
+                    module="general", source_type="legacy_reference", source_id="legacy-reference-1",
+                ),
+                AgendaItem(
+                    id="module-game-agenda", title="游戏模块计划", plan_date=date(2026, 10, 5),
+                    module="games",
+                ),
+                AgendaItem(
+                    id="source-game-agenda", title="游戏来源计划", plan_date=date(2026, 10, 5),
+                    module="general", source_type="game_plan", source_id="orphan-game-plan",
+                ),
+                AgendaItem(
+                    id="learning-agenda", title="练习函数", plan_date=date(2026, 10, 5),
+                    module="learning",
+                ),
+            ])
+            session.add(GamePlan(
+                id="game-plan-1", game_id="game-1", agenda_id="linked-game-agenda", planned_minutes=30,
+            ))
+    finally:
+        database.dispose()
+
+    migrate_database(path)
+
+    database = Database(path)
+    try:
+        with database.session() as session:
+            assert session.get(GamePlan, "game-plan-1").deleted_at is not None
+            assert session.get(AgendaItem, "linked-game-agenda").deleted_at is not None
+            assert session.get(AgendaItem, "module-game-agenda").deleted_at is not None
+            assert session.get(AgendaItem, "source-game-agenda").deleted_at is not None
+            assert session.get(AgendaItem, "learning-agenda").deleted_at is None
+        with database.engine.connect() as connection:
+            assert connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one() == "0003"
     finally:
         database.dispose()
 

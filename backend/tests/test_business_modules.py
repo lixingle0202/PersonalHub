@@ -162,23 +162,7 @@ def test_diet_meal_can_be_edited_and_keeps_the_home_plan_in_sync(client):
     assert invalid.status_code == 422
 
 
-def test_games_library_plans_sessions_and_budget_warning(client):
-    game = client.post("/api/v1/games", json={
-        "name": "示例游戏", "platform": "PC", "genre": "策略", "status": "playing",
-        "progress": "第二章", "next_goal": "完成第三章",
-    }).json()
-    plan = client.post(f"/api/v1/games/{game['id']}/plans", json={
-        "plan_date": "2026-09-30", "planned_minutes": 45,
-    })
-    assert plan.status_code == 201
-    client.put("/api/v1/games/budget", json={
-        "period_type": "daily", "minute_limit": 60, "starts_on": "2026-09-30",
-    })
-    client.post(f"/api/v1/games/{game['id']}/sessions", json={
-        "played_on": "2026-09-30", "actual_minutes": 90, "notes": "完成一章",
-    })
-    budget = client.get("/api/v1/games/budget", params={"period_type": "daily", "on": "2026-09-30"}).json()
-    assert budget["used_minutes"] == 90
-    assert budget["exceeded"] is True
-    agenda = client.get("/api/v1/agenda", params={"date": "2026-09-30"}).json()
-    assert agenda[0]["module"] == "games"
+def test_retired_games_api_is_not_available(client):
+    assert client.get("/api/v1/games").status_code == 404
+    assert client.post("/api/v1/games", json={"name": "示例游戏"}).status_code == 404
+    assert not any(path.startswith("/api/v1/games") for path in client.get("/openapi.json").json()["paths"])

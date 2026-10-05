@@ -50,10 +50,11 @@ def test_server_rejects_non_local_host_headers_and_exposes_all_primary_read_rout
         routes = [
             "/api/v1/home?date=2026-09-30", "/api/v1/agenda?date=2026-09-30",
             "/api/v1/media", "/api/v1/dev/projects", "/api/v1/consultations",
-            "/api/v1/learning/goals", "/api/v1/diet/dishes", "/api/v1/games",
+            "/api/v1/learning/goals", "/api/v1/diet/dishes",
             "/api/v1/settings", "/api/v1/backups", "/api/v1/trash",
         ]
         for route in routes:
             response = client.get(route)
             assert response.status_code == 200, route
+        assert client.get("/api/v1/games").status_code == 404
     app.state.database.dispose()

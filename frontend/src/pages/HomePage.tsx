@@ -10,7 +10,6 @@ import type { AgendaItem, HomeData } from '../types'
 const summaryMeta = {
   learning: ['学习计划', '/learning'],
   diet: ['饮食计划', '/diet'],
-  games: ['游戏娱乐', '/games'],
 } as const
 
 export function HomePage() {

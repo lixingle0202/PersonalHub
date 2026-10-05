@@ -1,5 +1,4 @@
 import {
-  AppstoreOutlined,
   CalendarOutlined,
   CoffeeOutlined,
   DashboardOutlined,
@@ -17,7 +16,6 @@ const HomePage = lazy(() => loadPageModule(() => import('../pages/HomePage').the
 const TodayPage = lazy(() => loadPageModule(() => import('../pages/TodayPage').then((module) => ({ default: module.TodayPage }))))
 const LearningPage = lazy(() => loadPageModule(() => import('../pages/LearningPage').then((module) => ({ default: module.LearningPage }))))
 const DietPage = lazy(() => loadPageModule(() => import('../pages/DietPage').then((module) => ({ default: module.DietPage }))))
-const GamesPage = lazy(() => loadPageModule(() => import('../pages/GamesPage').then((module) => ({ default: module.GamesPage }))))
 const SettingsPage = lazy(() => loadPageModule(() => import('../pages/SettingsPage').then((module) => ({ default: module.SettingsPage }))))
 const QuickCreate = lazy(() => loadPageModule(() => import('../components/QuickCreate').then((module) => ({ default: module.QuickCreate }))))
 const GlobalSearch = lazy(() => loadPageModule(() => import('../components/GlobalSearch').then((module) => ({ default: module.GlobalSearch }))))
@@ -29,7 +27,6 @@ const pages = [
   { path: '/today', label: '今日计划', icon: <CalendarOutlined /> },
   { path: '/learning', label: '学习计划', icon: <ReadOutlined /> },
   { path: '/diet', label: '饮食计划', icon: <CoffeeOutlined /> },
-  { path: '/games', label: '游戏娱乐', icon: <AppstoreOutlined /> },
   { path: '/settings', label: '数据与设置', icon: <SettingOutlined /> },
 ]
 
@@ -69,7 +66,6 @@ export function App() {
               <Route path="/today" element={<TodayPage />} />
               <Route path="/learning" element={<LearningPage />} />
               <Route path="/diet" element={<DietPage />} />
-              <Route path="/games" element={<GamesPage />} />
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes></Suspense>

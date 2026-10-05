@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from .deps import get_session
@@ -21,7 +21,10 @@ router = APIRouter(tags=["agenda"])
 
 def active_item(session: Session, item_id: str) -> AgendaItem:
     item = session.get(AgendaItem, item_id)
-    if not item or item.deleted_at is not None:
+    if (
+        not item or item.deleted_at is not None or item.module == "games"
+        or item.source_type == "game_plan"
+    ):
         raise HTTPException(404, "计划事项不存在")
     return item
 
@@ -32,12 +35,16 @@ def list_agenda(date: str, session: Session = Depends(get_session)):
         select(AgendaItem).where(
             AgendaItem.plan_date == date,
             AgendaItem.deleted_at.is_(None),
+            AgendaItem.module != "games",
+            or_(AgendaItem.source_type.is_(None), AgendaItem.source_type != "game_plan"),
         ).order_by(AgendaItem.sort_order, AgendaItem.start_time, AgendaItem.created_at)
     ).all()
 
 
 @router.post("/agenda", response_model=AgendaOut, status_code=status.HTTP_201_CREATED)
 def create_agenda(payload: AgendaCreate, session: Session = Depends(get_session)):
+    if payload.module == "games":
+        raise HTTPException(422, "游戏娱乐模块已移除")
     max_order = session.scalars(
         select(AgendaItem.sort_order).where(
             AgendaItem.plan_date == payload.plan_date,
@@ -95,7 +102,12 @@ def reschedule_agenda(item_id: str, payload: AgendaReschedule, session: Session 
 
 @router.post("/agenda/reorder", response_model=list[AgendaOut])
 def reorder_agenda(payload: AgendaReorder, session: Session = Depends(get_session)):
-    items = session.scalars(select(AgendaItem).where(AgendaItem.id.in_(payload.ordered_ids))).all()
+    items = session.scalars(select(AgendaItem).where(
+        AgendaItem.id.in_(payload.ordered_ids),
+        AgendaItem.deleted_at.is_(None),
+        AgendaItem.module != "games",
+        or_(AgendaItem.source_type.is_(None), AgendaItem.source_type != "game_plan"),
+    )).all()
     by_id = {item.id: item for item in items}
     if len(by_id) != len(payload.ordered_ids):
         raise HTTPException(422, "排序列表中包含不存在的事项")

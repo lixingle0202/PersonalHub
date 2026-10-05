@@ -10,13 +10,11 @@ const moduleNames: Record<string, string> = {
   consulting: '其他事项',
   learning: '学习计划',
   diet: '饮食计划',
-  games: '游戏娱乐',
 }
 
 function sourceLink(item: AgendaItem) {
   if (item.module === 'learning') return `/learning?item=${item.source_id ?? ''}`
   if (item.module === 'diet') return `/diet?item=${item.source_id ?? ''}`
-  if (item.module === 'games') return `/games?item=${item.source_id ?? ''}`
   return null
 }
 

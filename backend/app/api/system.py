@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from .deps import get_session
 from ..models import (
-    AgendaItem, Consultation, DevIssue, DevProject, DevTask, Dish, Game,
+    AgendaItem, Consultation, DevIssue, DevProject, DevTask, Dish,
     LearningGoal, MediaContent, Setting,
 )
 from ..services.data_safety import create_backup, list_backups, resolve_backup, restore_backup
@@ -85,7 +85,10 @@ def search(q: str = Query(min_length=1, max_length=100), session: Session = Depe
     results: list[dict[str, str]] = []
 
     for item in session.scalars(select(AgendaItem).where(
-        AgendaItem.deleted_at.is_(None), or_(AgendaItem.title.ilike(pattern), AgendaItem.notes.ilike(pattern))
+        AgendaItem.deleted_at.is_(None),
+        AgendaItem.module != "games",
+        or_(AgendaItem.source_type.is_(None), AgendaItem.source_type != "game_plan"),
+        or_(AgendaItem.title.ilike(pattern), AgendaItem.notes.ilike(pattern)),
     ).limit(20)).all():
         results.append({"id": item.id, "module": "today", "type": "计划", "title": item.title, "snippet": snippet(item.notes, q), "path": f"/today?date={item.plan_date.isoformat()}"})
 
@@ -97,7 +100,6 @@ def search(q: str = Query(min_length=1, max_length=100), session: Session = Depe
         (Consultation, "consulting", "咨询", Consultation.title, Consultation.original_question, "/consulting?item="),
         (LearningGoal, "learning", "学习目标", LearningGoal.name, LearningGoal.goal, "/learning?item="),
         (Dish, "diet", "菜品", Dish.name, Dish.instructions, "/diet?dish="),
-        (Game, "games", "游戏", Game.name, Game.notes, "/games?item="),
     ]
     for model, module, label, title_col, text_col, path in resources:
         rows = session.scalars(select(model).where(

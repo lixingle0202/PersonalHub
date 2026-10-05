@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from threading import RLock
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -61,6 +61,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.post("/api/v1/local-session/verify")
     def verify_local_session() -> dict[str, bool]:
         return {"valid": True}
+
+    @app.api_route(
+        "/api/{full_path:path}",
+        methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
+        include_in_schema=False,
+    )
+    def missing_api(full_path: str):
+        raise HTTPException(404, "接口不存在")
 
     frontend_dist = frontend_dist_path()
     assets = frontend_dist / "assets"

@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime, timezone
 from pathlib import Path
 import sqlite3
 
@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 
 from app.config import Settings
 from app.main import create_app
+from app.models import AgendaItem
 
 
 @pytest.fixture
@@ -83,6 +84,18 @@ def test_trash_can_restore_then_permanently_delete_an_item(local_app):
     assert client.delete(f"/api/v1/trash/agenda/{item['id']}").status_code == 204
     assert client.get(f"/api/v1/agenda/{item['id']}").status_code == 404
     assert client.get("/api/v1/trash").json() == []
+
+
+def test_retired_game_plan_cannot_be_listed_or_restored_from_trash(local_app):
+    client, app, _settings = local_app
+    with app.state.database.session() as session:
+        session.add(AgendaItem(
+            id="retired-game-agenda", title="旧游戏计划", plan_date=date.today(),
+            module="games", deleted_at=datetime.now(timezone.utc),
+        ))
+
+    assert client.get("/api/v1/trash").json() == []
+    assert client.post("/api/v1/trash/agenda/retired-game-agenda/restore").status_code == 404
 
 
 def test_restoring_a_linked_task_also_restores_its_today_plan_without_duplicates(local_app):

@@ -7,7 +7,6 @@ from .media import router as media_router
 from .consulting import router as consulting_router
 from .learning import router as learning_router
 from .diet import router as diet_router
-from .games import router as games_router
 from .system import router as system_router
 
 
@@ -19,5 +18,4 @@ api_router.include_router(media_router)
 api_router.include_router(consulting_router)
 api_router.include_router(learning_router)
 api_router.include_router(diet_router)
-api_router.include_router(games_router)
 api_router.include_router(system_router)

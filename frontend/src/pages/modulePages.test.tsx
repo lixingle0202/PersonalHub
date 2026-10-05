@@ -5,9 +5,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { setLocalToken } from '../api/client'
 import { ConsultingPage } from './ConsultingPage'
 import { DietPage } from './DietPage'
-import { GamesPage } from './GamesPage'
 import { LearningPage } from './LearningPage'
 import { MediaPage } from './MediaPage'
+import { visibleSearchResults } from '../components/GlobalSearch'
 
 function json(body: unknown, status = 200) {
   return Promise.resolve(new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } }))
@@ -160,14 +160,9 @@ describe('domain-specific module pages', () => {
     expect(screen.getByTitle('早餐')).toBeInTheDocument()
   })
 
-  it('renders game library states and an entertainment budget', async () => {
-    vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {
-      if (String(input).includes('/budget')) return json({ period_type: 'weekly', minute_limit: 300, used_minutes: 90, exceeded: false, starts_on: '2026-09-28' })
-      return json([{ id: 'game1', name: '示例游戏', platform: 'PC', genre: '策略', status: 'playing', progress: '第二章', next_goal: '第三章', notes: '', rating: 8 }])
-    })
-    render(<MemoryRouter><GamesPage /></MemoryRouter>)
-    expect(await screen.findByText('示例游戏')).toBeInTheDocument()
-    for (const label of ['想玩', '正在玩', '已通关', '暂时搁置']) expect(screen.getByText(label)).toBeInTheDocument()
-    expect(screen.getByText('90/300 分钟')).toBeInTheDocument()
+  it('keeps retired game records out of user-visible module results', () => {
+    expect(visibleSearchResults([
+      { id: 'game1', module: 'games', type: '游戏', title: '示例游戏', snippet: '第二章', path: '/games?item=game1' },
+    ])).toEqual([])
   })
 })

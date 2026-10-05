@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { apiRequest } from '../api/client'
 
 type SearchResult = { id: string; module: string; type: string; title: string; snippet: string; path: string }
-const visibleModules = new Set(['today', 'learning', 'diet', 'games'])
+const visibleModules = new Set(['today', 'learning', 'diet'])
 
 export function visibleSearchResults(results: SearchResult[]) {
   return results.filter((item) => visibleModules.has(item.module))

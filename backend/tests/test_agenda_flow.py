@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 
 from app.config import Settings
 from app.main import create_app
+from app.models import AgendaItem
 
 
 @pytest.fixture
@@ -110,11 +111,11 @@ def test_home_statistics_use_agenda_source_of_truth(client):
         "must": 0, "overdue": 1, "due_soon": 0,
     }
     assert set(home.json()["summaries"]) == {
-        "media", "development", "consulting", "learning", "diet", "games",
+        "media", "development", "consulting", "learning", "diet",
     }
 
 
-def test_home_collects_today_plans_from_learning_diet_and_games(client):
+def test_home_collects_today_plans_from_learning_and_diet(client):
     target_date = "2026-10-05"
     goal = client.post("/api/v1/learning/goals", json={
         "name": "Python 学习", "goal": "完成练习",
@@ -125,28 +126,49 @@ def test_home_collects_today_plans_from_learning_diet_and_games(client):
     client.post("/api/v1/diet/meals", json={
         "meal_date": target_date, "meal_type": "lunch", "custom_name": "鸡胸肉沙拉",
     })
-    game = client.post("/api/v1/games", json={
-        "name": "休闲游戏", "status": "wishlist",
-    }).json()
-    client.post(f"/api/v1/games/{game['id']}/plans", json={
-        "plan_date": target_date, "planned_minutes": 30,
-    })
-
     response = client.get("/api/v1/home", params={"date": target_date})
 
     assert response.status_code == 200
     body = response.json()
-    assert {item["module"] for item in body["agenda"]} == {"learning", "diet", "games"}
+    assert {item["module"] for item in body["agenda"]} == {"learning", "diet"}
     assert {item["title"] for item in body["agenda"]} == {
-        "练习函数", "午餐：鸡胸肉沙拉", "游戏：休闲游戏",
+        "练习函数", "午餐：鸡胸肉沙拉",
     }
     assert body["summaries"]["learning"]["count"] == 1
     assert body["summaries"]["diet"]["count"] == 1
-    assert body["summaries"]["games"] == {
-        "title": "今日 1 个游戏计划",
-        "count": 1,
-        "detail": "计划 30 分钟",
-    }
+    assert "games" not in body["summaries"]
+
+
+def test_retired_game_agenda_is_hidden_from_today_and_home(client):
+    target_date = "2026-10-05"
+    with client.app.state.database.session() as session:
+        session.add(AgendaItem(
+            id="legacy-game-agenda", title="游戏：休闲游戏", plan_date=date(2026, 10, 5),
+            module="games", source_type="game_plan", source_id="legacy-game-plan",
+        ))
+    learning_plan = client.post("/api/v1/agenda", json={
+        "title": "练习函数", "plan_date": target_date,
+        "module": "learning", "bucket": "scheduled",
+    })
+    rejected = client.post("/api/v1/agenda", json={
+        "title": "新游戏计划", "plan_date": target_date,
+        "module": "games", "bucket": "scheduled",
+    })
+    assert learning_plan.status_code == 201
+    assert rejected.status_code == 422
+
+    today = client.get("/api/v1/agenda", params={"date": target_date}).json()
+    home = client.get("/api/v1/home", params={"date": target_date}).json()
+    search = client.get("/api/v1/search", params={"q": "休闲游戏"}).json()
+
+    assert [item["title"] for item in today] == ["练习函数"]
+    assert [item["title"] for item in home["agenda"]] == ["练习函数"]
+    assert home["stats"]["total"] == 1
+    assert search == []
+    assert client.get("/api/v1/agenda/legacy-game-agenda").status_code == 404
+    assert client.post("/api/v1/agenda/reorder", json={
+        "ordered_ids": [learning_plan.json()["id"], "legacy-game-agenda"],
+    }).status_code == 422
 
 
 def test_home_learning_summary_includes_current_goals_without_daily_tasks(client):

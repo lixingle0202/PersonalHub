@@ -90,15 +90,7 @@
 
 修改餐次时，必须至少保留一个常用菜品或非空的自定义饮食内容。`PATCH /diet/meals/{id}` 会同步更新关联的今日计划日期和标题；旧数据缺少关联计划时会自动补建。
 
-## 9. 游戏娱乐
-
-- `GET|POST /api/v1/games`
-- `GET|PATCH|DELETE /api/v1/games/{id}`
-- `GET|POST /api/v1/games/{id}/plans`
-- `GET|POST /api/v1/games/{id}/sessions`
-- `GET|PUT /api/v1/games/budget`
-
-## 10. 数据安全
+## 9. 数据安全
 
 - `GET /api/v1/backups`
 - `POST /api/v1/backups`
@@ -108,3 +100,5 @@
 - `DELETE /api/v1/trash/{type}/{id}`
 
 恢复接口必须验证文件、先备份当前数据，再执行原子替换。无效备份返回 422，不改变当前数据库。
+
+游戏娱乐接口组已下线，不再注册任何游戏资源、计划、游玩记录或娱乐预算接口；相关旧请求返回 404。

@@ -11,7 +11,7 @@ function json(body: unknown) {
 const emptyHome = {
   date: '2026-09-30', stats: { total: 0, completed: 0, completion_rate: 0, must: 0, overdue: 0, due_soon: 0 },
   agenda: [], quick_notes: [],
-  summaries: Object.fromEntries(['media', 'development', 'consulting', 'learning', 'diet', 'games'].map((key) => [key, { title: '暂无重点', count: 0 }])),
+  summaries: Object.fromEntries(['learning', 'diet'].map((key) => [key, { title: '暂无重点', count: 0 }])),
 }
 
 describe('application shell', () => {
@@ -20,14 +20,14 @@ describe('application shell', () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation((input) => String(input).includes('/home') ? json(emptyHome) : json([]))
   })
 
-  it('shows only the six retained primary navigation items', async () => {
+  it('shows only the five retained primary navigation items', async () => {
     render(<MemoryRouter><App /></MemoryRouter>)
     for (const label of [
-      '首页总览', '今日计划', '学习计划', '饮食计划', '游戏娱乐', '数据与设置',
+      '首页总览', '今日计划', '学习计划', '饮食计划', '数据与设置',
     ]) {
       expect(screen.getAllByText(label).length).toBeGreaterThan(0)
     }
-    for (const removed of ['自媒体', '开发工作', '咨询工作']) {
+    for (const removed of ['自媒体', '开发工作', '咨询工作', '游戏娱乐']) {
       expect(screen.queryByRole('link', { name: removed })).not.toBeInTheDocument()
     }
     expect(await screen.findByText('今天，专注最重要的事')).toBeInTheDocument()
@@ -41,7 +41,7 @@ describe('application shell', () => {
     expect(await screen.findByText('从长期目标拆到章节、任务和每次学习记录')).toBeInTheDocument()
   })
 
-  it.each(['/media', '/development', '/consulting'])('redirects removed route %s to the overview', async (route) => {
+  it.each(['/media', '/development', '/consulting', '/games'])('redirects removed route %s to the overview', async (route) => {
     render(<MemoryRouter initialEntries={[route]}><App /></MemoryRouter>)
     expect(await screen.findByText('今天，专注最重要的事')).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: '首页总览', level: 3 })).toBeInTheDocument()

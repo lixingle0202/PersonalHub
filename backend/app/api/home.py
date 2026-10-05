@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from .deps import get_session
 from ..models import (
     AgendaItem, Consultation, DailyHealthLog, DevIssue, DevMilestone, DevProject,
-    Dish, GamePlan, LearningGoal, MealPlan, MediaContent, QuickNote,
+    Dish, LearningGoal, MealPlan, MediaContent, QuickNote,
 )
 from ..schemas import AgendaOut, QuickNoteOut
 
@@ -23,6 +23,8 @@ def home_summary(date: date, session: Session = Depends(get_session)):
         AgendaItem.plan_date == date,
         AgendaItem.deleted_at.is_(None),
         AgendaItem.status != "cancelled",
+        AgendaItem.module != "games",
+        or_(AgendaItem.source_type.is_(None), AgendaItem.source_type != "game_plan"),
     ).order_by(AgendaItem.sort_order, AgendaItem.start_time)).all()
     total = len(agenda)
     completed = sum(item.status == "completed" for item in agenda)
@@ -30,12 +32,16 @@ def home_summary(date: date, session: Session = Depends(get_session)):
         AgendaItem.plan_date < date,
         AgendaItem.status == "pending",
         AgendaItem.deleted_at.is_(None),
+        AgendaItem.module != "games",
+        or_(AgendaItem.source_type.is_(None), AgendaItem.source_type != "game_plan"),
     )) or 0
     due_soon = session.scalar(select(func.count(AgendaItem.id)).where(
         AgendaItem.plan_date > date,
         AgendaItem.plan_date <= date + timedelta(days=3),
         AgendaItem.status == "pending",
         AgendaItem.deleted_at.is_(None),
+        AgendaItem.module != "games",
+        or_(AgendaItem.source_type.is_(None), AgendaItem.source_type != "game_plan"),
     )) or 0
     notes = session.scalars(select(QuickNote).where(
         QuickNote.deleted_at.is_(None), QuickNote.is_archived.is_(False)
@@ -86,14 +92,6 @@ def home_summary(date: date, session: Session = Depends(get_session)):
     health = session.scalar(select(DailyHealthLog).where(
         DailyHealthLog.log_date == date, DailyHealthLog.deleted_at.is_(None)
     ))
-    game_plans = session.scalars(select(GamePlan).join(
-        AgendaItem, GamePlan.agenda_id == AgendaItem.id
-    ).where(
-        AgendaItem.plan_date == date, AgendaItem.status != "cancelled",
-        GamePlan.deleted_at.is_(None), AgendaItem.deleted_at.is_(None),
-    )).all()
-    game_minutes = sum(item.planned_minutes for item in game_plans)
-
     return {
         "date": date.isoformat(),
         "stats": {
@@ -133,11 +131,6 @@ def home_summary(date: date, session: Session = Depends(get_session)):
                 "title": f"下一餐：{next_meal_name}" if next_meal else "今日暂无饮食安排",
                 "count": len(meals),
                 "detail": f"已饮水 {health.water_ml if health else 0} ml",
-            },
-            "games": {
-                "title": f"今日 {len(game_plans)} 个游戏计划" if game_plans else "今日暂无游戏计划",
-                "count": len(game_plans),
-                "detail": f"计划 {game_minutes} 分钟",
             },
         },
     }
