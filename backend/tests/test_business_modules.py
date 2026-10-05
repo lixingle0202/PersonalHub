@@ -143,6 +143,25 @@ def test_diet_week_plan_health_and_generated_shopping_list(client):
     assert items == {"鸡蛋": "4个", "番茄": "4个"}
 
 
+def test_diet_meal_can_be_edited_and_keeps_the_home_plan_in_sync(client):
+    meal = client.post("/api/v1/diet/meals", json={
+        "meal_date": "2026-10-05", "meal_type": "lunch", "custom_name": "米饭",
+    }).json()
+
+    updated = client.patch(f"/api/v1/diet/meals/{meal['id']}", json={
+        "meal_date": "2026-10-05", "meal_type": "lunch", "custom_name": "鸡胸肉沙拉",
+    })
+
+    assert updated.status_code == 200
+    assert updated.json()["dish_name"] == "鸡胸肉沙拉"
+    home = client.get("/api/v1/home", params={"date": "2026-10-05"}).json()
+    assert [item["title"] for item in home["agenda"]] == ["午餐：鸡胸肉沙拉"]
+    invalid = client.patch(f"/api/v1/diet/meals/{meal['id']}", json={
+        "meal_date": "2026-10-05", "meal_type": "lunch", "custom_name": "",
+    })
+    assert invalid.status_code == 422
+
+
 def test_games_library_plans_sessions_and_budget_warning(client):
     game = client.post("/api/v1/games", json={
         "name": "示例游戏", "platform": "PC", "genre": "策略", "status": "playing",

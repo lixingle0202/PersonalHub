@@ -76,6 +76,19 @@ export function HomePage() {
       <Row gutter={20} align="stretch">
         <Col span={15}>
           <Card title="今日计划" extra={<Button type="link" onClick={() => navigate('/today')}>查看全部</Button>}>
+            <div className="home-plan-overviews">
+              {Object.entries(summaryMeta).map(([key, [label, path]]) => {
+                const summary = data.summaries[key as keyof HomeData['summaries']]
+                return (
+                  <button type="button" className="home-plan-overview" key={key} onClick={() => navigate(path)}>
+                    <Typography.Text type="secondary">{label}</Typography.Text>
+                    <Typography.Text strong>{summary.title}</Typography.Text>
+                    {summary.detail ? <Typography.Text type="secondary">{summary.detail}</Typography.Text> : null}
+                  </button>
+                )
+              })}
+            </div>
+            <Typography.Title level={5}>今天要完成（{data.agenda.length} 项）</Typography.Title>
             <AgendaList items={data.agenda} onComplete={(item) => void complete(item)} compact />
           </Card>
         </Col>
@@ -96,25 +109,6 @@ export function HomePage() {
           </Card>
         </Col>
       </Row>
-      <section>
-        <Typography.Title level={4}>模块摘要</Typography.Title>
-        <Row gutter={[16, 16]}>
-          {Object.entries(summaryMeta).map(([key, [label, path]]) => {
-            const summary = data.summaries[key as keyof HomeData['summaries']]
-            return (
-              <Col span={8} key={key}>
-                <Card hoverable onClick={() => navigate(path)}>
-                  <Space orientation="vertical">
-                    <Typography.Text type="secondary">{label}</Typography.Text>
-                    <Typography.Text strong>{summary.title}</Typography.Text>
-                    {summary.detail ? <Typography.Text type="secondary">{summary.detail}</Typography.Text> : null}
-                  </Space>
-                </Card>
-              </Col>
-            )
-          })}
-        </Row>
-      </section>
     </div>
   )
 }

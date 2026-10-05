@@ -112,3 +112,38 @@ def test_home_statistics_use_agenda_source_of_truth(client):
     assert set(home.json()["summaries"]) == {
         "media", "development", "consulting", "learning", "diet", "games",
     }
+
+
+def test_home_collects_today_plans_from_learning_diet_and_games(client):
+    target_date = "2026-10-05"
+    goal = client.post("/api/v1/learning/goals", json={
+        "name": "Python 学习", "goal": "完成练习",
+    }).json()
+    client.post(f"/api/v1/learning/goals/{goal['id']}/tasks", json={
+        "title": "练习函数", "plan_date": target_date,
+    })
+    client.post("/api/v1/diet/meals", json={
+        "meal_date": target_date, "meal_type": "lunch", "custom_name": "鸡胸肉沙拉",
+    })
+    game = client.post("/api/v1/games", json={
+        "name": "休闲游戏", "status": "wishlist",
+    }).json()
+    client.post(f"/api/v1/games/{game['id']}/plans", json={
+        "plan_date": target_date, "planned_minutes": 30,
+    })
+
+    response = client.get("/api/v1/home", params={"date": target_date})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert {item["module"] for item in body["agenda"]} == {"learning", "diet", "games"}
+    assert {item["title"] for item in body["agenda"]} == {
+        "练习函数", "午餐：鸡胸肉沙拉", "游戏：休闲游戏",
+    }
+    assert body["summaries"]["learning"]["count"] == 1
+    assert body["summaries"]["diet"]["count"] == 1
+    assert body["summaries"]["games"] == {
+        "title": "今日 1 个游戏计划",
+        "count": 1,
+        "detail": "计划 30 分钟",
+    }

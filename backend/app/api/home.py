@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from .deps import get_session
 from ..models import (
     AgendaItem, Consultation, DailyHealthLog, DevIssue, DevMilestone, DevProject,
-    Dish, Game, GamePlan, LearningTask, MealPlan, MediaContent, QuickNote,
+    Dish, GamePlan, MealPlan, MediaContent, QuickNote,
 )
 from ..schemas import AgendaOut, QuickNoteOut
 
@@ -78,15 +78,13 @@ def home_summary(date: date, session: Session = Depends(get_session)):
     health = session.scalar(select(DailyHealthLog).where(
         DailyHealthLog.log_date == date, DailyHealthLog.deleted_at.is_(None)
     ))
-    playing_games = session.scalar(select(func.count(Game.id)).where(
-        Game.status == "playing", Game.deleted_at.is_(None)
-    )) or 0
-    game_minutes = session.scalar(select(func.coalesce(func.sum(GamePlan.planned_minutes), 0)).join(
+    game_plans = session.scalars(select(GamePlan).join(
         AgendaItem, GamePlan.agenda_id == AgendaItem.id
     ).where(
         AgendaItem.plan_date == date, AgendaItem.status != "cancelled",
         GamePlan.deleted_at.is_(None), AgendaItem.deleted_at.is_(None),
-    )) or 0
+    )).all()
+    game_minutes = sum(item.planned_minutes for item in game_plans)
 
     return {
         "date": date.isoformat(),
@@ -126,9 +124,9 @@ def home_summary(date: date, session: Session = Depends(get_session)):
                 "detail": f"已饮水 {health.water_ml if health else 0} ml",
             },
             "games": {
-                "title": f"{playing_games} 个游戏正在玩" if playing_games else "暂无正在玩的游戏",
-                "count": playing_games,
-                "detail": f"今日计划 {game_minutes} 分钟",
+                "title": f"今日 {len(game_plans)} 个游戏计划" if game_plans else "今日暂无游戏计划",
+                "count": len(game_plans),
+                "detail": f"计划 {game_minutes} 分钟",
             },
         },
     }

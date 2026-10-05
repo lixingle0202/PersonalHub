@@ -101,6 +101,12 @@ button, input, textarea { font: inherit; }
 .meal-week { display: grid; grid-template-columns: repeat(7, minmax(140px, 1fr)); gap: 8px; overflow-x: auto; }
 .meal-week > section { min-width: 140px; display: flex; flex-direction: column; gap: 8px; }
 .meal-week header { padding: 8px; text-align: center; font-weight: 600; }
+.meal-slot { cursor: pointer; }
+.meal-slot:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
+.home-plan-overviews { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-bottom: 18px; }
+.home-plan-overview { display: flex; min-width: 0; flex-direction: column; gap: 4px; padding: 12px; border: 1px solid #e8e8e8; border-radius: 10px; background: #fafafa; text-align: left; cursor: pointer; }
+.home-plan-overview:hover { border-color: var(--primary-color); background: #f5f9ff; }
+.home-plan-overview:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
 .shopping-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #edf0f5; }
 .search-results { display: flex; flex-direction: column; gap: 6px; max-height: 480px; overflow: auto; }
 .search-results > button { border: 0; background: transparent; border-radius: 8px; padding: 10px; text-align: left; display: flex; flex-direction: column; gap: 6px; cursor: pointer; }

@@ -152,9 +152,17 @@ def create_meal(payload: MealIn, session: Session = Depends(get_session)):
 @router.patch("/meals/{meal_id}")
 def update_meal(meal_id: str, payload: MealIn, session: Session = Depends(get_session)):
     meal = active_record(session, MealPlan, meal_id, "饮食安排")
+    if not payload.dish_id and not payload.custom_name.strip():
+        raise HTTPException(422, "请选择菜品或填写餐食名称")
     dish = active_record(session, Dish, payload.dish_id, "菜品") if payload.dish_id else None
     apply_changes(meal, payload.model_dump(), set(MealIn.model_fields))
-    agenda = session.get(AgendaItem, meal.agenda_id)
+    agenda = session.get(AgendaItem, meal.agenda_id) if meal.agenda_id else None
+    if not agenda:
+        agenda = AgendaItem(
+            plan_date=meal.meal_date,
+            module="diet", source_type="meal_plan", source_id=meal.id,
+        )
+        session.add(agenda); session.flush(); meal.agenda_id = agenda.id
     if agenda:
         agenda.plan_date = meal.meal_date
         agenda.title = f"{MEAL_NAMES[meal.meal_type]}：{dish.name if dish else meal.custom_name}"

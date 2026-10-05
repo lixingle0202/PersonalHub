@@ -88,6 +88,8 @@
 - `GET /api/v1/diet/shopping-lists`
 - `PATCH /api/v1/diet/shopping-items/{id}`
 
+修改餐次时，必须至少保留一个常用菜品或非空的自定义饮食内容。`PATCH /diet/meals/{id}` 会同步更新关联的今日计划日期和标题；旧数据缺少关联计划时会自动补建。
+
 ## 9. 游戏娱乐
 
 - `GET|POST /api/v1/games`

@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -23,11 +23,16 @@ describe('core pages', () => {
     vi.restoreAllMocks()
   })
 
-  it('renders home statistics, agenda, notes and only three retained summaries', async () => {
+  it('puts retained module overviews and all of today plans inside the home agenda card', async () => {
+    const retainedAgenda = [
+      { ...agenda[0], id: 'learn-1', title: '练习函数', module: 'learning', source_type: 'learning_task', source_id: 'task-1' },
+      { ...agenda[0], id: 'meal-1', title: '午餐：鸡胸肉沙拉', module: 'diet', source_type: 'meal_plan', source_id: 'meal-1' },
+      { ...agenda[0], id: 'game-1', title: '游戏：休闲游戏', module: 'games', source_type: 'game_plan', source_id: 'plan-1' },
+    ]
     vi.spyOn(globalThis, 'fetch').mockImplementation(() => json({
       date: '2026-09-30',
-      stats: { total: 1, completed: 0, completion_rate: 0, must: 1, overdue: 0, due_soon: 0 },
-      agenda,
+      stats: { total: 3, completed: 0, completion_rate: 0, must: 3, overdue: 0, due_soon: 0 },
+      agenda: retainedAgenda,
       quick_notes: [{ id: 'n1', content: '记录灵感', is_important: false, is_archived: false, converted_type: null, converted_id: null, created_at: '2026-09-30T00:00:00Z' }],
       summaries: {
         media: { title: '待发布 1 条', count: 1 }, development: { title: '1 个项目', count: 0 },
@@ -36,15 +41,20 @@ describe('core pages', () => {
       },
     }))
     render(<MemoryRouter><HomePage /></MemoryRouter>)
-    expect(await screen.findByText('完成核心闭环')).toBeInTheDocument()
+    const agendaCard = (await screen.findByText('今日计划')).closest('.ant-card')
+    expect(agendaCard).not.toBeNull()
+    const agendaArea = within(agendaCard as HTMLElement)
+    for (const title of ['练习函数', '午餐：鸡胸肉沙拉', '游戏：休闲游戏']) {
+      expect(agendaArea.getByText(title)).toBeInTheDocument()
+    }
     expect(screen.getByText('记录灵感')).toBeInTheDocument()
-    expect(screen.getByText('其他事项')).toBeInTheDocument()
     for (const label of ['学习计划', '饮食计划', '游戏娱乐']) {
-      expect(screen.getAllByText(label).length).toBeGreaterThan(0)
+      expect(agendaArea.getAllByText(label).length).toBeGreaterThan(0)
     }
-    for (const removed of ['自媒体', '开发工作', '咨询工作']) {
-      expect(screen.queryByText(removed)).not.toBeInTheDocument()
+    for (const summary of ['今日学习', '下一餐午餐', '今日 30 分钟']) {
+      expect(agendaArea.getByText(summary)).toBeInTheDocument()
     }
+    expect(screen.queryByText('模块摘要')).not.toBeInTheDocument()
   })
 
   it('completes an item from today page through the protected API', async () => {

@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import dayjs from 'dayjs'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { setLocalToken } from '../api/client'
@@ -99,10 +100,11 @@ describe('domain-specific module pages', () => {
   })
 
   it('renders a weekly meal grid plus dishes, shopping and daily records', async () => {
+    const mealDate = dayjs().startOf('week').add(1, 'day').format('YYYY-MM-DD')
     vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {
       const url = String(input)
       if (url.includes('/dishes')) return json([{ id: 'd1', name: '番茄炒蛋', instructions: '', nutrition_notes: '', notes: '', ingredients: [] }])
-      if (url.includes('/meals')) return json([{ id: 'meal1', meal_date: '2026-09-30', meal_type: 'dinner', dish_id: 'd1', custom_name: '', dish_name: '番茄炒蛋', actual_food: '', status: 'pending' }])
+      if (url.includes('/meals')) return json([{ id: 'meal1', meal_date: mealDate, meal_type: 'dinner', dish_id: 'd1', custom_name: '', dish_name: '番茄炒蛋', actual_food: '', status: 'pending' }])
       if (url.includes('/health/')) return json({ log_date: '2026-09-30', water_ml: 1500, weight_kg: null, feeling: '' })
       return json([])
     })
@@ -110,6 +112,52 @@ describe('domain-specific module pages', () => {
     expect(await screen.findByText('每周饮食')).toBeInTheDocument()
     for (const label of ['常用菜品', '购物清单', '每日记录']) expect(screen.getByText(label)).toBeInTheDocument()
     expect(screen.getAllByText('番茄炒蛋').length).toBeGreaterThan(0)
+  })
+
+  it('opens a meal cell and saves changed food through the meal update API', async () => {
+    const mealDate = dayjs().startOf('week').add(1, 'day').format('YYYY-MM-DD')
+    let meal = { id: 'meal1', meal_date: mealDate, meal_type: 'lunch', dish_id: null, custom_name: '米饭', dish_name: '米饭', actual_food: '', status: 'pending' }
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation((input, init) => {
+      const url = String(input)
+      if (url.endsWith('/diet/meals/meal1') && init?.method === 'PATCH') {
+        const body = JSON.parse(String(init.body)) as typeof meal
+        meal = { ...meal, ...body, dish_name: body.custom_name }
+        return json(meal)
+      }
+      if (url.includes('/dishes')) return json([])
+      if (url.includes('/meals')) return json([meal])
+      if (url.includes('/health/')) return json({ log_date: mealDate, water_ml: 0, weight_kg: null, feeling: '' })
+      return json([])
+    })
+    render(<MemoryRouter><DietPage /></MemoryRouter>)
+
+    fireEvent.click(await screen.findByRole('button', { name: `修改 ${mealDate} 午餐` }))
+    expect(await screen.findByRole('dialog', { name: '修改饮食安排' })).toBeInTheDocument()
+    const customName = screen.getByLabelText('或填写其他餐食')
+    expect(customName).toHaveValue('米饭')
+    fireEvent.change(customName, { target: { value: '鸡胸肉沙拉' } })
+    fireEvent.click(screen.getByRole('button', { name: '保存修改' }))
+
+    await waitFor(() => expect(fetchMock.mock.calls.some(([input, init]) => {
+      if (!String(input).endsWith('/diet/meals/meal1') || init?.method !== 'PATCH') return false
+      return JSON.parse(String(init.body)).custom_name === '鸡胸肉沙拉'
+    })).toBe(true))
+    expect(await screen.findByText('鸡胸肉沙拉')).toBeInTheDocument()
+  })
+
+  it('opens an empty meal cell with its date and meal type preselected', async () => {
+    const mealDate = dayjs().startOf('week').add(1, 'day').format('YYYY-MM-DD')
+    vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {
+      const url = String(input)
+      if (url.includes('/health/')) return json({ log_date: mealDate, water_ml: 0, weight_kg: null, feeling: '' })
+      return json([])
+    })
+    render(<MemoryRouter><DietPage /></MemoryRouter>)
+
+    fireEvent.click(await screen.findByRole('button', { name: `安排 ${mealDate} 早餐` }))
+    expect(await screen.findByRole('dialog', { name: '安排一餐' })).toBeInTheDocument()
+    expect(screen.getByLabelText('日期')).toHaveValue(mealDate)
+    expect(screen.getByTitle('早餐')).toBeInTheDocument()
   })
 
   it('renders game library states and an entertainment budget', async () => {
