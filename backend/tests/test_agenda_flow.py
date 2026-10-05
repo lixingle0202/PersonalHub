@@ -147,3 +147,27 @@ def test_home_collects_today_plans_from_learning_diet_and_games(client):
         "count": 1,
         "detail": "计划 30 分钟",
     }
+
+
+def test_home_learning_summary_includes_current_goals_without_daily_tasks(client):
+    target_date = "2026-10-05"
+    client.post("/api/v1/learning/goals", json={
+        "name": "物理", "goal": "完成力学复习",
+        "start_date": target_date, "target_date": "2026-10-07",
+    })
+    client.post("/api/v1/learning/goals", json={
+        "name": "安卓", "goal": "完成练习程序",
+    })
+    client.post("/api/v1/learning/goals", json={
+        "name": "未来计划", "start_date": "2026-10-06", "target_date": "2026-10-10",
+    })
+
+    response = client.get("/api/v1/home", params={"date": target_date})
+
+    assert response.status_code == 200
+    summary = response.json()["summaries"]["learning"]
+    assert summary["count"] == 2
+    assert "物理" in summary["title"]
+    assert "安卓" in summary["title"]
+    assert "未来计划" not in summary["title"]
+    assert summary["detail"] == "今日暂无学习任务"

@@ -65,10 +65,9 @@ export function HomePage() {
         <Progress type="circle" percent={data.stats.completion_rate} size={78} />
       </section>
       <Row gutter={16}>
-        <Col span={6}><Card><Statistic title="今日事项" value={data.stats.total} /></Card></Col>
-        <Col span={6}><Card><Statistic title="已经完成" value={data.stats.completed} /></Card></Col>
-        <Col span={6}><Card><Statistic title="必须完成" value={data.stats.must} /></Card></Col>
-        <Col span={6}><Card><Statistic title="逾期事项" value={data.stats.overdue} styles={{ content: { color: data.stats.overdue ? '#cf1322' : undefined } }} /></Card></Col>
+        <Col span={8}><Card><Statistic title="今日事项" value={data.stats.total} /></Card></Col>
+        <Col span={8}><Card><Statistic title="已经完成" value={data.stats.completed} /></Card></Col>
+        <Col span={8}><Card><Statistic title="必须完成" value={data.stats.must} /></Card></Col>
       </Row>
       {data.stats.overdue || data.stats.due_soon ? (
         <Alert type="warning" showIcon title={`有 ${data.stats.overdue} 项逾期，${data.stats.due_soon} 项将在三天内到期`} />

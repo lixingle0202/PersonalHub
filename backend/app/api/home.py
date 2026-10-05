@@ -3,13 +3,13 @@ from __future__ import annotations
 from datetime import date, timedelta
 
 from fastapi import APIRouter, Depends
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from .deps import get_session
 from ..models import (
     AgendaItem, Consultation, DailyHealthLog, DevIssue, DevMilestone, DevProject,
-    Dish, GamePlan, MealPlan, MediaContent, QuickNote,
+    Dish, GamePlan, LearningGoal, MealPlan, MediaContent, QuickNote,
 )
 from ..schemas import AgendaOut, QuickNoteOut
 
@@ -67,6 +67,14 @@ def home_summary(date: date, session: Session = Depends(get_session)):
         AgendaItem.deleted_at.is_(None),
     ).order_by(AgendaItem.plan_date).limit(1))
     learning_today = [item for item in agenda if item.module == "learning"]
+    current_learning_goals = session.scalars(select(LearningGoal).where(
+        LearningGoal.deleted_at.is_(None), LearningGoal.archived_at.is_(None),
+        or_(LearningGoal.start_date.is_(None), LearningGoal.start_date <= date),
+        or_(LearningGoal.target_date.is_(None), LearningGoal.target_date >= date),
+    ).order_by(LearningGoal.updated_at.desc())).all()
+    learning_goal_names = "、".join(goal.name for goal in current_learning_goals[:3])
+    if len(current_learning_goals) > 3:
+        learning_goal_names += f"等 {len(current_learning_goals)} 个目标"
     meals = session.scalars(select(MealPlan).where(
         MealPlan.meal_date == date, MealPlan.deleted_at.is_(None)
     ).order_by(MealPlan.meal_type)).all()
@@ -115,8 +123,11 @@ def home_summary(date: date, session: Session = Depends(get_session)):
                 "detail": f"下次跟进 {next_consulting.plan_date.isoformat()}" if next_consulting else "",
             },
             "learning": {
-                "title": f"今日 {len(learning_today)} 个学习任务" if learning_today else "今日暂无学习任务",
-                "count": len(learning_today),
+                "title": f"当前目标：{learning_goal_names}" if current_learning_goals else (
+                    f"今日 {len(learning_today)} 个学习任务" if learning_today else "暂无学习计划"
+                ),
+                "count": len(current_learning_goals) if current_learning_goals else len(learning_today),
+                "detail": f"今日 {len(learning_today)} 个学习任务" if learning_today else "今日暂无学习任务",
             },
             "diet": {
                 "title": f"下一餐：{next_meal_name}" if next_meal else "今日暂无饮食安排",
