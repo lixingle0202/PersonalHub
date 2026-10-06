@@ -23,7 +23,7 @@ export function ConfirmDangerButton({
       onConfirm={onConfirm}
       disabled={disabled}
     >
-      <Button danger disabled={disabled}>{label}</Button>
+      <Button aria-label={label} danger disabled={disabled}>{label}</Button>
     </Popconfirm>
   )
 }

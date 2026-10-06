@@ -6,11 +6,12 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from .deps import get_session
 from .utils import active_record, apply_changes, model_dict, soft_delete
+from ..services.diet import delete_meal_plan
 from ..models import (
     AgendaItem, DailyHealthLog, Dish, DishIngredient, MealPlan, ShoppingItem,
     ShoppingList, new_id,
@@ -131,6 +132,28 @@ def list_meals(start_date: date, end_date: date, session: Session = Depends(get_
     return [meal_out(session, meal) for meal in meals]
 
 
+@router.post("/reset")
+def reset_meal_plans(session: Session = Depends(get_session)):
+    meals = session.scalars(select(MealPlan).where(MealPlan.deleted_at.is_(None))).all()
+    meal_ids = [meal.id for meal in meals]
+    agenda_ids = [meal.agenda_id for meal in meals if meal.agenda_id]
+    agenda_conditions = []
+    if agenda_ids:
+        agenda_conditions.append(AgendaItem.id.in_(agenda_ids))
+    if meal_ids:
+        agenda_conditions.append(
+            (AgendaItem.source_type == "meal_plan") & AgendaItem.source_id.in_(meal_ids)
+        )
+    agendas = session.scalars(select(AgendaItem).where(
+        AgendaItem.deleted_at.is_(None), or_(*agenda_conditions)
+    )).all() if agenda_conditions else []
+
+    for item in [*meals, *agendas]:
+        soft_delete(item)
+    session.flush()
+    return {"cancelled_meals": len(meals), "cancelled_agenda": len(agendas)}
+
+
 @router.post("/meals", status_code=status.HTTP_201_CREATED)
 def create_meal(payload: MealIn, session: Session = Depends(get_session)):
     if not payload.dish_id and not payload.custom_name.strip():
@@ -173,10 +196,7 @@ def update_meal(meal_id: str, payload: MealIn, session: Session = Depends(get_se
 @router.delete("/meals/{meal_id}")
 def delete_meal(meal_id: str, session: Session = Depends(get_session)):
     meal = active_record(session, MealPlan, meal_id, "饮食安排")
-    soft_delete(meal)
-    agenda = session.get(AgendaItem, meal.agenda_id) if meal.agenda_id else None
-    if agenda: agenda.deleted_at = meal.deleted_at
-    session.flush()
+    delete_meal_plan(session, meal)
     return meal_out(session, meal)
 
 

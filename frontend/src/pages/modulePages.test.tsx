@@ -1,4 +1,5 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import dayjs from 'dayjs'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -99,7 +100,7 @@ describe('domain-specific module pages', () => {
     expect(screen.getByText('手动进度')).toBeInTheDocument()
   })
 
-  it('renders a weekly meal grid plus dishes, shopping and daily records', async () => {
+  it('renders a monthly meal calendar plus dishes, shopping and daily records', async () => {
     const mealDate = dayjs().startOf('week').add(1, 'day').format('YYYY-MM-DD')
     vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {
       const url = String(input)
@@ -109,7 +110,7 @@ describe('domain-specific module pages', () => {
       return json([])
     })
     render(<MemoryRouter><DietPage /></MemoryRouter>)
-    expect(await screen.findByText('每周饮食')).toBeInTheDocument()
+    expect(await screen.findByRole('table', { name: '饮食月历' })).toBeInTheDocument()
     for (const label of ['常用菜品', '购物清单', '每日记录']) expect(screen.getByText(label)).toBeInTheDocument()
     expect(screen.getAllByText('番茄炒蛋').length).toBeGreaterThan(0)
   })
@@ -131,7 +132,7 @@ describe('domain-specific module pages', () => {
     })
     render(<MemoryRouter><DietPage /></MemoryRouter>)
 
-    fireEvent.click(await screen.findByRole('button', { name: `修改 ${mealDate} 午餐` }))
+    fireEvent.click(await screen.findByLabelText(`修改 ${mealDate} 午餐`))
     expect(await screen.findByRole('dialog', { name: '修改饮食安排' })).toBeInTheDocument()
     const customName = screen.getByLabelText('或填写其他餐食')
     expect(customName).toHaveValue('米饭')
@@ -154,10 +155,38 @@ describe('domain-specific module pages', () => {
     })
     render(<MemoryRouter><DietPage /></MemoryRouter>)
 
-    fireEvent.click(await screen.findByRole('button', { name: `安排 ${mealDate} 早餐` }))
+    fireEvent.click(await screen.findByLabelText(`安排 ${mealDate} 早餐`))
     expect(await screen.findByRole('dialog', { name: '安排一餐' })).toBeInTheDocument()
     expect(screen.getByLabelText('日期')).toHaveValue(mealDate)
     expect(screen.getByTitle('早餐')).toBeInTheDocument()
+  })
+
+  it('clears every meal plan only after confirmation', async () => {
+    const user = userEvent.setup()
+    const mealDate = dayjs().startOf('week').add(1, 'day').format('YYYY-MM-DD')
+    const meal = { id: 'meal1', meal_date: mealDate, meal_type: 'dinner', dish_id: null, custom_name: '火锅', dish_name: '火锅', actual_food: '', status: 'pending' }
+    let cleared = false
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation((input, init) => {
+      const url = String(input)
+      if (url.endsWith('/diet/reset') && init?.method === 'POST') {
+        cleared = true
+        return json({ cancelled_meals: 1, cancelled_agenda: 1 })
+      }
+      if (url.includes('/dishes')) return json([])
+      if (url.includes('/meals')) return json(cleared ? [] : [meal])
+      if (url.includes('/health/')) return json({ log_date: mealDate, water_ml: 0, weight_kg: null, feeling: '' })
+      return json([])
+    })
+    render(<MemoryRouter><DietPage /></MemoryRouter>)
+    expect(await screen.findByText('火锅')).toBeInTheDocument()
+
+    await user.click(screen.getByLabelText('清零全部饮食计划'))
+    expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith('/diet/reset'))).toBe(false)
+    await user.click(within(screen.getByRole('tooltip')).getByRole('button', { name: /确\s*认/ }))
+
+    await waitFor(() => expect(fetchMock.mock.calls.some(([input, init]) => String(input).endsWith('/diet/reset') && init?.method === 'POST')).toBe(true))
+    await waitFor(() => expect(screen.queryByText('火锅')).not.toBeInTheDocument())
+    expect(screen.getAllByText('未安排').length).toBeGreaterThan(0)
   })
 
   it('keeps retired game records out of user-visible module results', () => {

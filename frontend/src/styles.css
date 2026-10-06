@@ -98,11 +98,38 @@ button, input, textarea { font: inherit; }
 .record-list-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 0; border-bottom: 1px solid #edf0f5; }
 .record-list-row > div { display: flex; flex-direction: column; gap: 4px; }
 .record-complete { opacity: .7; background: #f6ffed; }
-.meal-week { display: grid; grid-template-columns: repeat(7, minmax(140px, 1fr)); gap: 8px; overflow-x: auto; }
-.meal-week > section { min-width: 140px; display: flex; flex-direction: column; gap: 8px; }
-.meal-week header { padding: 8px; text-align: center; font-weight: 600; }
-.meal-slot { cursor: pointer; }
-.meal-slot:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
+.diet-calendar-intro { margin-bottom: 20px; }
+.diet-calendar-intro h4 { margin: 0 0 6px; }
+.diet-calendar { border: 1px solid #dfe5e4; border-radius: 16px; overflow: hidden; background: #fff; }
+.diet-calendar-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 18px 22px; }
+.diet-calendar-toolbar .anticon-calendar { color: #527769; font-size: 22px; }
+.diet-calendar-toolbar strong { font-size: 20px; white-space: nowrap; }
+.diet-calendar-scroll { overflow-x: auto; }
+.diet-calendar table { width: 100%; min-width: 840px; border-collapse: collapse; table-layout: fixed; }
+.diet-calendar th { padding: 12px; border-top: 1px solid #e3e7e6; border-bottom: 1px solid #e3e7e6; color: #7c8582; font-weight: 500; text-align: right; }
+.diet-calendar td { height: 178px; padding: 10px; vertical-align: top; border-right: 1px solid #e3e7e6; border-bottom: 1px solid #e3e7e6; }
+.diet-calendar td:last-child { border-right: 0; }
+.diet-calendar tr:last-child td { border-bottom: 0; }
+.diet-calendar td.calendar-other-month { background: #f7f8f7; color: #929995; }
+.diet-calendar td.calendar-today { background: #e7f0ec; box-shadow: inset 0 0 0 2px #9eb9ad; }
+.calendar-day-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.calendar-add { display: grid; place-items: center; width: 28px; height: 30px; border: 0; border-radius: 6px; background: transparent; color: #6e8175; cursor: pointer; }
+.calendar-add:hover { background: #dfe9e3; }
+.calendar-day-number { display: grid; place-items: center; min-width: 30px; height: 30px; font-weight: 600; }
+.calendar-today .calendar-day-number { color: #fff; background: #3e6956; border-radius: 10px; }
+.calendar-meals { display: flex; flex-direction: column; gap: 6px; }
+.calendar-meal { width: 100%; display: flex; flex-direction: column; gap: 4px; padding: 9px 10px; border: 1px solid #edf0ee; border-left: 3px solid #a3aba7; border-radius: 10px; background: #fff; color: #34443c; text-align: left; cursor: pointer; overflow-wrap: anywhere; }
+.calendar-meal strong { font-size: 12px; }
+.calendar-meal span { font-size: 12px; line-height: 1.5; }
+.calendar-meal-actual { border-left-color: #3e6956; }
+.calendar-actual-food { color: #66796e; }
+.calendar-meal:hover { border-color: #527769; background: #f7fbf8; }
+.calendar-meal:focus-visible, .calendar-more:focus-visible, .calendar-add:focus-visible, .calendar-empty button:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
+.calendar-more { border: 0; background: transparent; color: #66796e; padding: 8px 4px 0; font-size: 12px; cursor: pointer; }
+.calendar-empty { padding: 14px 0; font-size: 12px; }
+.calendar-empty > div { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 10px; }
+.calendar-empty button { border: 0; background: transparent; color: #6e8175; padding: 0; font-size: 12px; cursor: pointer; }
+.diet-editor-footer { display: flex; justify-content: space-between; gap: 12px; }
 .home-plan-overviews { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-bottom: 18px; }
 .home-plan-overview { display: flex; min-width: 0; flex-direction: column; gap: 4px; padding: 12px; border: 1px solid #e8e8e8; border-radius: 10px; background: #fafafa; text-align: left; cursor: pointer; }
 .home-plan-overview:hover { border-color: var(--primary-color); background: #f5f9ff; }
@@ -143,3 +170,12 @@ body.dark-mode .ant-tabs-nav::before,
 body.dark-mode .data-row,
 body.dark-mode .record-list-row { border-color: #34445f; }
 body.dark-mode .ant-typography-secondary { color: #a8b4c8; }
+body.dark-mode .diet-calendar { background: #182234; border-color: #34445f; color: #e7edf8; }
+body.dark-mode .diet-calendar th, body.dark-mode .diet-calendar td { border-color: #34445f; }
+body.dark-mode .diet-calendar th { color: #a8b4c8; }
+body.dark-mode .diet-calendar td.calendar-other-month { background: #141d2c; color: #91a0b6; }
+body.dark-mode .diet-calendar td.calendar-today { background: #233e35; box-shadow: inset 0 0 0 2px #527769; }
+body.dark-mode .calendar-meal { background: #223149; color: #e7edf8; border-color: #34445f; }
+body.dark-mode .calendar-meal-actual { border-left-color: #7faf96; }
+body.dark-mode .calendar-meal:hover { background: #2c4058; border-color: #7faf96; }
+body.dark-mode .calendar-actual-food, body.dark-mode .calendar-more, body.dark-mode .calendar-empty button { color: #b1cbbc; }

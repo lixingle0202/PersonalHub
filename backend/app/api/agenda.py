@@ -7,13 +7,14 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from .deps import get_session
-from ..models import AgendaItem, DailyReview, QuickNote
+from ..models import AgendaItem, DailyReview, MealPlan, QuickNote
 from ..schemas import (
     AgendaCreate, AgendaOut, AgendaReorder, AgendaReschedule, AgendaUpdate,
     DailyReviewIn, DailyReviewOut, EndDayRequest, QuickNoteConvert,
     QuickNoteCreate, QuickNoteOut, QuickNoteUpdate,
 )
 from ..services.agenda import set_agenda_status
+from ..services.diet import delete_meal_plan
 
 
 router = APIRouter(tags=["agenda"])
@@ -75,6 +76,13 @@ def update_agenda(item_id: str, payload: AgendaUpdate, session: Session = Depend
 def delete_agenda(item_id: str, session: Session = Depends(get_session)):
     from datetime import datetime, timezone
     item = active_item(session, item_id)
+    meal_links = [MealPlan.agenda_id == item.id]
+    if item.source_type == "meal_plan" and item.source_id:
+        meal_links.append(MealPlan.id == item.source_id)
+    meal = session.scalar(select(MealPlan).where(or_(*meal_links)))
+    if meal:
+        delete_meal_plan(session, meal)
+        return item
     item.deleted_at = datetime.now(timezone.utc)
     session.flush()
     return item

@@ -162,6 +162,30 @@ def test_diet_meal_can_be_edited_and_keeps_the_home_plan_in_sync(client):
     assert invalid.status_code == 422
 
 
+def test_diet_reset_cancels_meals_across_all_dates_but_keeps_other_diet_data(client):
+    dish = client.post("/api/v1/diet/dishes", json={"name": "番茄炒蛋"}).json()
+    for meal_date in ["2026-10-05", "2026-11-20"]:
+        assert client.post("/api/v1/diet/meals", json={
+            "meal_date": meal_date, "meal_type": "dinner", "dish_id": dish["id"],
+        }).status_code == 201
+    assert client.put("/api/v1/diet/health/2026-10-05", json={
+        "water_ml": 1800, "feeling": "很好",
+    }).status_code == 200
+
+    reset = client.post("/api/v1/diet/reset")
+
+    assert reset.status_code == 200
+    assert reset.json() == {"cancelled_meals": 2, "cancelled_agenda": 2}
+    assert client.get("/api/v1/diet/meals", params={
+        "start_date": "2026-01-01", "end_date": "2026-12-31",
+    }).json() == []
+    assert client.get("/api/v1/agenda", params={"date": "2026-10-05"}).json() == []
+    assert client.get("/api/v1/agenda", params={"date": "2026-11-20"}).json() == []
+    assert [item["name"] for item in client.get("/api/v1/diet/dishes").json()] == ["番茄炒蛋"]
+    assert client.get("/api/v1/diet/health/2026-10-05").json()["water_ml"] == 1800
+    assert client.post("/api/v1/diet/reset").json() == {"cancelled_meals": 0, "cancelled_agenda": 0}
+
+
 def test_retired_games_api_is_not_available(client):
     assert client.get("/api/v1/games").status_code == 404
     assert client.post("/api/v1/games", json={"name": "示例游戏"}).status_code == 404

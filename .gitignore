@@ -11,6 +11,7 @@ build/
 __pycache__/
 *.py[cod]
 .pytest_cache/
+.test-runtime/
 .coverage
 coverage.xml
 test-results/
