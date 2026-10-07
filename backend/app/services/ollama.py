@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from copy import deepcopy
 from collections import defaultdict
 from datetime import date, timedelta
 from urllib.parse import urlsplit
@@ -147,12 +148,28 @@ def generate_learning_plan(settings: OllamaSettings, request: LearningGenerateRe
     if not settings.model:
         raise HTTPException(422, "请先在数据与设置 → 本地大模型中选择并保存一个 Ollama 模型")
     schema = ModelLearningPlan.model_json_schema()
+    # Exact daily slots and enumerated minutes also constrain small local models.
+    # Keep the preview validator independent: imported drafts may contain several tasks per day.
+    daily_slots = []
+    for day in range(1, request.days + 1):
+        slot = deepcopy(schema['$defs']['ModelTask'])
+        slot['properties']['day_number'] = {'type': 'integer', 'enum': [day]}
+        slot['properties']['section_index'] = {'type': 'integer', 'enum': [day - 1]}
+        slot['properties']['minutes'] = {'type': 'integer', 'enum': list(range(1, request.daily_minutes + 1))}
+        daily_slots.append(slot)
+    schema['properties']['tasks'] = {'type': 'array', 'prefixItems': daily_slots,
+                                     'minItems': request.days, 'maxItems': request.days}
+    schema['properties']['sections']['minItems'] = request.days
+    schema['properties']['sections']['maxItems'] = request.days
     instructions = (
         "你是中文学习规划助手。根据用户填写的目标、基础和每天可用时间，制定具体可执行的学习计划。"
-        "只返回符合 JSON schema 的 JSON，不包含 Markdown。章节名称简短，每项任务明确成果或练习。"
-        "day_number 从 1 开始，必须覆盖每一个计划日；section_index 从 0 开始引用 sections。"
-        "每一天所有任务的 minutes 之和不能超过用户的 daily_minutes；不要生成空名称或重复任务。"
-        f"JSON schema：{json.dumps(schema, ensure_ascii=False)}"
+        "只返回 JSON，不包含 Markdown。章节名称简短，每项任务明确成果或练习。"
+        f"每天只生成一个综合任务，其他学习活动写入 notes。tasks 恰好包含 {request.days} 项，按天排序，"
+        f"day_number 从 1 到 {request.days} 各出现一次。每项 minutes 必须是 1 至 {request.daily_minutes} 的整数。"
+        f"sections 也恰好包含 {request.days} 个学习阶段，与每天的任务按顺序一一对应。"
+        "第 N 天任务的 section_index 必须是 N-1，阶段名称对应这一天学习的内容，不要生成空名称。"
+        'JSON 结构：{"name":"计划名称","goal":"目标","sections":["章节名称"],'
+        '"tasks":[{"day_number":1,"section_index":0,"title":"具体任务","minutes":30,"notes":"练习步骤和成果"}]}。'
     )
     data = ollama_request(settings, "/api/chat", {
         "model": settings.model, "stream": False, "think": False, "format": schema,

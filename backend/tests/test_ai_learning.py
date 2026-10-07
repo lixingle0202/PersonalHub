@@ -90,6 +90,12 @@ def test_generation_uses_structured_output_and_does_not_create_live_plans(client
         assert body['model'] == CONFIG['model']
         assert body['stream'] is False and body['think'] is False
         assert body['format']['type'] == 'object'
+        slots = body['format']['properties']['tasks']
+        assert slots['minItems'] == slots['maxItems'] == 2
+        assert [slot['properties']['day_number']['enum'] for slot in slots['prefixItems']] == [[1], [2]]
+        assert [slot['properties']['section_index']['enum'] for slot in slots['prefixItems']] == [[0], [1]]
+        assert body['format']['properties']['sections']['minItems'] == body['format']['properties']['sections']['maxItems'] == 2
+        assert all(slot['properties']['minutes']['enum'] == list(range(1, 46)) for slot in slots['prefixItems'])
         assert json.loads(body['messages'][1]['content'])['topic'] == 'Android'
         assert '私人笔记' not in json.dumps(body, ensure_ascii=False)
         return httpx.Response(200, json={'message': {'content': json.dumps(MODEL_PLAN)}})
@@ -99,6 +105,28 @@ def test_generation_uses_structured_output_and_does_not_create_live_plans(client
     assert client.get('/api/v1/learning/goals').json() == []
     assert client.get('/api/v1/agenda?date=2026-12-31').json() == []
     assert client.get(f"/api/v1/ai/learning/drafts/{draft['id']}").json() == draft
+
+
+@pytest.mark.parametrize('days,minutes', [(1, 5), (7, 45), (30, 480)])
+def test_small_model_generation_constrains_every_requested_day_and_its_time_budget(monkeypatch, days, minutes):
+    def handler(request):
+        body = json.loads(request.content)
+        slots = body['format']['properties']['tasks']
+        assert slots['minItems'] == slots['maxItems'] == days
+        assert len(slots['prefixItems']) == days
+        assert [slot['properties']['day_number']['enum'][0] for slot in slots['prefixItems']] == list(range(1, days + 1))
+        assert [slot['properties']['section_index']['enum'][0] for slot in slots['prefixItems']] == list(range(days))
+        assert body['format']['properties']['sections']['minItems'] == body['format']['properties']['sections']['maxItems'] == days
+        assert all(slot['properties']['minutes']['enum'] == list(range(1, minutes + 1)) for slot in slots['prefixItems'])
+        assert len(body['messages'][0]['content']) < 1000  # Do not duplicate a 30-day schema into the prompt.
+        result = {'name': '轻量模型计划', 'goal': '完成练习', 'sections': [f'阶段 {day}' for day in range(1, days + 1)],
+                  'tasks': [{'day_number': day, 'section_index': day - 1, 'title': f'练习 {day}', 'minutes': minutes, 'notes': '动手练习'} for day in range(1, days + 1)]}
+        return httpx.Response(200, json={'message': {'content': json.dumps(result)}})
+    model_transport(monkeypatch, handler)
+    request = ollama.LearningGenerateRequest(**{**REQUIREMENTS, 'days': days, 'daily_minutes': minutes})
+    result = ollama.generate_learning_plan(ollama.OllamaSettings(**CONFIG), request)
+    assert len(result.tasks) == days
+    assert all(task.minutes == minutes for task in result.tasks)
 
 
 def test_user_edited_draft_is_imported_once_and_visible_in_home_today_and_search(client, monkeypatch):
@@ -127,10 +155,11 @@ def test_user_edited_draft_is_imported_once_and_visible_in_home_today_and_search
     assert client.post(endpoint, json=draft['plan']).status_code == 409
 
 
-@pytest.mark.parametrize('change', ['bad_section', 'missing_day', 'over_budget', 'duplicate', 'blank_title'])
+@pytest.mark.parametrize('change', ['bad_section', 'missing_section', 'missing_day', 'over_budget', 'duplicate', 'blank_title'])
 def test_invalid_model_results_are_rejected_without_any_draft_or_live_plan(client, monkeypatch, change):
     plan = deepcopy(MODEL_PLAN)
     if change == 'bad_section': plan['tasks'][0]['section_index'] = 99
+    if change == 'missing_section': plan['sections'] = plan['sections'][:1]
     if change == 'missing_day': plan['tasks'] = plan['tasks'][:1]
     if change == 'over_budget': plan['tasks'][0]['minutes'] = 46
     if change == 'duplicate': plan['tasks'].append(deepcopy(plan['tasks'][0]))

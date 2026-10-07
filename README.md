@@ -22,6 +22,16 @@ PersonalHub 是只在当前 Windows 电脑上使用的工作与生活管理工�
 
 模型只收到生成窗口填写的需求，不会自动读取其他笔记。此功能可选，其他功能不依赖 Ollama。程序不会自动安装 Ollama 或下载模型。
 
+### 本机 D 盘安装与启动
+
+已安装的独立 Ollama 程序位于项目下 `.local-ai/ollama`，模型位于 `.local-ai/models`，下载包、日志和临时目录均位于 `.local-ai`，不放到 C 盘。该目录已加入 Git 忽略，不提交模型大文件。
+
+双击项目根目录 `Start-PersonalHub-With-AI.cmd` 可同时启动模型服务与网页；重启电脑后也使用这个入口。只启动模型服务可双击 `Start-LocalAI.cmd`。重复启动会复用已验证的现有服务，不创建第二个进程。服务只监听 `127.0.0.1:11434`，禁用云端模型功能。
+
+当前轻量模型为 [Qwen2.5 1.5B](https://ollama.com/library/qwen2.5:1.5b)，约 986 MB。网页“本地大模型”设置中使用 `qwen2.5:1.5b`；首次生成会加载模型，建议先从 2—7 天的学习计划开始。
+
+生成时每日一个学习阶段和一个综合任务，具体活动写在任务说明中；结构化输出逐日限定日期序号、对应章节和可用分钟，减少轻量模型漏天、超时或章节引用错误。现有草稿仍可保留多项任务，只要每日总时长符合预算。
+
 ## 数据、备份和恢复
 
 - 正式数据库：`%LOCALAPPDATA%\PersonalHub\data\personal_data.db`
@@ -81,6 +91,14 @@ node scripts/test-ai-browser.mjs .venv/Scripts/python.exe <playwright模块路�
 ```
 
 将第一个参数换为 `dist/PersonalHub/PersonalHub.exe` 并添加 `--packaged`，可对打包版执行同样的浏览器集成验收。
+
+已安装本机模型时，可执行真实推理验收，测试使用隔离数据库：
+
+```powershell
+node scripts/test-local-ai.mjs <playwright模块路径> .test-runtime/local-ai-review
+```
+
+该测试验证 D 盘模型存储、重复启动复用服务、实际生成 2 天和 7 天学习计划、编辑确认与首页同步，不创建个人数据库中的测试目标。
 
 打包后独立运行验收：
 

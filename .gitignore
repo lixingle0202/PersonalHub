@@ -12,6 +12,7 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 .test-runtime/
+.local-ai/
 .coverage
 coverage.xml
 test-results/
