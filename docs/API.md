@@ -106,3 +106,15 @@
 恢复接口必须验证文件、先备份当前数据，再执行原子替换。无效备份返回 422，不改变当前数据库。
 
 游戏娱乐接口组已下线，不再注册任何游戏资源、计划、游玩记录或娱乐预算接口；相关旧请求返回 404。
+
+## 10. 可选本地 AI 学习计划
+
+- `GET|PUT /api/v1/ai/ollama/settings`：读取或保存 `base_url` 和 `model`。服务地址只允许本机回环地址，禁止路径、凭据和重定向。
+- `POST /api/v1/ai/ollama/models`：传入 `base_url`，查询 Ollama `/api/tags` 返回模型名称。
+- `POST /api/v1/ai/learning/generate`：传入 `topic`、`objective`、`current_level`、`preferences`、`start_date`、`days`（1—30）、`daily_minutes`（5—480）。调用 Ollama `/api/chat`，使用 JSON schema 结构化输出；成功返回 `{id, plan, imported_goal_id: null}` 草稿，不创建正式学习目标。
+- `GET /api/v1/ai/learning/drafts/{id}`：读取持久化草稿。
+- `POST /api/v1/ai/learning/drafts/{id}/import`：提交编辑后的完整 `plan`，原日期范围和每日时间预算必须保留。一次事务创建学习目标、章节、任务及关联今日计划，返回目标详情（201）。同一草稿重试返回同一目标；已删除目标的草稿再次导入返回 409。
+
+草稿字段：`name`、`goal`、`start_date`、`target_date`、`daily_minutes`、`sections`（章节名称数组）、`tasks`（`title`、`plan_date`、`section_index` 从 0 开始、`minutes`、`notes`）。允许删除部分任务，但至少保留一项。导入时校验所有任务日期、章节引用、非空名称、同日重复任务及每日总分钟。
+
+未配置或未安装模型返回 422，连接失败返回 503，超时返回 504，Ollama 服务错误或模型输出不合格返回 502。生成最长等待 300 秒，浏览器允许取消等待。后端生成请求可能继续完成并保存草稿，但不会自动导入正式计划。

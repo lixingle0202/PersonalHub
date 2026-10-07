@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Button, Card, Col, DatePicker, Form, Input, InputNumber, Modal, Progress, Row, Space, Tabs, Typography, message } from 'antd'
 import dayjs, { type Dayjs } from 'dayjs'
 import { apiRequest } from '../api/client'
+import { AILearningGenerator } from '../components/AILearningGenerator'
 import { EmptyStatePanel, ErrorPanel, LoadingPanel } from '../components/StatePanels'
 
 type LearningGoal = {
@@ -85,7 +86,7 @@ export function LearningPage() {
   if (error) return <ErrorPanel message={error} onRetry={() => void loadGoals()} />
   if (!goals) return <LoadingPanel />
   return <div className="page-stack">
-    <div className="page-actions"><Typography.Text type="secondary">从长期目标拆到章节、任务和每次学习记录</Typography.Text><Button type="primary" onClick={openCreateGoal}>新建学习目标</Button></div>
+    <div className="page-actions"><Typography.Text type="secondary">从长期目标拆到章节、任务和每次学习记录</Typography.Text><Space><AILearningGenerator initialTopic={detail?.name} initialObjective={detail?.goal} onImported={async (id) => { await loadGoals(); setSelectedId(id); if (id === selectedId) await loadDetail() }} /><Button type="primary" onClick={openCreateGoal}>新建学习目标</Button></Space></div>
     <Row gutter={20}>
       <Col span={7}><Card title="学习目标"><div className="selectable-list">{goals.map((goal) => <button aria-label={`编辑学习目标 ${goal.name}`} key={goal.id} className={goal.id === selectedId ? 'selected' : ''} onClick={() => openGoalEditor(goal)}><strong>{goal.name}</strong><span>{goal.progress}% · 点击修改</span></button>)}</div></Card></Col>
       <Col span={17}>{detail ? <Card title={detail.name} extra={<Space><Typography.Text type="secondary">{detail.progress_is_manual ? '手动进度' : '按章节计算'}</Typography.Text><InputNumber aria-label="学习进度" min={0} max={100} value={progressValue} onChange={(value) => setProgressValue(value ?? 0)} /><Typography.Text>%</Typography.Text><Button type="primary" loading={savingProgress} onClick={() => void saveProgress()}>保存进度</Button></Space>}><Typography.Paragraph>{detail.goal}</Typography.Paragraph><Typography.Text type="secondary">计划：{detail.start_date ?? '未设置'} 至 {detail.target_date ?? '未设置'} · 预计投入 {detail.estimated_minutes} 分钟</Typography.Text><Progress percent={detail.progress} /><Tabs items={[

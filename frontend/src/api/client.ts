@@ -1,4 +1,4 @@
-export type ApiErrorBody = { detail?: string }
+export type ApiErrorBody = { detail?: string | Array<{ msg?: string }> }
 
 let localToken = ''
 
@@ -33,7 +33,8 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
     let message = `操作失败（${response.status}）`
     try {
       const body = await response.json() as ApiErrorBody
-      if (body.detail) message = body.detail
+      if (typeof body.detail === 'string') message = body.detail
+      else if (Array.isArray(body.detail)) message = body.detail.map((item) => item.msg).filter(Boolean).join('；') || message
     } catch {
       // Keep the status-based message when the response is not JSON.
     }

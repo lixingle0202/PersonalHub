@@ -75,6 +75,19 @@ try {
     $Body = '{"content":"package-persistence"}'
     Invoke-RestMethod -Uri "http://127.0.0.1:$Port/api/v1/quick-notes" -Method Post -Headers $Headers -ContentType "application/json" -Body $Body -TimeoutSec 2 | Out-Null
 
+    $OfflineModelAddress = "http://127.0.0.1:$(Get-FreeLoopbackPort)"
+    $ModelConfig = @{ base_url = $OfflineModelAddress; model = 'package-test-model' } | ConvertTo-Json -Compress
+    Invoke-RestMethod -Uri "http://127.0.0.1:$Port/api/v1/ai/ollama/settings" -Method Put -Headers $Headers -ContentType "application/json" -Body $ModelConfig -TimeoutSec 2 | Out-Null
+    $DisconnectedStatus = 0
+    try {
+        $EndpointBody = @{ base_url = $OfflineModelAddress } | ConvertTo-Json -Compress
+        Invoke-WebRequest -Uri "http://127.0.0.1:$Port/api/v1/ai/ollama/models" -Method Post -Headers $Headers -ContentType "application/json" -Body $EndpointBody -TimeoutSec 5 -UseBasicParsing | Out-Null
+    } catch {
+        if ($null -eq $_.Exception.Response) { throw }
+        $DisconnectedStatus = [int]$_.Exception.Response.StatusCode
+    }
+    if ($DisconnectedStatus -ne 503) { throw 'Packaged Ollama client did not handle a disconnected local service.' }
+
     $Second = Start-Process -FilePath $Executable -WorkingDirectory $WorkingDirectory -WindowStyle Hidden -PassThru
     if (-not $Second.WaitForExit(10000)) { throw "Second packaged instance did not exit." }
     if ($Second.ExitCode -ne 0) { throw "Second packaged instance returned $($Second.ExitCode)." }
@@ -92,7 +105,12 @@ try {
         throw "Data did not persist across a packaged app restart."
     }
 
-    Write-Host "Package smoke test passed: local-only server, frontend assets, single instance, and restart persistence."
+    $SavedModel = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/api/v1/ai/ollama/settings" -TimeoutSec 2
+    if ($SavedModel.model -ne 'package-test-model' -or $SavedModel.base_url -ne $OfflineModelAddress) {
+        throw 'Local model settings did not persist across a packaged app restart.'
+    }
+
+    Write-Host "Package smoke test passed: local-only server, frontend assets, single instance, restart persistence, Ollama client errors and persisted model settings."
 } finally {
     Stop-TestProcess -Process $Second
     Stop-TestProcess -Process $First

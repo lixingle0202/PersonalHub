@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Button, Card, Col, ColorPicker, Empty, Form, Input, InputNumber, Row, Select, Switch, Tabs, Tag, Typography, message } from 'antd'
 import { apiRequest, bootstrapApi } from '../api/client'
 import { applyAppearance } from '../app/theme'
 import { ConfirmDangerButton } from '../components/ConfirmDangerButton'
+import { OllamaSettingsPanel } from '../components/OllamaSettingsPanel'
 import { ErrorPanel, LoadingPanel } from '../components/StatePanels'
 
 type AppSettings = {
@@ -25,6 +27,7 @@ function readableSize(size: number) {
 }
 
 export function SettingsPage() {
+  const [searchParams] = useSearchParams()
   const [settings, setSettings] = useState<AppSettings | null>(null)
   const [databasePath, setDatabasePath] = useState('')
   const [backups, setBackups] = useState<Backup[]>([])
@@ -108,8 +111,9 @@ export function SettingsPage() {
     <Button type="primary" htmlType="submit">保存设置</Button>
   </Form></Card>
 
-  return <div className="page-stack"><Tabs items={[
+  return <div className="page-stack"><Tabs defaultActiveKey={searchParams.get('tab') === 'ai' ? 'ai' : 'data'} items={[
     { key: 'data', label: '数据管理', children: dataPanel },
     { key: 'preferences', label: '个性化设置', children: preferencesPanel },
+    { key: 'ai', label: '本地大模型', children: <OllamaSettingsPanel /> },
   ]} /></div>
 }

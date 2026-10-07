@@ -246,6 +246,14 @@ class LearningSection(LifecycleMixin, Base):
     is_completed: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
+class AILearningDraft(TimestampMixin, Base):
+    __tablename__ = "ai_learning_drafts"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    plan_json: Mapped[str] = mapped_column(Text, nullable=False)
+    imported_goal_id: Mapped[str | None] = mapped_column(ForeignKey("learning_goals.id", ondelete="SET NULL"))
+    imported_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class LearningTask(LifecycleMixin, Base):
     __tablename__ = "learning_tasks"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
