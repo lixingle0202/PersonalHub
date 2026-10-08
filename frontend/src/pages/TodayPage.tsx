@@ -97,7 +97,7 @@ export function TodayPage() {
         </Space>
       </div>
       {groups.map(([key, label]) => (
-        <Card title={`${label} · ${grouped[key].length}`} key={key}>
+        <Card className={`agenda-group agenda-group-${key}`} title={<span className="agenda-group-title"><span className="group-dot" aria-hidden="true" />{label} · {grouped[key].length}</span>} key={key}>
           <AgendaList
             items={grouped[key]}
             onComplete={key === 'completed' ? undefined : (item) => void complete(item)}

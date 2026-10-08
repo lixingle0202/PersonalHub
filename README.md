@@ -92,6 +92,14 @@ node scripts/test-ai-browser.mjs .venv/Scripts/python.exe <playwright模块路�
 
 将第一个参数换为 `dist/PersonalHub/PersonalHub.exe` 并添加 `--packaged`，可对打包版执行同样的浏览器集成验收。
 
+视觉与交互浏览器验收（使用独立数据库，涵盖五个页面、明暗模式、键盘操作、窄屏布局、减少动态效果/透明度和玻璃材质回退）：
+
+```powershell
+node scripts/test-visual-browser.mjs .venv/Scripts/python.exe <playwright模块路径> .test-runtime/visual-review
+```
+
+报告及各页面截图保存在指定目录；打包版同样支持 `--packaged`。
+
 已安装本机模型时，可执行真实推理验收，测试使用隔离数据库：
 
 ```powershell

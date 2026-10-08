@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -39,6 +39,27 @@ describe('application shell', () => {
     await user.click(screen.getByRole('link', { name: /学习计划/ }))
     expect(await screen.findByRole('heading', { name: '学习计划', level: 3 })).toBeInTheDocument()
     expect(await screen.findByText('从长期目标拆到章节、任务和每次学习记录')).toBeInTheDocument()
+  })
+
+  it('exposes one current navigation destination and updates it after navigation', async () => {
+    const user = userEvent.setup()
+    render(<MemoryRouter><App /></MemoryRouter>)
+    const navigation = screen.getByRole('navigation', { name: '主导航' })
+    expect(within(navigation).getByRole('link', { name: '首页总览' })).toHaveAttribute('aria-current', 'page')
+    await user.click(within(navigation).getByRole('link', { name: '今日计划' }))
+    expect(await screen.findByRole('heading', { level: 3, name: '今日计划' })).toBeInTheDocument()
+    expect(within(navigation).getByRole('link', { name: '今日计划' })).toHaveAttribute('aria-current', 'page')
+    expect(within(navigation).getByRole('link', { name: '首页总览' })).not.toHaveAttribute('aria-current')
+    expect(navigation.querySelectorAll('[aria-current="page"]')).toHaveLength(1)
+  })
+
+  it('lets keyboard users skip navigation and focus the main content', async () => {
+    const user = userEvent.setup()
+    render(<MemoryRouter><App /></MemoryRouter>)
+    await user.tab()
+    expect(screen.getByRole('link', { name: '跳到主要内容' })).toHaveFocus()
+    await user.keyboard('{Enter}')
+    expect(screen.getByRole('main')).toHaveFocus()
   })
 
   it.each(['/media', '/development', '/consulting', '/games'])('redirects removed route %s to the overview', async (route) => {

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { ArrowRightOutlined, CalendarOutlined, CheckOutlined, CoffeeOutlined, EditOutlined, FlagOutlined, ReadOutlined } from '@ant-design/icons'
 import { Alert, Button, Card, Col, Input, Progress, Row, Space, Statistic, Typography, message } from 'antd'
 import dayjs from 'dayjs'
 import { useNavigate } from 'react-router-dom'
@@ -56,30 +57,31 @@ export function HomePage() {
 
   return (
     <div className="page-stack">
-      <section className="welcome-row">
+      <section className="welcome-row" aria-label="今日概览">
         <div>
+          <span className="eyebrow">每一天，都值得好好安排</span>
           <Typography.Title level={2}>今天，专注最重要的事</Typography.Title>
-          <Typography.Text type="secondary">{dayjs().format('YYYY年MM月DD日 dddd')}</Typography.Text>
+          <Typography.Text type="secondary">{dayjs().format('YYYY年MM月DD日')} · {['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'][dayjs().day()]}</Typography.Text>
         </div>
-        <Progress type="circle" percent={data.stats.completion_rate} size={78} />
+        <div className="daily-progress"><Progress type="circle" percent={data.stats.completion_rate} size={88} strokeWidth={8} strokeColor="var(--primary-color)" railColor="var(--surface-line)" /><span>今日完成度</span></div>
       </section>
-      <Row gutter={16}>
-        <Col span={8}><Card><Statistic title="今日事项" value={data.stats.total} /></Card></Col>
-        <Col span={8}><Card><Statistic title="已经完成" value={data.stats.completed} /></Card></Col>
-        <Col span={8}><Card><Statistic title="必须完成" value={data.stats.must} /></Card></Col>
+      <Row gutter={[16, 16]} className="summary-grid">
+        <Col xs={24} sm={8}><Card className="summary-card"><span className="summary-icon summary-icon-blue"><CalendarOutlined aria-hidden="true" /></span><Statistic title="今日事项" value={data.stats.total} suffix={<span className="stat-unit">项</span>} /><span className="summary-caption">为今天留出清晰的节奏</span></Card></Col>
+        <Col xs={24} sm={8}><Card className="summary-card"><span className="summary-icon summary-icon-green"><CheckOutlined aria-hidden="true" /></span><Statistic title="已经完成" value={data.stats.completed} suffix={<span className="stat-unit">项</span>} /><span className="summary-caption">每一小步，都算数</span></Card></Col>
+        <Col xs={24} sm={8}><Card className="summary-card"><span className="summary-icon summary-icon-amber"><FlagOutlined aria-hidden="true" /></span><Statistic title="必须完成" value={data.stats.must} suffix={<span className="stat-unit">项</span>} /><span className="summary-caption">把精力放在重要的事上</span></Card></Col>
       </Row>
       {data.stats.overdue || data.stats.due_soon ? (
         <Alert type="warning" showIcon title={`有 ${data.stats.overdue} 项逾期，${data.stats.due_soon} 项将在三天内到期`} />
       ) : null}
-      <Row gutter={20} align="stretch">
-        <Col span={15}>
-          <Card title="今日计划" extra={<Button type="link" onClick={() => navigate('/today')}>查看全部</Button>}>
+      <Row gutter={[20, 20]} align="stretch" className="home-detail-grid">
+        <Col xs={24} xl={15}>
+          <Card title={<span className="card-title-icon"><CalendarOutlined aria-hidden="true" />今日计划</span>} extra={<Button type="link" onClick={() => navigate('/today')}>查看全部 <ArrowRightOutlined aria-hidden="true" /></Button>}>
             <div className="home-plan-overviews">
               {Object.entries(summaryMeta).map(([key, [label, path]]) => {
                 const summary = data.summaries[key as keyof HomeData['summaries']]
                 return (
                   <button type="button" className="home-plan-overview" key={key} onClick={() => navigate(path)}>
-                    <Typography.Text type="secondary">{label}</Typography.Text>
+                    <span className="overview-label">{key === 'learning' ? <ReadOutlined aria-hidden="true" /> : <CoffeeOutlined aria-hidden="true" />}{label}<ArrowRightOutlined aria-hidden="true" /></span>
                     <Typography.Text strong>{summary.title}</Typography.Text>
                     {summary.detail ? <Typography.Text type="secondary">{summary.detail}</Typography.Text> : null}
                   </button>
@@ -90,10 +92,11 @@ export function HomePage() {
             <AgendaList items={data.agenda} onComplete={(item) => void complete(item)} compact />
           </Card>
         </Col>
-        <Col span={9}>
-          <Card title="快速备忘">
+        <Col xs={24} xl={9}>
+          <Card className="notes-card" title={<span className="card-title-icon"><EditOutlined aria-hidden="true" />快速备忘</span>}>
+            <Typography.Paragraph type="secondary" className="notes-caption">让灵感先落下来，稍后再慢慢安排。</Typography.Paragraph>
             <Space.Compact block>
-              <Input value={note} onChange={(event) => setNote(event.target.value)} onPressEnter={() => void addNote()} placeholder="随手记下一件事" />
+              <Input aria-label="快速备忘内容" value={note} onChange={(event) => setNote(event.target.value)} onPressEnter={() => void addNote()} placeholder="随手记下一件事" />
               <Button type="primary" onClick={() => void addNote()}>记录</Button>
             </Space.Compact>
             <div className="note-list">
@@ -103,6 +106,7 @@ export function HomePage() {
                   <Button size="small" onClick={() => void convertNote(item.id)}>加入今天</Button>
                 </div>
               ))}
+              {!data.quick_notes.length ? <div className="notes-empty"><EditOutlined aria-hidden="true" /><span>一个想法，一件小事<br />都可以从这里开始</span></div> : null}
             </div>
           </Card>
         </Col>

@@ -1,8 +1,12 @@
 import '@testing-library/jest-dom/vitest'
-import { cleanup } from '@testing-library/react'
+import { act, cleanup } from '@testing-library/react'
+import { message } from 'antd'
 import { afterEach } from 'vitest'
 
-afterEach(() => cleanup())
+afterEach(async () => {
+  cleanup()
+  await act(async () => message.destroy())
+})
 
 class ResizeObserverMock {
   observe() {}

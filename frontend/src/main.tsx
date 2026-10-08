@@ -1,10 +1,13 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
+import { ConfigProvider } from 'antd'
 import { BrowserRouter } from 'react-router-dom'
 import { App } from './app/App'
 import { bootstrapApi } from './api/client'
-import { loadAppearance } from './app/theme'
+import { AppearanceProvider, loadAppearance } from './app/theme'
 import './styles.css'
+
+ConfigProvider.config({ holderRender: (children) => <AppearanceProvider>{children}</AppearanceProvider> })
 
 async function start() {
   const root = ReactDOM.createRoot(document.getElementById('root')!)
@@ -12,7 +15,7 @@ async function start() {
     await Promise.all([bootstrapApi(), loadAppearance()])
     root.render(
       <React.StrictMode>
-        <BrowserRouter><App /></BrowserRouter>
+        <AppearanceProvider><BrowserRouter><App /></BrowserRouter></AppearanceProvider>
       </React.StrictMode>,
     )
   } catch (error) {

@@ -133,11 +133,13 @@ describe('domain-specific module pages', () => {
     render(<MemoryRouter><DietPage /></MemoryRouter>)
 
     fireEvent.click(await screen.findByLabelText(`修改 ${mealDate} 午餐`))
-    expect(await screen.findByRole('dialog', { name: '修改饮食安排' })).toBeInTheDocument()
-    const customName = screen.getByLabelText('或填写其他餐食')
+    const editor = await screen.findByRole('dialog', { name: '修改饮食安排' })
+    expect(editor).toBeInTheDocument()
+    const editorArea = within(editor)
+    const customName = editorArea.getByLabelText('或填写其他餐食')
     expect(customName).toHaveValue('米饭')
     fireEvent.change(customName, { target: { value: '鸡胸肉沙拉' } })
-    fireEvent.click(screen.getByRole('button', { name: '保存修改' }))
+    fireEvent.click(editorArea.getByLabelText('保存修改'))
 
     await waitFor(() => expect(fetchMock.mock.calls.some(([input, init]) => {
       if (!String(input).endsWith('/diet/meals/meal1') || init?.method !== 'PATCH') return false

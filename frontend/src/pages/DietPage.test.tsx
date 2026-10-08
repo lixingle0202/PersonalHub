@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
+import { message } from 'antd'
 import dayjs from 'dayjs'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setLocalToken } from '../api/client'
@@ -45,7 +45,10 @@ describe('diet monthly calendar and manual changes', () => {
     vi.setSystemTime(new Date('2026-10-07T12:00:00+08:00'))
     setLocalToken('test-token')
   })
-  afterEach(() => vi.useRealTimers())
+  afterEach(async () => {
+    await act(async () => message.destroy())
+    vi.useRealTimers()
+  })
 
   it.each([
     ['2026-10-01', '2026-09-28', '2026-11-01'],
@@ -152,17 +155,18 @@ describe('diet monthly calendar and manual changes', () => {
   })
 
   it('requires confirmation for deletion and removes only that meal', async () => {
-    const user = userEvent.setup()
     const fetchMock = mockApi([meal('one'), meal('two', { meal_type: 'dinner', custom_name: '蒸鱼', dish_name: '蒸鱼' })])
     render(<DietPage />)
-    await user.click(await screen.findByLabelText('修改 2026-10-07 午餐'))
+    fireEvent.click(await screen.findByLabelText('修改 2026-10-07 午餐'))
     const dialog = within(screen.getByRole('dialog'))
-    await user.click(dialog.getByRole('button', { name: '删除这餐' }))
+    fireEvent.click(dialog.getByLabelText('删除这餐'))
     expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(false)
-    await user.click(within(screen.getByRole('tooltip')).getByRole('button', { name: /取\s*消/ }))
+    fireEvent.click(within(screen.getByRole('tooltip')).getByRole('button', { name: /取\s*消/ }))
     expect(screen.getByText('米饭')).toBeInTheDocument()
-    await user.click(dialog.getByRole('button', { name: '删除这餐' }))
-    await user.click(screen.getByRole('button', { name: /确\s*认/ }))
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(false)
+    fireEvent.click(dialog.getByLabelText('删除这餐'))
+    const confirmation = within(screen.getByRole('tooltip')).getByRole('button', { name: /确\s*认/ })
+    await act(async () => fireEvent.click(confirmation))
     await waitFor(() => expect(screen.queryByText('米饭')).not.toBeInTheDocument())
     expect(screen.getByText('蒸鱼')).toBeInTheDocument()
     expect(fetchMock.mock.calls.some(([input, init]) => String(input).endsWith('/diet/meals/one') && init?.method === 'DELETE')).toBe(true)
@@ -170,14 +174,16 @@ describe('diet monthly calendar and manual changes', () => {
   })
 
   it('keeps the meal and editor visible when deletion fails', async () => {
-    const user = userEvent.setup()
-    mockApi([meal('one')], true)
+    const fetchMock = mockApi([meal('one')], true)
     render(<DietPage />)
-    await user.click(await screen.findByLabelText('修改 2026-10-07 午餐'))
-    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: '删除这餐' }))
-    await user.click(screen.getByRole('button', { name: /确\s*认/ }))
+    fireEvent.click(await screen.findByLabelText('修改 2026-10-07 午餐'))
+    fireEvent.click(within(screen.getByRole('dialog')).getByLabelText('删除这餐'))
+    const confirmation = within(screen.getByRole('tooltip')).getByRole('button', { name: /确\s*认/ })
+    await act(async () => fireEvent.click(confirmation))
     expect(await screen.findByText('删除失败，请重试')).toBeInTheDocument()
     expect(screen.getByRole('dialog', { name: '修改饮食安排' })).toBeInTheDocument()
     expect(screen.getByText('米饭')).toBeInTheDocument()
+    expect(fetchMock.mock.calls.some(([input, init]) => String(input).endsWith('/diet/meals/one') && init?.method === 'DELETE')).toBe(true)
+    expect(screen.getByLabelText('或填写其他餐食')).toHaveValue('米饭')
   })
 })
