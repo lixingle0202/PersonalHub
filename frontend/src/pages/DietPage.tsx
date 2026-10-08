@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Button, Card, Checkbox, Col, DatePicker, Form, Input, InputNumber, Modal, Row, Select, Space, Tabs, Typography, message } from 'antd'
+import { Alert, Button, Card, Checkbox, Col, DatePicker, Form, Input, InputNumber, Modal, Row, Select, Space, Tabs, Typography, message } from 'antd'
 import dayjs, { type Dayjs } from 'dayjs'
 import { apiRequest } from '../api/client'
 import { ConfirmDangerButton } from '../components/ConfirmDangerButton'
@@ -23,6 +23,8 @@ export function DietPage() {
   const [resetting, setResetting] = useState(false)
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
   const [loadingCalendar, setLoadingCalendar] = useState(false)
   const loadVersion = useRef(0)
   const [form] = Form.useForm()
@@ -95,18 +97,21 @@ export function DietPage() {
 
   function closeModal() {
     form.resetFields()
+    setDeleteConfirmOpen(false)
+    setDeleteError('')
     setEditingMeal(null)
     setModal(null)
   }
   async function deleteMeal() {
-    if (!editingMeal) return
+    if (!editingMeal || deleting || saving) return
     setDeleting(true)
+    setDeleteError('')
     try {
       await apiRequest(`/diet/meals/${editingMeal.id}`, { method: 'DELETE' })
       closeModal()
       await load()
       message.success('饮食安排已删除，其他模块已同步移除')
-    } catch (reason) { message.error(reason instanceof Error ? reason.message : '删除失败，请重试') }
+    } catch (reason) { setDeleteError(reason instanceof Error ? reason.message : '删除失败，请重试') }
     finally { setDeleting(false) }
   }
   async function saveHealth(values: { water_ml: number; weight_kg?: number; feeling?: string }) {
@@ -138,12 +143,16 @@ export function DietPage() {
       { key: 'shopping', label: '购物清单', children: <><div className="tab-actions"><Button type="primary" onClick={() => openSimpleModal('shopping')}>按当前月份饮食生成</Button></div>{shopping.map((list) => <Card title={`${list.name} · ${list.start_date}—${list.end_date}`} key={list.id}>{list.items.map((item) => <div className="shopping-row" key={item.id}><Checkbox checked={item.is_completed} onChange={(event) => void toggleShopping(item.id, event.target.checked)}>{item.ingredient_name}</Checkbox><span>{item.quantity_text}</span></div>)}</Card>)}</> },
       { key: 'daily', label: '每日记录', children: <Card title="今天"><Form layout="vertical" initialValues={health} onFinish={(values) => void saveHealth(values)}><Row gutter={12}><Col span={8}><Form.Item name="water_ml" label="饮水量（ml）"><InputNumber min={0} /></Form.Item></Col><Col span={8}><Form.Item name="weight_kg" label="体重（kg）"><InputNumber min={1} step={0.1} /></Form.Item></Col></Row><Form.Item name="feeling" label="今日感受"><Input.TextArea /></Form.Item><Button type="primary" htmlType="submit">保存记录</Button></Form></Card> },
     ]} />
-    <Modal forceRender title={modal === 'dish' ? '新增菜品' : modal === 'meal' ? editingMeal ? '修改饮食安排' : '安排一餐' : '生成购物清单'} open={Boolean(modal)} onCancel={() => { if (!saving && !deleting) closeModal() }} footer={<div className="diet-editor-footer"><div>{editingMeal ? <ConfirmDangerButton label="删除这餐" title="确认删除这餐？" description="这条饮食安排将从饮食日历、首页、今日计划和搜索中移除，可在回收站恢复。" disabled={saving || deleting} onConfirm={deleteMeal} /> : null}</div><Space><Button aria-label="取消" disabled={saving || deleting} onClick={closeModal}>取消</Button><Button aria-label={editingMeal ? '保存修改' : '创建'} type="primary" loading={saving} disabled={deleting} onClick={() => form.submit()}>{editingMeal ? '保存修改' : '创建'}</Button></Space></div>}>
+    <Modal forceRender title={modal === 'dish' ? '新增菜品' : modal === 'meal' ? editingMeal ? '修改饮食安排' : '安排一餐' : '生成购物清单'} open={Boolean(modal)} closable={{ disabled: saving || deleting }} keyboard={!saving && !deleting} mask={{ closable: !saving && !deleting }} onCancel={() => { if (!saving && !deleting) closeModal() }} footer={<div className="diet-editor-footer"><div>{editingMeal ? <Button aria-label="删除这餐" danger disabled={saving || deleting} onClick={() => { setDeleteError(''); setDeleteConfirmOpen(true) }}>删除这餐</Button> : null}</div><Space><Button aria-label="取消" disabled={saving || deleting} onClick={closeModal}>取消</Button><Button aria-label={editingMeal ? '保存修改' : '创建'} type="primary" loading={saving} disabled={deleting} onClick={() => form.submit()}>{editingMeal ? '保存修改' : '创建'}</Button></Space></div>}>
       <Form form={form} layout="vertical" onFinish={(values) => void submit(values)}>
         {modal === 'dish' ? <><Form.Item name="name" label="菜品名称" rules={[{ required: true }]}><Input /></Form.Item><Form.Item name="instructions" label="简单做法"><Input.TextArea /></Form.Item><Form.Item name="ingredients_text" label="食材（每行：名称 | 数量 | 单位）"><Input.TextArea rows={5} placeholder={'鸡蛋 | 2 | 个\n番茄 | 2 | 个'} /></Form.Item><Form.Item name="nutrition_notes" label="营养备注"><Input.TextArea /></Form.Item></> : null}
         {modal === 'meal' ? <><Form.Item name="meal_date" label="日期" rules={[{ required: true }]}><DatePicker /></Form.Item><Form.Item name="meal_type" label="餐次" rules={[{ required: true }]}><Select options={mealTypes.map(([value, label]) => ({ value, label }))} /></Form.Item><Form.Item name="dish_id" label="选择菜品"><Select allowClear options={dishes.map((dish) => ({ value: dish.id, label: dish.name }))} /></Form.Item><Form.Item name="custom_name" label="或填写其他餐食"><Input /></Form.Item><Form.Item name="actual_food" label="实际饮食（可选）"><Input /></Form.Item></> : null}
         {modal === 'shopping' ? <Form.Item name="name" label="清单名称" initialValue="本月采购" rules={[{ required: true }]}><Input /></Form.Item> : null}
       </Form>
+    </Modal>
+    <Modal title="确认删除这餐？" centered width={440} open={deleteConfirmOpen && Boolean(editingMeal)} onOk={() => void deleteMeal()} onCancel={() => { if (!deleting) { setDeleteConfirmOpen(false); setDeleteError('') } }} okText="确认" cancelText="取消" confirmLoading={deleting} okButtonProps={{ danger: true, disabled: saving || deleting }} cancelButtonProps={{ disabled: deleting }} closable={!deleting} keyboard={!deleting} mask={{ closable: !deleting }}>
+      <Typography.Paragraph>这条饮食安排将从饮食日历、首页、今日计划和搜索中移除，可在回收站恢复。</Typography.Paragraph>
+      {deleteError ? <Alert type="error" showIcon title={deleteError} /> : null}
     </Modal>
   </div>
 }

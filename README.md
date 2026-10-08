@@ -100,6 +100,14 @@ node scripts/test-visual-browser.mjs .venv/Scripts/python.exe <playwright模块�
 
 报告及各页面截图保存在指定目录；打包版同样支持 `--packaged`。
 
+饮食删除浏览器回归测试（独立数据库，验证小窗口确认按钮可点击、取消保留草稿、失败重试、防止重复删除，以及首页、今日计划、搜索和日历同步）：
+
+```powershell
+node scripts/test-diet-delete-browser.mjs .venv/Scripts/python.exe <playwright模块路径> .test-runtime/diet-delete-review
+```
+
+打包版同样将第一个参数换为程序路径并追加 `--packaged`；每次运行使用新的测试目录。
+
 已安装本机模型时，可执行真实推理验收，测试使用隔离数据库：
 
 ```powershell

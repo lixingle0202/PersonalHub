@@ -11,13 +11,18 @@ const meal = (id: string, overrides: Partial<Meal> = {}): Meal => ({
   custom_name: '米饭', dish_name: '米饭', actual_food: '', status: 'pending', ...overrides,
 })
 
-function mockApi(initial: Meal[] = [], deleteFails = false) {
+// Ant Design uses a shared title ID in test mode; locate each dialog by its visible title.
+function dialogWithTitle(title: string) {
+  return screen.getByText(title).closest('[role="dialog"]') as HTMLElement
+}
+
+function mockApi(initial: Meal[] = [], deleteFails: boolean | (() => boolean) = false) {
   let meals = [...initial]
   return vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
     const url = new URL(String(input), 'http://localhost')
     let body: unknown = []
     if (url.pathname.includes('/diet/meals/') && init?.method === 'DELETE') {
-      if (deleteFails) return new Response(JSON.stringify({ detail: '删除失败，请重试' }), { status: 500 })
+      if (typeof deleteFails === 'function' ? deleteFails() : deleteFails) return new Response(JSON.stringify({ detail: '删除失败，请重试' }), { status: 500 })
       meals = meals.filter((entry) => !url.pathname.endsWith(`/${entry.id}`))
       body = {}
     } else if (url.pathname.includes('/diet/meals/') && init?.method === 'PATCH') {
@@ -161,11 +166,12 @@ describe('diet monthly calendar and manual changes', () => {
     const dialog = within(screen.getByRole('dialog'))
     fireEvent.click(dialog.getByLabelText('删除这餐'))
     expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(false)
-    fireEvent.click(within(screen.getByRole('tooltip')).getByRole('button', { name: /取\s*消/ }))
+    const firstConfirmation = within(dialogWithTitle('确认删除这餐？'))
+    fireEvent.click(firstConfirmation.getByRole('button', { name: /取\s*消/ }))
     expect(screen.getByText('米饭')).toBeInTheDocument()
     expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(false)
     fireEvent.click(dialog.getByLabelText('删除这餐'))
-    const confirmation = within(screen.getByRole('tooltip')).getByRole('button', { name: /确\s*认/ })
+    const confirmation = within(dialogWithTitle('确认删除这餐？')).getByRole('button', { name: /确\s*认/ })
     await act(async () => fireEvent.click(confirmation))
     await waitFor(() => expect(screen.queryByText('米饭')).not.toBeInTheDocument())
     expect(screen.getByText('蒸鱼')).toBeInTheDocument()
@@ -178,12 +184,58 @@ describe('diet monthly calendar and manual changes', () => {
     render(<DietPage />)
     fireEvent.click(await screen.findByLabelText('修改 2026-10-07 午餐'))
     fireEvent.click(within(screen.getByRole('dialog')).getByLabelText('删除这餐'))
-    const confirmation = within(screen.getByRole('tooltip')).getByRole('button', { name: /确\s*认/ })
+    const confirmation = within(dialogWithTitle('确认删除这餐？')).getByRole('button', { name: /确\s*认/ })
     await act(async () => fireEvent.click(confirmation))
     expect(await screen.findByText('删除失败，请重试')).toBeInTheDocument()
-    expect(screen.getByRole('dialog', { name: '修改饮食安排' })).toBeInTheDocument()
+    expect(dialogWithTitle('修改饮食安排')).toBeInTheDocument()
     expect(screen.getByText('米饭')).toBeInTheDocument()
     expect(fetchMock.mock.calls.some(([input, init]) => String(input).endsWith('/diet/meals/one') && init?.method === 'DELETE')).toBe(true)
     expect(screen.getByLabelText('或填写其他餐食')).toHaveValue('米饭')
+  })
+
+  it('allows a failed delete to be retried without losing unsaved meal edits', async () => {
+    let failDelete = true
+    const fetchMock = mockApi([meal('one')], () => failDelete)
+    render(<DietPage />)
+    fireEvent.click(await screen.findByLabelText('修改 2026-10-07 午餐'))
+    fireEvent.change(screen.getByLabelText('或填写其他餐食'), { target: { value: '尚未保存的修改' } })
+    fireEvent.click(screen.getByLabelText('删除这餐'))
+    const confirmation = within(dialogWithTitle('确认删除这餐？'))
+    await act(async () => fireEvent.click(confirmation.getByRole('button', { name: /确\s*认/ })))
+    expect(await confirmation.findByText('删除失败，请重试')).toBeInTheDocument()
+    expect(screen.getByLabelText('或填写其他餐食')).toHaveValue('尚未保存的修改')
+    failDelete = false
+    await act(async () => fireEvent.click(confirmation.getByRole('button', { name: /确\s*认/ })))
+    await waitFor(() => expect(screen.queryByText('米饭')).not.toBeInTheDocument())
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'DELETE')).toHaveLength(2)
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('blocks duplicate deletion and editor actions while the delete request is pending', async () => {
+    const fetchMock = mockApi([meal('one')])
+    const normalRequest = fetchMock.getMockImplementation()!
+    let releaseDelete: (() => Promise<void>) | undefined
+    fetchMock.mockImplementation((input, init) => init?.method === 'DELETE'
+      ? new Promise<Response>((resolve) => { releaseDelete = async () => resolve(await normalRequest(input, init)) })
+      : normalRequest(input, init))
+    render(<DietPage />)
+    fireEvent.click(await screen.findByLabelText('修改 2026-10-07 午餐'))
+    const editor = within(screen.getByRole('dialog', { name: '修改饮食安排' }))
+    fireEvent.click(editor.getByLabelText('删除这餐'))
+    const confirmationDialog = dialogWithTitle('确认删除这餐？')
+    const confirmation = within(confirmationDialog)
+    const confirm = confirmation.getByRole('button', { name: /确\s*认/ })
+    fireEvent.click(confirm)
+    expect(confirm).toBeDisabled()
+    expect(confirmation.getByRole('button', { name: /取\s*消/ })).toBeDisabled()
+    expect(editor.getByLabelText('保存修改')).toBeDisabled()
+    expect(editor.getByLabelText('取消')).toBeDisabled()
+    fireEvent.click(confirm)
+    fireEvent.keyDown(confirmationDialog, { key: 'Escape', keyCode: 27 })
+    expect(confirmationDialog).toBeInTheDocument()
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'DELETE')).toHaveLength(1)
+    await act(async () => releaseDelete!())
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(screen.queryByText('米饭')).not.toBeInTheDocument()
   })
 })
