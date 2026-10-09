@@ -3,6 +3,7 @@ import { Alert, Button, Card, Checkbox, Col, DatePicker, Form, Input, InputNumbe
 import dayjs, { type Dayjs } from 'dayjs'
 import { apiRequest } from '../api/client'
 import { ConfirmDangerButton } from '../components/ConfirmDangerButton'
+import { DietTemplates } from '../components/DietTemplates'
 import { calendarRange, DietCalendar, mealTypes, type Meal, type MealType } from '../components/DietCalendar'
 import { ErrorPanel, LoadingPanel } from '../components/StatePanels'
 
@@ -164,6 +165,7 @@ export function DietPage() {
     <Tabs items={[
       { key: 'calendar', label: '饮食日历', children: <><div className="page-actions diet-calendar-intro"><div><Typography.Title level={4}>饮食日历</Typography.Title><Typography.Text type="secondary">按天查看餐食及估算热量，点击卡片可修改或删除</Typography.Text></div><Space><ConfirmDangerButton label="清零全部饮食计划" title="确认清零全部饮食计划？" description="所有日期的早、午、晚餐和加餐安排都会取消并从页面隐藏，可在回收站中恢复。" disabled={resetting} onConfirm={resetAllPlans} /><Button type="primary" onClick={() => openMealEditor(dayjs(), 'dinner')}>安排一餐</Button></Space></div><DietCalendar month={month} meals={meals} loading={loadingCalendar} onMonthChange={setMonth} onEdit={(date, type, meal) => openMealEditor(date, type, meal)} /></> },
       { key: 'dishes', label: '常用菜品', children: <><div className="tab-actions"><Button type="primary" onClick={() => openSimpleModal('dish')}>新增菜品</Button></div><Row gutter={[12, 12]}>{dishes.map((dish) => <Col span={8} key={dish.id}><Card title={dish.name} extra={<Button aria-label={`修改菜品 ${dish.name}`} onClick={() => openDishEditor(dish)}>修改</Button>}><p>{dish.instructions || '暂无做法'}</p><Typography.Text type="secondary">{dish.ingredients.map((item) => item.name).join('、') || '暂无食材'}</Typography.Text></Card></Col>)}</Row></> },
+      { key: 'templates', label: '饮食模板', children: <DietTemplates onImported={async (startDate) => { if (!startDate.isSame(month, 'month')) setMonth(startDate.startOf('month')); else await load() }} /> },
       { key: 'shopping', label: '购物清单', children: <><div className="tab-actions"><Button type="primary" onClick={() => openSimpleModal('shopping')}>按当前月份饮食生成</Button></div>{shopping.map((list) => <Card title={`${list.name} · ${list.start_date}—${list.end_date}`} key={list.id}>{list.items.map((item) => <div className="shopping-row" key={item.id}><Checkbox checked={item.is_completed} onChange={(event) => void toggleShopping(item.id, event.target.checked)}>{item.ingredient_name}</Checkbox><span>{item.quantity_text}</span></div>)}</Card>)}</> },
       { key: 'daily', label: '每日记录', children: <Card title="今天"><Form layout="vertical" initialValues={health} onFinish={(values) => void saveHealth(values)}><Row gutter={12}><Col span={8}><Form.Item name="water_ml" label="饮水量（ml）"><InputNumber min={0} /></Form.Item></Col><Col span={8}><Form.Item name="weight_kg" label="体重（kg）"><InputNumber min={1} step={0.1} /></Form.Item></Col></Row><Form.Item name="feeling" label="今日感受"><Input.TextArea /></Form.Item><Button type="primary" htmlType="submit">保存记录</Button></Form></Card> },
     ]} />

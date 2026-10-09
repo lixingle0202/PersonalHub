@@ -337,6 +337,15 @@ class MealPlan(LifecycleMixin, Base):
     agenda_id: Mapped[str | None] = mapped_column(ForeignKey("agenda_items.id", ondelete="SET NULL"), unique=True)
 
 
+class DietTemplate(LifecycleMixin, Base):
+    __tablename__ = "diet_templates"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[str] = mapped_column(Text, default="")
+    cycle_days: Mapped[int] = mapped_column(Integer, nullable=False)
+    meals_json: Mapped[str] = mapped_column(Text, nullable=False)
+
+
 class DailyHealthLog(LifecycleMixin, Base):
     __tablename__ = "daily_health_logs"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)

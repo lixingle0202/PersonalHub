@@ -17,12 +17,12 @@ function pause(ms: number, signal: AbortSignal): Promise<void> {
   })
 }
 
-export async function generateSharedDraft<T>(requirements: unknown, signal: AbortSignal, onWaiting: () => void): Promise<T> {
+export async function generateSharedDraft<T>(requirements: unknown, signal: AbortSignal, onWaiting: () => void, path = '/ai/learning/generate'): Promise<T> {
   const started = Date.now()
   while (true) {
     if (signal.aborted) throw new DOMException('Aborted', 'AbortError')
     try {
-      return await apiRequest<T>('/ai/learning/generate', {
+      return await apiRequest<T>(path, {
         method: 'POST', signal, body: JSON.stringify(requirements),
       })
     } catch (error) {

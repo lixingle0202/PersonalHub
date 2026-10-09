@@ -300,7 +300,7 @@ class PublicHub:
             return await JSONResponse({"detail": "共享模型由服务端管理"}, status_code=403)(scope, receive, send)
         if path == "/api/v1/ai/ollama/models":
             return await JSONResponse({"detail": "共享模型由服务端管理"}, status_code=403)(scope, receive, send)
-        if path == "/api/v1/ai/learning/generate" and request.method == "POST":
+        if path in {"/api/v1/ai/learning/generate", "/api/v1/ai/diet/generate"} and request.method == "POST":
             if self.model_gate.locked():
                 return await JSONResponse(
                     {"detail": "共享模型正在处理其他请求，稍后将自动重试", "code": "model_busy"},
