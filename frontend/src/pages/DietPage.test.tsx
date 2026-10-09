@@ -19,6 +19,7 @@ function dialogWithTitle(title: string) {
 function mockApi(initial: Meal[] = [], deleteFails: boolean | (() => boolean) = false, initialDishes: Array<{ id: string; name: string; instructions: string; nutrition_notes: string; notes: string; ingredients: Array<{ name: string; quantity: number | null; unit: string }> }> = []) {
   let meals = [...initial]
   let dishes = [...initialDishes]
+  let profile = { height_cm: null as number | null, weight_kg: null as number | null }
   return vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
     const url = new URL(String(input), 'http://localhost')
     let body: unknown = []
@@ -43,6 +44,9 @@ function mockApi(initial: Meal[] = [], deleteFails: boolean | (() => boolean) = 
       body = created
     } else if (url.pathname.endsWith('/diet/meals')) {
       body = meals.filter((entry) => entry.meal_date >= url.searchParams.get('start_date')! && entry.meal_date <= url.searchParams.get('end_date')!)
+    } else if (url.pathname.endsWith('/diet/profile')) {
+      if (init?.method === 'PUT') profile = JSON.parse(String(init.body))
+      body = profile
     } else if (url.pathname.includes('/health/')) {
       body = { log_date: '2026-10-07', water_ml: 0, weight_kg: null, feeling: '' }
     }
@@ -86,6 +90,16 @@ describe('diet monthly calendar and manual changes', () => {
     expect(screen.getByRole('cell', { name: '2026-09-28' })).toHaveClass('calendar-other-month')
     expect(screen.getByText('燕麦')).toBeInTheDocument()
     expect(fetchMock.mock.calls.some(([input]) => String(input).includes('start_date=2026-09-28&end_date=2026-11-01'))).toBe(true)
+  })
+
+  it('saves height and weight and shows the estimated calories on the calendar', async () => {
+    const fetchMock = mockApi([meal('one', { display_kcal: 282, calorie_source: '食材粗估' })])
+    render(<DietPage />)
+    expect(await screen.findByText('约 282 kcal · 食材粗估')).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('身高（cm）'), { target: { value: '175' } })
+    fireEvent.change(screen.getByLabelText('体重（kg）'), { target: { value: '68' } })
+    fireEvent.click(screen.getByRole('button', { name: '保存身体资料' }))
+    await waitFor(() => expect(fetchMock.mock.calls.some(([input, init]) => String(input).endsWith('/diet/profile') && init?.method === 'PUT' && JSON.parse(String(init.body)).height_cm === 175)).toBe(true))
   })
 
   it('changes the requested date range when navigating months and returning to today', async () => {

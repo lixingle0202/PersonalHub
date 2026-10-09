@@ -7,7 +7,8 @@ import { calendarRange, DietCalendar, mealTypes, type Meal, type MealType } from
 import { ErrorPanel, LoadingPanel } from '../components/StatePanels'
 
 type Ingredient = { id?: string; name: string; quantity: number | null; unit: string }
-type Dish = { id: string; name: string; instructions: string; nutrition_notes: string; notes: string; ingredients: Ingredient[] }
+type Dish = { id: string; name: string; instructions: string; nutrition_notes: string; notes: string; estimated_kcal?: number | null; ingredients: Ingredient[] }
+type DietProfile = { height_cm: number | null; weight_kg: number | null }
 type Shopping = { id: string; name: string; start_date: string; end_date: string; items: Array<{ id: string; ingredient_name: string; quantity_text: string; is_completed: boolean }> }
 type Health = { log_date: string; water_ml: number; weight_kg: number | null; feeling: string }
 
@@ -17,12 +18,14 @@ export function DietPage() {
   const [meals, setMeals] = useState<Meal[]>([])
   const [shopping, setShopping] = useState<Shopping[]>([])
   const [health, setHealth] = useState<Health | null>(null)
+  const [profile, setProfile] = useState<DietProfile | null>(null)
   const [error, setError] = useState('')
   const [modal, setModal] = useState<'dish' | 'meal' | 'shopping' | null>(null)
   const [editingMeal, setEditingMeal] = useState<Meal | null>(null)
   const [editingDish, setEditingDish] = useState<Dish | null>(null)
   const [resetting, setResetting] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [profileSaving, setProfileSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [deleteError, setDeleteError] = useState('')
@@ -35,14 +38,15 @@ export function DietPage() {
     const { start, end } = calendarRange(month)
     setLoadingCalendar(true)
     try {
-      const [dishData, mealData, shopData, healthData] = await Promise.all([
+      const [dishData, mealData, shopData, healthData, profileData] = await Promise.all([
         apiRequest<Dish[]>('/diet/dishes'),
         apiRequest<Meal[]>(`/diet/meals?start_date=${start.format('YYYY-MM-DD')}&end_date=${end.format('YYYY-MM-DD')}`),
         apiRequest<Shopping[]>('/diet/shopping-lists'),
         apiRequest<Health>(`/diet/health/${dayjs().format('YYYY-MM-DD')}`),
+        apiRequest<DietProfile>('/diet/profile'),
       ])
       if (version === loadVersion.current) {
-        setDishes(dishData); setMeals(mealData); setShopping(shopData); setHealth(healthData); setError('')
+        setDishes(dishData); setMeals(mealData); setShopping(shopData); setHealth(healthData); setProfile(profileData); setError('')
       }
     } catch (reason) { if (version === loadVersion.current) setError(reason instanceof Error ? reason.message : '读取失败') }
     finally { if (version === loadVersion.current) setLoadingCalendar(false) }
@@ -84,8 +88,9 @@ export function DietPage() {
     form.setFieldsValue({
       meal_date: mealDate,
       meal_type: mealType,
-      dish_id: meal?.dish_id ?? undefined,
+      dish_id: meal?.dish_id ?? '',
       custom_name: meal?.custom_name ?? '',
+      estimated_kcal: meal?.estimated_kcal ?? null,
     })
     setModal('meal')
   }
@@ -93,7 +98,7 @@ export function DietPage() {
   function openDishEditor(dish: Dish) {
     form.resetFields()
     setEditingMeal(null); setEditingDish(dish)
-    form.setFieldsValue({ name: dish.name, instructions: dish.instructions, nutrition_notes: dish.nutrition_notes, ingredients_text: dish.ingredients.map((item) => `${item.name} | ${item.quantity ?? ''} | ${item.unit}`).join('\n') })
+    form.setFieldsValue({ name: dish.name, instructions: dish.instructions, nutrition_notes: dish.nutrition_notes, estimated_kcal: dish.estimated_kcal, ingredients_text: dish.ingredients.map((item) => `${item.name} | ${item.quantity ?? ''} | ${item.unit}`).join('\n') })
     setModal('dish')
   }
 
@@ -128,6 +133,14 @@ export function DietPage() {
     await apiRequest(`/diet/health/${dayjs().format('YYYY-MM-DD')}`, { method: 'PUT', body: JSON.stringify(values) })
     message.success('今日记录已保存'); await load()
   }
+  async function saveProfile(values: DietProfile) {
+    setProfileSaving(true)
+    try {
+      const updated = await apiRequest<DietProfile>('/diet/profile', { method: 'PUT', body: JSON.stringify(values) })
+      setProfile(updated); message.success('身体资料已保存')
+    } catch (reason) { message.error(reason instanceof Error ? reason.message : '保存身体资料失败') }
+    finally { setProfileSaving(false) }
+  }
   async function toggleShopping(id: string, checked: boolean) {
     await apiRequest(`/diet/shopping-items/${id}`, { method: 'PATCH', body: JSON.stringify({ is_completed: checked }) }); await load()
   }
@@ -147,16 +160,17 @@ export function DietPage() {
   if (error) return <ErrorPanel message={error} onRetry={() => void load()} />
   if (!dishes || !health) return <LoadingPanel />
   return <div className="page-stack">
+    <Card title="个人身体资料与热量估算"><Form layout="inline" initialValues={profile ?? {}} onFinish={(values) => void saveProfile(values)}><Form.Item name="height_cm" label="身高（cm）" rules={[{ required: true }]}><InputNumber min={80} max={250} step={0.1} /></Form.Item><Form.Item name="weight_kg" label="体重（kg）" rules={[{ required: true }]}><InputNumber min={20} max={400} step={0.1} /></Form.Item><Button type="primary" htmlType="submit" loading={profileSaving}>保存身体资料</Button></Form><Typography.Text type="secondary">单餐热量按菜品食材和份量粗估；身高体重仅保存为个人资料，不用于推算食物热量。可在每餐手动调整。</Typography.Text></Card>
     <Tabs items={[
-      { key: 'calendar', label: '饮食日历', children: <><div className="page-actions diet-calendar-intro"><div><Typography.Title level={4}>饮食日历</Typography.Title><Typography.Text type="secondary">按天查看计划餐食和实际饮食，点击餐食卡片可修改或删除</Typography.Text></div><Space><ConfirmDangerButton label="清零全部饮食计划" title="确认清零全部饮食计划？" description="所有日期的早、午、晚餐和加餐安排都会取消并从页面隐藏，可在回收站中恢复。" disabled={resetting} onConfirm={resetAllPlans} /><Button type="primary" onClick={() => openMealEditor(dayjs(), 'dinner')}>安排一餐</Button></Space></div><DietCalendar month={month} meals={meals} loading={loadingCalendar} onMonthChange={setMonth} onEdit={(date, type, meal) => openMealEditor(date, type, meal)} /></> },
+      { key: 'calendar', label: '饮食日历', children: <><div className="page-actions diet-calendar-intro"><div><Typography.Title level={4}>饮食日历</Typography.Title><Typography.Text type="secondary">按天查看餐食及估算热量，点击卡片可修改或删除</Typography.Text></div><Space><ConfirmDangerButton label="清零全部饮食计划" title="确认清零全部饮食计划？" description="所有日期的早、午、晚餐和加餐安排都会取消并从页面隐藏，可在回收站中恢复。" disabled={resetting} onConfirm={resetAllPlans} /><Button type="primary" onClick={() => openMealEditor(dayjs(), 'dinner')}>安排一餐</Button></Space></div><DietCalendar month={month} meals={meals} loading={loadingCalendar} onMonthChange={setMonth} onEdit={(date, type, meal) => openMealEditor(date, type, meal)} /></> },
       { key: 'dishes', label: '常用菜品', children: <><div className="tab-actions"><Button type="primary" onClick={() => openSimpleModal('dish')}>新增菜品</Button></div><Row gutter={[12, 12]}>{dishes.map((dish) => <Col span={8} key={dish.id}><Card title={dish.name} extra={<Button aria-label={`修改菜品 ${dish.name}`} onClick={() => openDishEditor(dish)}>修改</Button>}><p>{dish.instructions || '暂无做法'}</p><Typography.Text type="secondary">{dish.ingredients.map((item) => item.name).join('、') || '暂无食材'}</Typography.Text></Card></Col>)}</Row></> },
       { key: 'shopping', label: '购物清单', children: <><div className="tab-actions"><Button type="primary" onClick={() => openSimpleModal('shopping')}>按当前月份饮食生成</Button></div>{shopping.map((list) => <Card title={`${list.name} · ${list.start_date}—${list.end_date}`} key={list.id}>{list.items.map((item) => <div className="shopping-row" key={item.id}><Checkbox checked={item.is_completed} onChange={(event) => void toggleShopping(item.id, event.target.checked)}>{item.ingredient_name}</Checkbox><span>{item.quantity_text}</span></div>)}</Card>)}</> },
       { key: 'daily', label: '每日记录', children: <Card title="今天"><Form layout="vertical" initialValues={health} onFinish={(values) => void saveHealth(values)}><Row gutter={12}><Col span={8}><Form.Item name="water_ml" label="饮水量（ml）"><InputNumber min={0} /></Form.Item></Col><Col span={8}><Form.Item name="weight_kg" label="体重（kg）"><InputNumber min={1} step={0.1} /></Form.Item></Col></Row><Form.Item name="feeling" label="今日感受"><Input.TextArea /></Form.Item><Button type="primary" htmlType="submit">保存记录</Button></Form></Card> },
     ]} />
     <Modal forceRender title={modal === 'dish' ? editingDish ? '修改菜品' : '新增菜品' : modal === 'meal' ? editingMeal ? '修改饮食安排' : '安排一餐' : '生成购物清单'} open={Boolean(modal)} closable={{ disabled: saving || deleting }} keyboard={!saving && !deleting} mask={{ closable: !saving && !deleting }} onCancel={() => { if (!saving && !deleting) closeModal() }} footer={<div className="diet-editor-footer"><div>{editingMeal ? <Button aria-label="删除这餐" danger disabled={saving || deleting} onClick={() => { setDeleteError(''); setDeleteConfirmOpen(true) }}>删除这餐</Button> : null}</div><Space><Button aria-label="取消" disabled={saving || deleting} onClick={closeModal}>取消</Button><Button aria-label={editingMeal || editingDish ? '保存修改' : '创建'} type="primary" loading={saving} disabled={deleting} onClick={() => form.submit()}>{editingMeal || editingDish ? '保存修改' : '创建'}</Button></Space></div>}>
       <Form form={form} layout="vertical" onFinish={(values) => void submit(values)}>
-        {modal === 'dish' ? <><Form.Item name="name" label="菜品名称" rules={[{ required: true }]}><Input /></Form.Item><Form.Item name="instructions" label="简单做法"><Input.TextArea /></Form.Item><Form.Item name="ingredients_text" label="食材（每行：名称 | 数量 | 单位）"><Input.TextArea rows={5} placeholder={'鸡蛋 | 2 | 个\n番茄 | 2 | 个'} /></Form.Item><Form.Item name="nutrition_notes" label="营养备注"><Input.TextArea /></Form.Item></> : null}
-        {modal === 'meal' ? <><Form.Item name="meal_date" label="日期" rules={[{ required: true }]}><DatePicker /></Form.Item><Form.Item name="meal_type" label="餐次" rules={[{ required: true }]}><select className="native-form-select">{mealTypes.map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></Form.Item><Form.Item name="dish_id" label="选择菜品"><select className="native-form-select"><option value="">不选择常用菜品</option>{dishes.map((dish) => <option value={dish.id} key={dish.id}>{dish.name}</option>)}</select></Form.Item><Form.Item name="custom_name" label="或填写其他餐食"><Input /></Form.Item></> : null}
+        {modal === 'dish' ? <><Form.Item name="name" label="菜品名称" rules={[{ required: true }]}><Input /></Form.Item><Form.Item name="instructions" label="简单做法"><Input.TextArea /></Form.Item><Form.Item name="ingredients_text" label="食材（每行：名称 | 数量 | 单位）"><Input.TextArea rows={5} placeholder={'鸡蛋 | 2 | 个\n番茄 | 2 | 个'} /></Form.Item><Form.Item name="estimated_kcal" label="每份热量（kcal，可选）"><InputNumber min={0} max={10000} /></Form.Item><Form.Item name="nutrition_notes" label="营养备注"><Input.TextArea /></Form.Item></> : null}
+        {modal === 'meal' ? <><Form.Item name="meal_date" label="日期" rules={[{ required: true }]}><DatePicker /></Form.Item><Form.Item name="meal_type" label="餐次" rules={[{ required: true }]}><select className="native-form-select">{mealTypes.map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></Form.Item><Form.Item name="dish_id" label="选择菜品"><select className="native-form-select"><option value="">不选择常用菜品</option>{dishes.map((dish) => <option value={dish.id} key={dish.id}>{dish.name}</option>)}</select></Form.Item><Form.Item name="custom_name" label="或填写其他餐食"><Input /></Form.Item><Form.Item name="estimated_kcal" label="这餐热量（kcal，可选）"><InputNumber min={0} max={10000} placeholder="留空自动粗估" /></Form.Item></> : null}
         {modal === 'shopping' ? <Form.Item name="name" label="清单名称" initialValue="本月采购" rules={[{ required: true }]}><Input /></Form.Item> : null}
       </Form>
     </Modal>

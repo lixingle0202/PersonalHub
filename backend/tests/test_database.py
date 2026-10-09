@@ -46,7 +46,7 @@ def test_migration_is_idempotent(tmp_path):
     try:
         assert "agenda_items" in inspect(database.engine).get_table_names()
         with database.engine.connect() as connection:
-            assert connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one() == "0007"
+            assert connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one() == "0008"
     finally:
         database.dispose()
 
@@ -65,7 +65,7 @@ def test_migration_adds_manual_progress_to_an_existing_database(tmp_path):
         columns = {column["name"] for column in inspect(database.engine).get_columns("learning_goals")}
         assert "progress_override" in columns
         with database.engine.connect() as connection:
-            assert connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one() == "0007"
+            assert connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one() == "0008"
     finally:
         database.dispose()
 
@@ -104,7 +104,7 @@ def test_migration_recovers_an_unversioned_database_without_losing_learning_goal
         columns = {column["name"] for column in inspect(database.engine).get_columns("learning_goals")}
         assert "progress_override" in columns
         with database.engine.connect() as connection:
-            assert connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one() == "0007"
+            assert connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one() == "0008"
             assert connection.exec_driver_sql(
                 "SELECT name FROM learning_goals WHERE id = 'legacy-goal'"
             ).scalar_one() == "安卓"
@@ -154,7 +154,7 @@ def test_migration_retires_existing_game_plans_without_touching_other_agenda(tmp
             assert session.get(AgendaItem, "source-game-agenda").deleted_at is not None
             assert session.get(AgendaItem, "learning-agenda").deleted_at is None
         with database.engine.connect() as connection:
-            assert connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one() == "0007"
+            assert connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one() == "0008"
     finally:
         database.dispose()
 

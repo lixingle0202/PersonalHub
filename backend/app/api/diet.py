@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import defaultdict
 from datetime import date
 from typing import Literal
+import json
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
@@ -12,9 +13,10 @@ from sqlalchemy.orm import Session
 from .deps import get_session
 from .utils import active_record, apply_changes, model_dict, soft_delete
 from ..services.diet import delete_meal_plan
+from ..services.calories import estimate_meal
 from ..models import (
     AgendaItem, DailyHealthLog, Dish, DishIngredient, MealPlan, ShoppingItem,
-    ShoppingList, new_id,
+    ShoppingList, Setting, new_id,
 )
 
 
@@ -33,6 +35,7 @@ class DishIn(BaseModel):
     nutrition_notes: str = ""
     notes: str = ""
     ingredients: list[IngredientIn] = []
+    estimated_kcal: int | None = Field(default=None, ge=0, le=10000)
 
 
 class MealIn(BaseModel):
@@ -41,6 +44,12 @@ class MealIn(BaseModel):
     dish_id: str | None = None
     custom_name: str = ""
     actual_food: str = ""
+    estimated_kcal: int | None = Field(default=None, ge=0, le=10000)
+
+
+class DietProfileIn(BaseModel):
+    height_cm: float = Field(ge=80, le=250)
+    weight_kg: float = Field(ge=20, le=400)
 
 
 class HealthIn(BaseModel):
@@ -75,11 +84,31 @@ def meal_out(session: Session, meal: MealPlan) -> dict:
     data = model_dict(meal)
     dish = session.get(Dish, meal.dish_id) if meal.dish_id else None
     agenda = session.get(AgendaItem, meal.agenda_id) if meal.agenda_id else None
+    kcal, source = estimate_meal(session, meal.meal_type, dish, meal.estimated_kcal)
     data.update(
         dish_name=dish.name if dish else meal.custom_name,
         status=agenda.status if agenda else None,
+        display_kcal=kcal,
+        calorie_source=source,
     )
     return data
+
+
+@router.get("/profile")
+def get_diet_profile(session: Session = Depends(get_session)):
+    row = session.get(Setting, "diet_profile")
+    return json.loads(row.value_json) if row else {"height_cm": None, "weight_kg": None}
+
+
+@router.put("/profile")
+def put_diet_profile(payload: DietProfileIn, session: Session = Depends(get_session)):
+    row = session.get(Setting, "diet_profile")
+    if row:
+        row.value_json = payload.model_dump_json()
+    else:
+        session.add(Setting(key="diet_profile", value_json=payload.model_dump_json()))
+    session.flush()
+    return payload
 
 
 @router.get("/dishes")
@@ -107,7 +136,7 @@ def get_dish(dish_id: str, session: Session = Depends(get_session)):
 @router.patch("/dishes/{dish_id}")
 def update_dish(dish_id: str, payload: DishIn, session: Session = Depends(get_session)):
     dish = active_record(session, Dish, dish_id, "菜品")
-    apply_changes(dish, payload.model_dump(exclude={"ingredients"}), {"name", "instructions", "nutrition_notes", "notes"})
+    apply_changes(dish, payload.model_dump(exclude={"ingredients"}), {"name", "instructions", "nutrition_notes", "notes", "estimated_kcal"})
     for item in session.scalars(select(DishIngredient).where(DishIngredient.dish_id == dish.id)).all():
         session.delete(item)
     for ingredient in payload.ingredients:
