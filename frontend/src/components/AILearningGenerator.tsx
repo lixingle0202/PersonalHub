@@ -3,6 +3,7 @@ import { Alert, Button, DatePicker, Form, Input, InputNumber, Modal, Space, Tag,
 import { BulbOutlined, DeleteOutlined } from '@ant-design/icons'
 import dayjs, { type Dayjs } from 'dayjs'
 import { apiRequest, currentUsername, isPublicMode } from '../api/client'
+import { generateSharedDraft } from '../api/sharedModel'
 import { readVisitorModel, visitorGenerate, visitorModels } from '../api/visitorModel'
 import type { OllamaSettings } from './OllamaSettingsPanel'
 
@@ -29,6 +30,7 @@ export function AILearningGenerator({ onImported, initialTopic = '', initialObje
   const [draft, setDraft] = useState<Draft | null>(null)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState<'load' | 'generate' | 'import' | ''>('')
+  const [waitingForShared, setWaitingForShared] = useState(false)
   const controller = useRef<AbortController | null>(null)
   const [form] = Form.useForm<Requirements>()
 
@@ -36,7 +38,7 @@ export function AILearningGenerator({ onImported, initialTopic = '', initialObje
     if (!open) return
     const abort = new AbortController()
     controller.current = abort
-    setBusy('load'); setError(''); setConnectionError(''); setConfig(null)
+    setBusy('load'); setError(''); setConnectionError(''); setConfig(null); setWaitingForShared(false)
     form.setFieldsValue({ topic: initialTopic, objective: initialObjective, current_level: '零基础', start_date: dayjs(), days: 7, daily_minutes: 45 })
     void (async () => {
       try {
@@ -69,13 +71,13 @@ export function AILearningGenerator({ onImported, initialTopic = '', initialObje
   function close() {
     if (busy === 'import') return
     controller.current?.abort()
-    setBusy(''); setOpen(false); setError('')
+    setBusy(''); setOpen(false); setError(''); setWaitingForShared(false)
   }
 
   async function generate(values: Requirements) {
     const abort = new AbortController()
     controller.current = abort
-    setBusy('generate'); setError('')
+    setBusy('generate'); setError(''); setWaitingForShared(false)
     try {
       const requirements = { ...values, start_date: values.start_date.format('YYYY-MM-DD') }
       let generated: Draft
@@ -89,13 +91,15 @@ export function AILearningGenerator({ onImported, initialTopic = '', initialObje
           method: 'POST', signal: abort.signal, body: JSON.stringify({ requirements, ...result }),
         })
       } else {
-        generated = await apiRequest<Draft>('/ai/learning/generate', {
-          method: 'POST', signal: abort.signal, body: JSON.stringify(requirements),
-        })
+        generated = hosted
+          ? await generateSharedDraft<Draft>(requirements, abort.signal, () => setWaitingForShared(true))
+          : await apiRequest<Draft>('/ai/learning/generate', {
+            method: 'POST', signal: abort.signal, body: JSON.stringify(requirements),
+          })
       }
       if (!abort.signal.aborted) { setDraft(generated); sessionStorage.setItem(draftKey(hosted), generated.id) }
     } catch (reason) { if (!abort.signal.aborted) setError(reason instanceof Error ? reason.message : '生成失败，请重试') }
-    finally { if (!abort.signal.aborted) setBusy('') }
+    finally { if (!abort.signal.aborted) { setBusy(''); setWaitingForShared(false) } }
   }
 
   function editPlan(update: (plan: LearningPreview) => LearningPreview) {
@@ -144,7 +148,7 @@ export function AILearningGenerator({ onImported, initialTopic = '', initialObje
           <Form.Item name="current_level" label="目前基础"><Input placeholder="例如：会 Java，尚未接触 Android" maxLength={1000} /></Form.Item>
           <div className="ai-request-schedule"><Form.Item name="start_date" label="开始日期" rules={[{ required: true }]}><DatePicker /></Form.Item><Form.Item name="days" label="计划天数" rules={[{ required: true }]}><InputNumber min={1} max={30} /></Form.Item><Form.Item name="daily_minutes" label="每天可用分钟" rules={[{ required: true }]}><InputNumber min={5} max={480} /></Form.Item></div>
           <Form.Item name="preferences" label="补充要求"><Input.TextArea rows={2} placeholder="例如：多安排动手练习，每三天复习一次" maxLength={2000} /></Form.Item>
-          {busy === 'generate' ? <Alert type="info" showIcon title={provider === 'shared' ? '共享模型正在生成，请稍候' : '本地模型正在生成，首次加载可能需要较长时间'} description="可以取消等待；取消不会向正式学习计划添加内容。" className="ai-status" /> : null}
+          {busy === 'generate' ? <Alert type="info" showIcon title={waitingForShared ? '共享模型正在处理其他请求，已自动等待' : provider === 'shared' ? '共享模型正在生成，请稍候' : '本地模型正在生成，首次加载可能需要较长时间'} description={waitingForShared ? '模型空闲后会自动重试；排队期间不消耗每日生成次数。可以取消等待。' : '可以取消等待；取消不会向正式学习计划添加内容。'} className="ai-status" /> : null}
           <div className="ai-generator-actions"><Typography.Text type="secondary">生成后先预览，再由你确认加入</Typography.Text><Space><Button aria-label="取消等待" onClick={close}>{busy === 'generate' ? '取消等待' : '取消'}</Button><Button type="primary" htmlType="submit" loading={busy === 'generate'} disabled={Boolean(busy) || !config?.model || Boolean(connectionError)}>生成草稿</Button></Space></div>
         </Form>}
       </div>

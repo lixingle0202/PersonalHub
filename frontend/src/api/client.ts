@@ -1,4 +1,4 @@
-export type ApiErrorBody = { detail?: string | Array<{ msg?: string }> }
+export type ApiErrorBody = { detail?: string | Array<{ msg?: string }>; code?: string }
 
 let localToken = ''
 let bootstrapInfo: Bootstrap | null = null
@@ -13,6 +13,10 @@ export type Bootstrap = {
 }
 
 export class AuthenticationRequired extends Error {}
+
+export class ApiResponseError extends Error {
+  constructor(message: string, readonly status: number, readonly code?: string) { super(message) }
+}
 
 export function isPublicMode() { return bootstrapInfo?.public_mode === true }
 export function currentUsername() { return bootstrapInfo?.username ?? '' }
@@ -41,14 +45,16 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
   const response = await fetch(`/api/v1${path}`, { ...init, headers })
   if (!response.ok) {
     let message = `操作失败（${response.status}）`
+    let code: string | undefined
     try {
       const body = await response.json() as ApiErrorBody
       if (typeof body.detail === 'string') message = body.detail
       else if (Array.isArray(body.detail)) message = body.detail.map((item) => item.msg).filter(Boolean).join('；') || message
+      if (typeof body.code === 'string') code = body.code
     } catch {
       // Keep the status-based message when the response is not JSON.
     }
-    throw new Error(message)
+    throw new ApiResponseError(message, response.status, code)
   }
   if (response.status === 204) return undefined as T
   return response.json() as Promise<T>

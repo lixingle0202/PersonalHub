@@ -302,7 +302,10 @@ class PublicHub:
             return await JSONResponse({"detail": "共享模型由服务端管理"}, status_code=403)(scope, receive, send)
         if path == "/api/v1/ai/learning/generate" and request.method == "POST":
             if self.model_gate.locked():
-                return await JSONResponse({"detail": "模型正在为其他人生成，请稍后重试"}, status_code=429)(scope, receive, send)
+                return await JSONResponse(
+                    {"detail": "共享模型正在处理其他请求，稍后将自动重试", "code": "model_busy"},
+                    status_code=429, headers={"Retry-After": "3", "Cache-Control": "no-store"},
+                )(scope, receive, send)
             await self.model_gate.acquire()
             reserved = False
             status = 500

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import sqlite3
@@ -157,6 +158,24 @@ def test_shared_model_generates_only_in_signed_in_users_space_and_limits_usage(t
                         headers={"x-local-token": bob_token}).status_code == 200
         assert alice.get("/api/v1/learning/goals").json() == []
         assert len(requests) == DAILY_GENERATIONS + 1
+
+
+def test_busy_shared_model_is_retryable_and_does_not_use_daily_quota(tmp_path):
+    root = tmp_path / 'shared'
+    public = create_public_app(root)
+    with TestClient(public, base_url=HOST) as alice:
+        token = register(alice, 'alice')
+        asyncio.run(public.model_gate.acquire())
+        try:
+            response = alice.post('/api/v1/ai/learning/generate', json=REQUIREMENTS,
+                                  headers={'x-local-token': token})
+            assert response.status_code == 429
+            assert response.json()['code'] == 'model_busy'
+            assert response.headers['Retry-After'] == '3'
+            with sqlite3.connect(root / 'accounts.sqlite3') as database:
+                assert database.execute('SELECT count(*) FROM model_usage').fetchone()[0] == 0
+        finally:
+            public.model_gate.release()
 
 
 def test_visitor_model_uses_browser_result_without_host_inference_and_keeps_drafts_private(tmp_path, monkeypatch):
