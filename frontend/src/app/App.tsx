@@ -11,6 +11,7 @@ import { Button, Typography } from 'antd'
 import { lazy, Suspense, useState } from 'react'
 import { Link, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { SaveStatus } from '../components/SaveStatus'
+import { LearningAutoExtension } from '../components/LearningAutoExtension'
 import { currentUsername, isPublicMode } from '../api/client'
 import { LoadingPanel } from '../components/StatePanels'
 import { loadPageModule, PageLoadErrorBoundary } from './pageLoadRecovery'
@@ -73,7 +74,7 @@ export function App() {
             <Suspense fallback={<LoadingPanel />}><Routes key={dataVersion}>
               <Route path="/" element={<HomePage />} />
               <Route path="/today" element={<TodayPage />} />
-              <Route path="/learning" element={<LearningPage />} />
+              <Route path="/learning" element={<LearningAutoExtension><LearningPage /></LearningAutoExtension>} />
               <Route path="/diet" element={<DietPage />} />
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />

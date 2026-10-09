@@ -254,6 +254,19 @@ class AILearningDraft(TimestampMixin, Base):
     imported_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+class LearningAutoExtension(TimestampMixin, Base):
+    __tablename__ = "learning_auto_extensions"
+    __table_args__ = (UniqueConstraint("goal_id", "triggered_on", name="uq_learning_extension_day"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    goal_id: Mapped[str] = mapped_column(ForeignKey("learning_goals.id", ondelete="CASCADE"), index=True)
+    triggered_on: Mapped[date] = mapped_column(Date, nullable=False)
+    shifted_days: Mapped[int] = mapped_column(Integer, nullable=False)
+    previous_first_date: Mapped[date] = mapped_column(Date, nullable=False)
+    new_first_date: Mapped[date] = mapped_column(Date, nullable=False)
+    acknowledged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class LearningTask(LifecycleMixin, Base):
     __tablename__ = "learning_tasks"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
