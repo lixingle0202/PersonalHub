@@ -1,6 +1,7 @@
 param(
     [string]$InstallRoot = '',
-    [ValidateRange(1024, 65535)][int]$Port = 11434
+    [ValidateRange(1024, 65535)][int]$Port = 11434,
+    [string]$AllowedOrigin = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -19,6 +20,15 @@ $TempDirectory = Join-Path $InstallRoot 'tmp'
 New-Item -ItemType Directory -Path $ModelDirectory, $LogDirectory, $TempDirectory -Force | Out-Null
 $StatePath = Join-Path $LogDirectory "runtime-$Port.json"
 $BaseUrl = "http://127.0.0.1:$Port"
+if ($AllowedOrigin) {
+    $ParsedOrigin = $null
+    if (-not [System.Uri]::TryCreate($AllowedOrigin, [System.UriKind]::Absolute, [ref]$ParsedOrigin) -or
+        $ParsedOrigin.Scheme -ne 'https' -or $ParsedOrigin.UserInfo -or
+        $ParsedOrigin.GetLeftPart([System.UriPartial]::Authority) -ne $AllowedOrigin.TrimEnd('/')) {
+        throw 'AllowedOrigin must be one exact HTTPS website origin without a path or wildcard.'
+    }
+    $AllowedOrigin = $ParsedOrigin.GetLeftPart([System.UriPartial]::Authority)
+}
 
 function Test-OllamaReady {
     try {
@@ -44,6 +54,9 @@ if (Test-OllamaReady) {
     if ($null -eq $ExistingProcess -or $ExistingProcess.Path -ne $OllamaExe -or $Existing.models_directory -ne $ModelDirectory) {
         throw 'An existing Ollama service does not match this installation. Keep the existing service unchanged.'
     }
+    if ($AllowedOrigin -and $Existing.allowed_origin -ne $AllowedOrigin) {
+        throw 'Ollama is running with a different allowed origin. Use Configure-HostLocalModel.ps1 to update it.'
+    }
     $Existing | ConvertTo-Json -Compress
     exit 0
 }
@@ -58,6 +71,7 @@ $Variables = @{
     TEMP = $TempDirectory
     TMP = $TempDirectory
 }
+if ($AllowedOrigin) { $Variables.OLLAMA_ORIGINS = $AllowedOrigin }
 $Previous = @{}
 try {
     foreach ($Name in $Variables.Keys) {
@@ -76,7 +90,7 @@ try {
         Start-Sleep -Milliseconds 200
     }
     if (-not $Ready) { throw "Ollama did not become ready. See $ErrorLog" }
-    $State = @{ pid = $Service.Id; url = $BaseUrl; models_directory = $ModelDirectory; executable = $OllamaExe; no_cloud = $true; error_log = $ErrorLog }
+    $State = @{ pid = $Service.Id; url = $BaseUrl; models_directory = $ModelDirectory; executable = $OllamaExe; no_cloud = $true; allowed_origin = $AllowedOrigin; error_log = $ErrorLog }
     $State | ConvertTo-Json | Set-Content -LiteralPath $StatePath -Encoding UTF8
     $State | ConvertTo-Json -Compress
 } finally {

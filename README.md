@@ -25,6 +25,8 @@ PersonalHub 是只在当前 Windows 电脑上使用的工作与生活管理工�
 
 脚本验证模型与 cloudflared 的数字签名，启动独立服务和 HTTPS 隧道，并打印可以分享的网址。访客在该网址注册和登录后使用完整网页。关闭分享时运行 `.\scripts\Stop-PublicHub.ps1`；账号数据仍保存在 `.public-hub-data`。主机必须保持开机、联网并运行 Ollama。
 
+如果**主机自己**也要从上述公网网址选择“本地大模型”，运行 `.\scripts\Configure-HostLocalModel.ps1`。脚本读取当前临时网址，验证运行中的 Ollama 确属本项目，再用仅允许该网址的 `OLLAMA_ORIGINS` 重启它，并检查跨域预检、已安装模型和公网网页。网址改变后重新运行此脚本。浏览器首次访问本地网络时，还需要在浏览器提示中允许该网页；若此前拒绝，可在该网址的站点设置中允许“本地网络访问”后刷新。此设置不会开放 Ollama 的网络监听端口。可重复运行 `.\scripts\Test-PublicLocalModel.ps1 -Origin <当前公网网址>` 验证连接。
+
 当前使用 Cloudflare 临时隧道；重启隧道后网址会改变，也没有长期可用保证。要固定网址，需在自己的 Cloudflare 账号和域名下创建正式隧道，并把它指向 `http://127.0.0.1:8766`。不要把原本的 `8765` 本机服务或 `11434` Ollama 端口公开到互联网。[临时隧道说明](https://developers.cloudflare.com/tunnel/get-started/quick-tunnels/)
 
 ## 使用本地大模型生成学习计划
