@@ -3,9 +3,10 @@ import { Alert, Button, Card, Col, DatePicker, Form, Input, InputNumber, Modal, 
 import dayjs, { type Dayjs } from 'dayjs'
 import { apiRequest } from '../api/client'
 import { AILearningGenerator } from '../components/AILearningGenerator'
+import { ConfirmDangerButton } from '../components/ConfirmDangerButton'
 import { EmptyStatePanel, ErrorPanel, LoadingPanel } from '../components/StatePanels'
 
-type LearningTask = { id: string; title: string; plan_date: string | null; status: string | null }
+type LearningTask = { id: string; title: string; details?: string; plan_date: string | null; status: string | null }
 type Editor = 'goal' | 'editGoal' | 'section' | 'task' | 'editTask' | 'session' | 'resource'
 type LearningGoal = {
   id: string; name: string; goal: string; start_date: string | null; target_date: string | null
@@ -32,6 +33,7 @@ export function LearningPage() {
   const [detailError, setDetailError] = useState('')
   const [progressValue, setProgressValue] = useState(0)
   const [savingProgress, setSavingProgress] = useState(false)
+  const [resetting, setResetting] = useState(false)
   const [form] = Form.useForm()
   const selectedRef = useRef(selectedId)
   selectedRef.current = selectedId
@@ -93,7 +95,7 @@ export function LearningPage() {
     if (!detail || detail.id !== selectedId) return
     form.resetFields()
     setEditingGoal(detail); setEditingTask(task); setSaveError('')
-    form.setFieldsValue({ title: task.title, plan_date: task.plan_date ? dayjs(task.plan_date) : null })
+    form.setFieldsValue({ title: task.title, details: task.details ?? '', plan_date: task.plan_date ? dayjs(task.plan_date) : null })
     setModal('editTask')
   }
 
@@ -127,7 +129,7 @@ export function LearningPage() {
         if (selectedRef.current === updated.id) setDetail(updated)
         await loadGoals(); message.success('学习目标已更新')
       } else if (modal === 'editTask' && editingTask) {
-        await apiRequest(`/learning/tasks/${editingTask.id}`, { method: 'PATCH', body: JSON.stringify({ title: values.title, plan_date: convertDate('plan_date') ?? null }) })
+        await apiRequest(`/learning/tasks/${editingTask.id}`, { method: 'PATCH', body: JSON.stringify({ title: values.title, details: values.details ?? '', plan_date: convertDate('plan_date') ?? null }) })
         await Promise.all([loadDetail(), loadGoals()]); message.success('学习任务已更新')
       } else if (editingGoal) {
         const resource = modal === 'section' ? 'sections' : modal === 'task' ? 'tasks' : modal === 'session' ? 'sessions' : 'resources'
@@ -185,16 +187,28 @@ export function LearningPage() {
       setSavingProgress(false)
     }
   }
+  async function resetAllPlans() {
+    setResetting(true)
+    try {
+      await apiRequest('/learning/reset', { method: 'POST' })
+      setSelectedId(null)
+      setDetail(null)
+      await loadGoals()
+      message.success('全部学习计划已清零')
+    } finally {
+      setResetting(false)
+    }
+  }
 
   if (error) return <ErrorPanel message={error} onRetry={() => void loadGoals()} />
   if (!goals) return <LoadingPanel />
   return <div className="page-stack">
-    <div className="page-actions"><Typography.Text type="secondary">从长期目标拆到章节和任务，点击目标或任务可修改、单独删除</Typography.Text><Space><AILearningGenerator initialTopic={detail?.name} initialObjective={detail?.goal} onImported={async (id) => { await loadGoals(); setSelectedId(id); if (id === selectedId) await loadDetail() }} /><Button type="primary" onClick={openCreateGoal}>新建学习目标</Button></Space></div>
+    <div className="page-actions"><Typography.Text type="secondary">从长期目标拆到章节和任务，点击目标或任务可修改、单独删除</Typography.Text><Space><AILearningGenerator initialTopic={detail?.name} initialObjective={detail?.goal} onImported={async (id) => { await loadGoals(); setSelectedId(id); if (id === selectedId) await loadDetail() }} /><ConfirmDangerButton label="清零全部学习计划" title="确认清零全部学习计划？" description="所有学习目标、任务和记录都会取消并从页面隐藏，可在回收站中恢复。" disabled={resetting || goals.length === 0} onConfirm={resetAllPlans} /><Button type="primary" onClick={openCreateGoal}>新建学习目标</Button></Space></div>
     <Row gutter={20}>
       <Col span={7}><Card title="学习目标"><div className="selectable-list">{goals.map((goal) => <button type="button" aria-label={`编辑学习目标 ${goal.name}`} disabled={editorBusy || savingProgress} key={goal.id} className={goal.id === selectedId ? 'selected' : ''} onClick={() => openGoalEditor(goal)}><strong>{goal.name}</strong><span>{goal.progress}% · 点击修改</span></button>)}</div></Card></Col>
       <Col span={17}>{detailError ? <ErrorPanel message={detailError} onRetry={() => void loadDetail()} /> : selectedId && detail?.id !== selectedId ? <LoadingPanel /> : detail ? <Card title={detail.name} extra={<Space><Typography.Text type="secondary">{detail.progress_is_manual ? '手动进度' : '按章节计算'}</Typography.Text><InputNumber aria-label="学习进度" min={0} max={100} value={progressValue} onChange={(value) => setProgressValue(value ?? 0)} /><Typography.Text>%</Typography.Text><Button type="primary" loading={savingProgress} onClick={() => void saveProgress()}>保存进度</Button></Space>}><Typography.Paragraph>{detail.goal}</Typography.Paragraph><Typography.Text type="secondary">计划：{detail.start_date ?? '未设置'} 至 {detail.target_date ?? '未设置'} · 预计投入 {detail.estimated_minutes} 分钟</Typography.Text><Progress percent={detail.progress} /><Tabs items={[
         { key: 'route', label: '学习路线', children: <><div className="tab-actions"><Button onClick={() => openChildEditor('section')}>添加章节</Button></div><div className="record-grid">{(detail.sections ?? []).map((item) => <Card size="small" key={item.id} className={item.is_completed ? 'record-complete' : ''}><label><input type="checkbox" checked={item.is_completed} onChange={(event) => void toggleSection(item.id, event.target.checked)} /> {item.name}</label></Card>)}</div></> },
-        { key: 'tasks', label: '学习任务', children: <><div className="tab-actions"><Button onClick={() => openChildEditor('task')}>安排学习任务</Button></div><div className="learning-task-list">{(detail.tasks ?? []).map((item) => <button type="button" className="learning-task" aria-label={`编辑学习任务 ${item.title}`} key={item.id} onClick={() => openTaskEditor(item)}><strong>{item.title}</strong><span>{item.plan_date ?? '未排期'} · {item.status ?? '未加入计划'} · 点击修改或删除</span></button>)}</div></> },
+        { key: 'tasks', label: '学习任务', children: <><div className="tab-actions"><Button onClick={() => openChildEditor('task')}>安排学习任务</Button></div><div className="learning-task-list">{(detail.tasks ?? []).map((item) => <button type="button" className="learning-task" aria-label={`编辑学习任务 ${item.title}`} key={item.id} onClick={() => openTaskEditor(item)}><strong>{item.title}</strong>{item.details ? <span className="learning-task-details">{item.details}</span> : null}<span>{item.plan_date ?? '未排期'} · {item.status ?? '未加入计划'} · 点击修改或删除</span></button>)}</div></> },
         { key: 'sessions', label: '学习记录', children: <><div className="tab-actions"><Button onClick={() => openChildEditor('session')}>记录一次学习</Button></div>{(detail.sessions ?? []).map((item) => <Card size="small" key={item.id}><strong>{item.studied_on} · {item.actual_minutes} 分钟</strong><p>{item.notes}</p><Typography.Text type="secondary">下一步：{item.next_step || '未填写'}</Typography.Text></Card>)}</> },
         { key: 'resources', label: '笔记与资料', children: <><div className="tab-actions"><Button onClick={() => openChildEditor('resource')}>添加资料</Button></div>{(detail.resources ?? []).map((item) => <Card size="small" key={item.id}><a href={item.link} target="_blank" rel="noreferrer">{item.name}</a><p>{item.notes}</p></Card>)}</> },
       ]} /></Card> : <EmptyStatePanel description="选择或创建学习目标" />}</Col>
@@ -206,7 +220,7 @@ export function LearningPage() {
       <Form form={form} layout="vertical" onFinish={(values) => void submit(values)}>
         {modal === 'goal' || modal === 'editGoal' ? <><Form.Item name="name" label="学习主题" rules={[{ required: true }]}><Input /></Form.Item><Form.Item name="goal" label="学习目标"><Input.TextArea /></Form.Item><Row gutter={12}><Col span={12}><Form.Item name="start_date" label="开始日期"><DatePicker /></Form.Item></Col><Col span={12}><Form.Item name="target_date" label="计划完成"><DatePicker /></Form.Item></Col></Row><Form.Item name="estimated_minutes" label="预计投入分钟"><InputNumber min={0} /></Form.Item></> : null}
         {modal === 'section' ? <Form.Item name="name" label="章节名称" rules={[{ required: true }]}><Input /></Form.Item> : null}
-        {modal === 'task' || modal === 'editTask' ? <><Form.Item name="title" label="学习任务" rules={[{ required: true }]}><Input /></Form.Item><Form.Item name="plan_date" label="计划日期"><DatePicker /></Form.Item></> : null}
+        {modal === 'task' || modal === 'editTask' ? <><Form.Item name="title" label="学习任务" rules={[{ required: true }]}><Input /></Form.Item><Form.Item name="details" label="任务详情"><Input.TextArea rows={4} placeholder="具体内容、练习步骤或完成标准" /></Form.Item><Form.Item name="plan_date" label="计划日期"><DatePicker /></Form.Item></> : null}
         {modal === 'session' ? <><Form.Item name="studied_on" label="学习日期" rules={[{ required: true }]}><DatePicker /></Form.Item><Form.Item name="actual_minutes" label="实际分钟" rules={[{ required: true }]}><InputNumber min={0} /></Form.Item><Form.Item name="notes" label="学习笔记"><Input.TextArea /></Form.Item><Form.Item name="problems" label="遇到的问题"><Input.TextArea /></Form.Item><Form.Item name="next_step" label="下一步"><Input /></Form.Item></> : null}
         {modal === 'resource' ? <><Form.Item name="name" label="资料名称" rules={[{ required: true }]}><Input /></Form.Item><Form.Item name="link" label="链接"><Input /></Form.Item><Form.Item name="notes" label="备注"><Input.TextArea /></Form.Item></> : null}
       </Form>

@@ -100,6 +100,31 @@ describe('domain-specific module pages', () => {
     expect(screen.getByText('手动进度')).toBeInTheDocument()
   })
 
+  it('clears all learning plans only after confirmation', async () => {
+    const user = userEvent.setup()
+    const goal = { id: 'g1', name: '学习 Python', goal: '完成项目', start_date: null, target_date: null, estimated_minutes: 2400, progress: 20, progress_is_manual: false }
+    let cleared = false
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation((input, init) => {
+      const url = String(input)
+      if (url.endsWith('/learning/reset') && init?.method === 'POST') {
+        cleared = true
+        return json({ cancelled_goals: 1, cancelled_tasks: 0, cancelled_agenda: 0 })
+      }
+      if (url.endsWith('/learning/goals')) return json(cleared ? [] : [goal])
+      return json({ ...goal, sections: [], tasks: [], sessions: [], resources: [] })
+    })
+    render(<MemoryRouter><LearningPage /></MemoryRouter>)
+    expect(await screen.findByText('学习 Python')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: '清零全部学习计划' }))
+    expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith('/learning/reset'))).toBe(false)
+    await user.click(screen.getByRole('button', { name: /确\s*认/ }))
+
+    await waitFor(() => expect(fetchMock.mock.calls.some(([input, init]) => String(input).endsWith('/learning/reset') && init?.method === 'POST')).toBe(true))
+    await waitFor(() => expect(screen.queryByText('学习 Python')).not.toBeInTheDocument())
+    expect(screen.getByText('选择或创建学习目标')).toBeInTheDocument()
+  })
+
   it('renders a monthly meal calendar plus dishes, shopping and daily records', async () => {
     const mealDate = dayjs().startOf('week').add(1, 'day').format('YYYY-MM-DD')
     vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {

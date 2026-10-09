@@ -119,6 +119,57 @@ def test_learning_route_progress_tasks_sessions_and_resources(client):
     assert client.patch(f"/api/v1/learning/goals/{goal['id']}", json={"progress": 101}).status_code == 422
 
 
+def test_learning_reset_cancels_every_plan_and_linked_agenda(client):
+    first_goal = client.post("/api/v1/learning/goals", json={
+        "name": "Python", "goal": "完成练习",
+    }).json()
+    second_goal = client.post("/api/v1/learning/goals", json={
+        "name": "英语", "goal": "完成阅读",
+    }).json()
+    section = client.post(f"/api/v1/learning/goals/{first_goal['id']}/sections", json={
+        "name": "基础章节",
+    }).json()
+    client.post(f"/api/v1/learning/goals/{first_goal['id']}/tasks", json={
+        "title": "完成函数练习", "section_id": section["id"], "plan_date": "2026-10-05",
+    })
+    client.post(f"/api/v1/learning/goals/{second_goal['id']}/tasks", json={
+        "title": "阅读文章", "plan_date": "2026-10-06",
+    })
+    client.post(f"/api/v1/learning/goals/{first_goal['id']}/sessions", json={
+        "studied_on": "2026-10-05", "actual_minutes": 30,
+    })
+    client.post(f"/api/v1/learning/goals/{first_goal['id']}/resources", json={
+        "name": "学习资料",
+    })
+    unrelated = client.post("/api/v1/agenda", json={
+        "title": "保留的普通事项", "plan_date": "2026-10-05", "module": "today",
+    }).json()
+
+    reset = client.post("/api/v1/learning/reset")
+
+    assert reset.status_code == 200
+    assert reset.json() == {
+        "cancelled_goals": 2,
+        "cancelled_sections": 1,
+        "cancelled_tasks": 2,
+        "cancelled_sessions": 1,
+        "cancelled_resources": 1,
+        "cancelled_agenda": 2,
+    }
+    assert client.get("/api/v1/learning/goals").json() == []
+    assert client.get(f"/api/v1/learning/goals/{first_goal['id']}").status_code == 404
+    assert [item["id"] for item in client.get("/api/v1/agenda", params={"date": "2026-10-05"}).json()] == [unrelated["id"]]
+    assert client.get("/api/v1/agenda", params={"date": "2026-10-06"}).json() == []
+    assert client.post("/api/v1/learning/reset").json() == {
+        "cancelled_goals": 0,
+        "cancelled_sections": 0,
+        "cancelled_tasks": 0,
+        "cancelled_sessions": 0,
+        "cancelled_resources": 0,
+        "cancelled_agenda": 0,
+    }
+
+
 def test_diet_week_plan_health_and_generated_shopping_list(client):
     dish = client.post("/api/v1/diet/dishes", json={
         "name": "番茄炒蛋",

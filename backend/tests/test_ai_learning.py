@@ -142,6 +142,7 @@ def test_user_edited_draft_is_imported_once_and_visible_in_home_today_and_search
     assert goal['estimated_minutes'] == 65
     assert [item['name'] for item in goal['sections']] == MODEL_PLAN['sections']
     assert len(goal['tasks']) == 2
+    assert goal['tasks'][0]['details'] == MODEL_PLAN['tasks'][0]['notes']
     assert client.post(endpoint, json=draft['plan']).json()['id'] == goal['id']
     assert len(client.get('/api/v1/learning/goals').json()) == 1
     today = client.get('/api/v1/agenda?date=2026-12-31').json()

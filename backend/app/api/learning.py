@@ -61,6 +61,7 @@ class SectionIn(BaseModel):
 
 class TaskIn(BaseModel):
     title: str = Field(min_length=1)
+    details: str = ""
     section_id: str | None = None
     plan_date: date | None = None
     priority: str = "normal"
@@ -68,6 +69,7 @@ class TaskIn(BaseModel):
 
 class TaskUpdate(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=300)
+    details: str | None = None
     section_id: str | None = None
     plan_date: date | None = None
 
@@ -176,6 +178,47 @@ def create_goal(payload: GoalIn, session: Session = Depends(get_session)):
     return commit_response(session, goal_out(session, goal, True))
 
 
+@router.post("/reset")
+def reset_learning_plans(session: Session = Depends(get_session)):
+    goals = session.scalars(select(LearningGoal).where(LearningGoal.deleted_at.is_(None))).all()
+    goal_ids = [goal.id for goal in goals]
+    sections = session.scalars(select(LearningSection).where(
+        LearningSection.goal_id.in_(goal_ids), LearningSection.deleted_at.is_(None)
+    )).all() if goal_ids else []
+    tasks = session.scalars(select(LearningTask).where(
+        LearningTask.goal_id.in_(goal_ids), LearningTask.deleted_at.is_(None)
+    )).all() if goal_ids else []
+    sessions = session.scalars(select(StudySession).where(
+        StudySession.goal_id.in_(goal_ids), StudySession.deleted_at.is_(None)
+    )).all() if goal_ids else []
+    resources = session.scalars(select(LearningResource).where(
+        LearningResource.goal_id.in_(goal_ids), LearningResource.deleted_at.is_(None)
+    )).all() if goal_ids else []
+
+    task_ids = [task.id for task in tasks]
+    agenda_ids = [task.agenda_id for task in tasks if task.agenda_id]
+    agenda_conditions = []
+    if agenda_ids:
+        agenda_conditions.append(AgendaItem.id.in_(agenda_ids))
+    if task_ids:
+        agenda_conditions.append(
+            (AgendaItem.source_type == "learning_task") & AgendaItem.source_id.in_(task_ids)
+        )
+    agendas = session.scalars(select(AgendaItem).where(
+        AgendaItem.deleted_at.is_(None), or_(*agenda_conditions)
+    )).all() if agenda_conditions else []
+
+    for item in [*goals, *sections, *tasks, *sessions, *resources, *agendas]:
+        soft_delete(item)
+    session.flush()
+    return {
+        "cancelled_goals": len(goals),
+        "cancelled_sections": len(sections),
+        "cancelled_tasks": len(tasks),
+        "cancelled_sessions": len(sessions),
+        "cancelled_resources": len(resources),
+        "cancelled_agenda": len(agendas),
+    }
 
 
 @router.get("/goals/{goal_id}")
@@ -235,13 +278,13 @@ def add_section(goal_id: str, payload: SectionIn, session: Session = Depends(get
 def add_task(goal_id: str, payload: TaskIn, session: Session = Depends(get_session)):
     goal = active_record(session, LearningGoal, goal_id, "学习目标")
     validate_section(session, payload.section_id, goal_id)
-    task = LearningTask(id=new_id(), goal_id=goal_id, section_id=payload.section_id, title=payload.title)
+    task = LearningTask(id=new_id(), goal_id=goal_id, section_id=payload.section_id, title=payload.title, details=payload.details)
     session.add(task)
     if payload.plan_date:
         agenda = AgendaItem(
             title=payload.title, plan_date=payload.plan_date, priority=payload.priority,
             module="learning", source_type="learning_task", source_id=task.id,
-            notes=f"学习目标：{goal.name}",
+            notes=f"学习目标：{goal.name}\n{payload.details}".strip(),
         )
         session.add(agenda); session.flush(); task.agenda_id = agenda.id
     session.flush()
@@ -257,7 +300,9 @@ def update_task(task_id: str, payload: TaskUpdate, session: Session = Depends(ge
     changes = payload.model_dump(exclude_unset=True)
     if "section_id" in changes:
         validate_section(session, changes["section_id"], goal.id)
-    apply_changes(task, changes, {"title", "section_id"})
+    apply_changes(task, changes, {"title", "section_id", "details"})
+    if task.details is None:
+        task.details = ""
     agendas = linked_task_agendas(session, [task])
     if "plan_date" in changes:
         if changes["plan_date"] is None:
@@ -271,10 +316,10 @@ def update_task(task_id: str, payload: TaskUpdate, session: Session = Depends(ge
             if agenda is None:
                 agenda = next((item for item in agendas if item.id == task.agenda_id), None)
             if agenda is None:
-                agenda = AgendaItem(module="learning", source_type="learning_task", source_id=task.id,
-                                    notes=f"学习目标：{goal.name}")
+                agenda = AgendaItem(module="learning", source_type="learning_task", source_id=task.id)
                 session.add(agenda)
             agenda.title = task.title
+            agenda.notes = f"学习目标：{goal.name}\n{task.details}".strip()
             agenda.plan_date = changes["plan_date"]
             agenda.module = "learning"
             agenda.source_type = "learning_task"
@@ -286,9 +331,10 @@ def update_task(task_id: str, payload: TaskUpdate, session: Session = Depends(ge
             for other in agendas:
                 if other is not agenda and other.deleted_at is None:
                     soft_delete(other)
-    elif "title" in changes:
+    elif "title" in changes or "details" in changes:
         for agenda in agendas:
             agenda.title = task.title
+            agenda.notes = f"学习目标：{goal.name}\n{task.details}".strip()
         active_agenda = next((agenda for agenda in agendas if agenda.deleted_at is None), None)
         if active_agenda:
             task.agenda_id = active_agenda.id

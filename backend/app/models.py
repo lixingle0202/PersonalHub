@@ -273,6 +273,7 @@ class LearningTask(LifecycleMixin, Base):
     goal_id: Mapped[str] = mapped_column(ForeignKey("learning_goals.id", ondelete="CASCADE"), index=True)
     section_id: Mapped[str | None] = mapped_column(ForeignKey("learning_sections.id", ondelete="SET NULL"), index=True)
     title: Mapped[str] = mapped_column(String(300), nullable=False)
+    details: Mapped[str] = mapped_column(Text, default="", nullable=False)
     agenda_id: Mapped[str | None] = mapped_column(ForeignKey("agenda_items.id", ondelete="SET NULL"), unique=True)
 
 

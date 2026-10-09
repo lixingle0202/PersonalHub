@@ -189,6 +189,7 @@ body .ant-tag.ant-tag-red:not(.ant-tag-disabled):is(.ant-tag-filled, .ant-tag-ou
 .learning-task:hover { background: var(--primary-soft); border-color: var(--primary-tint); }
 .learning-task:active { transform: translateY(1px); }
 .learning-task span { color: var(--text-secondary); font-size: 12px; }
+.learning-task .learning-task-details { color: var(--text-primary); font-size: 14px; white-space: pre-wrap; line-height: 1.6; }
 
 .diet-calendar-intro { margin-bottom: 22px; }
 .diet-calendar-intro h4.ant-typography { margin: 0 0 7px; font-size: 20px; letter-spacing: -.4px; }

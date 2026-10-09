@@ -112,7 +112,7 @@ def import_learning_draft(draft_id: str, payload: LearningPreview, request: Requ
             session.flush()
             section_ids.append(section.id)
         for index, item in enumerate(sorted(payload.tasks, key=lambda task: task.plan_date)):
-            task = LearningTask(id=new_id(), goal_id=goal.id, section_id=section_ids[item.section_index], title=item.title)
+            task = LearningTask(id=new_id(), goal_id=goal.id, section_id=section_ids[item.section_index], title=item.title, details=item.notes)
             session.add(task)
             agenda = AgendaItem(title=item.title, plan_date=item.plan_date, module='learning',
                                 source_type='learning_task', source_id=task.id, sort_order=index + 1,
