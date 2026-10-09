@@ -1,0 +1,159 @@
+from __future__ import annotations
+
+import hashlib
+import json
+import sqlite3
+
+import httpx
+from fastapi.testclient import TestClient
+
+from app.config import Settings
+from app.main import create_app
+from app.public import DAILY_GENERATIONS, create_public_app
+from app.services import ollama
+
+
+HOST = "https://hub.example.test"
+PASSWORD = "long-private-password"
+PLAN = {
+    "name": "两天学习计划", "goal": "学会界面和状态", "sections": ["界面", "状态"],
+    "tasks": [
+        {"day_number": 1, "section_index": 0, "title": "画出界面", "minutes": 30, "notes": "练习"},
+        {"day_number": 2, "section_index": 1, "title": "保存状态", "minutes": 30, "notes": "练习"},
+    ],
+}
+REQUIREMENTS = {"topic": "Android", "objective": "完成练习", "start_date": "2026-12-31",
+                "days": 2, "daily_minutes": 45}
+
+
+def register(client: TestClient, name: str) -> str:
+    response = client.post("/api/v1/public/register", json={"username": name, "password": PASSWORD})
+    assert response.status_code == 200, response.text
+    assert "HttpOnly" in response.headers["set-cookie"]
+    assert "Secure" in response.headers["set-cookie"]
+    assert "SameSite=strict" in response.headers["set-cookie"]
+    bootstrap = client.get("/api/v1/bootstrap")
+    assert bootstrap.status_code == 200, bootstrap.text
+    assert bootstrap.json()["public_mode"] is True
+    assert bootstrap.json()["database_path"] == "独立个人空间"
+    return bootstrap.json()["local_token"]
+
+
+def test_public_api_requires_login_and_never_mounts_owner_data(tmp_path):
+    private = create_app(Settings(data_root=tmp_path / "owner"))
+    with TestClient(private) as owner:
+        owner.post("/api/v1/learning/goals", json={"name": "主人私人计划"},
+                   headers={"x-local-token": private.state.local_token})
+    private.state.database.dispose()
+    original = (tmp_path / "owner" / "data" / "personal_data.db").read_bytes()
+
+    public = create_public_app(tmp_path / "shared")
+    with TestClient(public, base_url=HOST) as stranger:
+        for path in ("/api/v1/bootstrap", "/api/v1/learning/goals", "/api/v1/search?q=私人"):
+            assert stranger.get(path).status_code == 401
+        assert stranger.post("/api/v1/learning/goals", json={"name": "越权"}).status_code == 401
+        token = register(stranger, "alice")
+        assert stranger.get("/api/v1/learning/goals").json() == []
+        assert stranger.get("/api/v1/ai/ollama/settings").json()["model"] == "qwen2.5:1.5b"
+        assert stranger.put("/api/v1/ai/ollama/settings", json={"base_url": "http://127.0.0.1:9999", "model": "bad"},
+                            headers={"x-local-token": token}).status_code == 403
+        assert stranger.post("/api/v1/ai/ollama/models", json={"base_url": "http://127.0.0.1:9999"},
+                             headers={"x-local-token": token}).status_code == 403
+        assert "主人私人计划" not in stranger.get("/api/v1/search?q=私人").text
+        traversal = stranger.get("/%2e%2e%5c%2e%2e%5cREADME.md")
+        assert traversal.status_code == 200
+        assert traversal.headers["content-type"].startswith("text/html")
+    assert (tmp_path / "owner" / "data" / "personal_data.db").read_bytes() == original
+
+
+def test_two_accounts_get_independent_plans_backups_and_write_tokens(tmp_path):
+    public = create_public_app(tmp_path / "shared")
+    with TestClient(public, base_url=HOST) as alice, TestClient(public, base_url=HOST) as bob:
+        alice_token = register(alice, "alice")
+        bob_token = register(bob, "bob")
+        assert alice_token != bob_token
+        created = alice.post("/api/v1/learning/goals", json={"name": "Alice 的学习"},
+                             headers={"x-local-token": alice_token})
+        assert created.status_code == 201, created.text
+        assert bob.get("/api/v1/learning/goals").json() == []
+        assert bob.get("/api/v1/search?q=Alice").json() == []
+        assert bob.get("/api/v1/learning/goals/" + created.json()["id"]).status_code == 404
+        assert bob.post("/api/v1/learning/goals", json={"name": "错误令牌"},
+                        headers={"x-local-token": alice_token}).status_code == 403
+        assert bob.post("/api/v1/learning/goals", json={"name": "Bob 的学习"},
+                        headers={"x-local-token": bob_token}).status_code == 201
+        meal = alice.post("/api/v1/diet/meals", json={
+            "meal_date": "2026-12-31", "meal_type": "dinner", "custom_name": "Alice 的晚餐",
+        }, headers={"x-local-token": alice_token})
+        assert meal.status_code == 201, meal.text
+        meal_list = "/api/v1/diet/meals?start_date=2026-12-31&end_date=2026-12-31"
+        assert len(alice.get(meal_list).json()) == 1
+        assert bob.get(meal_list).json() == []
+        assert bob.get("/api/v1/search?q=Alice").json() == []
+        assert alice.get("/api/v1/home?date=2026-12-31").json()["stats"]["total"] >= 1
+        alice_backup = alice.post("/api/v1/backups", headers={"x-local-token": alice_token})
+        assert alice_backup.status_code == 201
+        assert bob.get("/api/v1/backups").json() == []
+        assert alice.get("/api/v1/learning/goals").json()[0]["name"] == "Alice 的学习"
+        assert bob.get("/api/v1/learning/goals").json()[0]["name"] == "Bob 的学习"
+
+
+def test_login_logout_password_storage_session_restart_and_csrf(tmp_path):
+    root = tmp_path / "shared"
+    public = create_public_app(root)
+    with TestClient(public, base_url=HOST) as alice:
+        register(alice, "alice")
+        assert alice.post("/api/v1/learning/goals", json={"name": "跨站"},
+                          headers={"origin": "https://attacker.example"}).status_code == 403
+        assert alice.post("/api/v1/learning/goals", json={"name": "跨站"},
+                          headers={"sec-fetch-site": "cross-site"}).status_code == 403
+        assert alice.post("/api/v1/public/register", json={"username": "alice", "password": PASSWORD}).status_code == 409
+        assert alice.post("/api/v1/public/logout").status_code == 200
+        assert alice.get("/api/v1/bootstrap").status_code == 401
+        assert alice.post("/api/v1/public/login", json={"username": "alice", "password": "wrong-password"}).status_code == 401
+        assert alice.post("/api/v1/public/login", json={"username": "alice", "password": PASSWORD}).status_code == 200
+        assert alice.get("/api/v1/bootstrap").status_code == 200
+        with sqlite3.connect(root / "accounts.sqlite3") as database:
+            stored = database.execute("SELECT password_hash FROM accounts WHERE username='alice'").fetchone()[0]
+        assert stored != PASSWORD.encode()
+        assert len(stored) == hashlib.sha256().digest_size
+        cookie = alice.cookies.get("personalhub_public_session")
+    restarted = create_public_app(root)
+    with TestClient(restarted, base_url=HOST) as browser:
+        browser.cookies.set("personalhub_public_session", cookie, domain="hub.example.test")
+        assert browser.get("/api/v1/bootstrap").status_code == 200
+        assert browser.get("/api/v1/public/me").json()["username"] == "alice"
+
+
+def test_shared_model_generates_only_in_signed_in_users_space_and_limits_usage(tmp_path, monkeypatch):
+    real_client = httpx.Client
+    requests = []
+
+    def transport(request):
+        requests.append(request)
+        assert request.url.host == "127.0.0.1"
+        assert request.url.port == 11434
+        body = json.loads(request.content)
+        assert body["model"] == "qwen2.5:1.5b"
+        return httpx.Response(200, json={"message": {"content": json.dumps(PLAN)}})
+
+    monkeypatch.setattr(ollama.httpx, "Client", lambda **kwargs: real_client(
+        transport=httpx.MockTransport(transport), **kwargs))
+    public = create_public_app(tmp_path / "shared")
+    with TestClient(public, base_url=HOST) as alice, TestClient(public, base_url=HOST) as bob:
+        alice_token = register(alice, "alice")
+        bob_token = register(bob, "bob")
+        assert alice.post("/api/v1/ai/learning/generate", json=REQUIREMENTS).status_code == 403
+        drafts = []
+        for _ in range(DAILY_GENERATIONS):
+            result = alice.post("/api/v1/ai/learning/generate", json=REQUIREMENTS,
+                                headers={"x-local-token": alice_token})
+            assert result.status_code == 200, result.text
+            drafts.append(result.json()["id"])
+        assert alice.post("/api/v1/ai/learning/generate", json=REQUIREMENTS,
+                          headers={"x-local-token": alice_token}).status_code == 429
+        assert bob.get("/api/v1/ai/learning/drafts/" + drafts[0]).status_code == 404
+        assert bob.post("/api/v1/ai/learning/generate", json=REQUIREMENTS,
+                        headers={"x-local-token": bob_token}).status_code == 200
+        assert alice.get("/api/v1/learning/goals").json() == []
+        assert len(requests) == DAILY_GENERATIONS + 1

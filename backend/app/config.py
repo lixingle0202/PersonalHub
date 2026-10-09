@@ -22,6 +22,7 @@ class Settings:
     host: str = "127.0.0.1"
     port: int = 8765
     dev_origin: str | None = None
+    allowed_hosts: tuple[str, ...] = ("127.0.0.1", "localhost", "testserver")
 
     @property
     def database_path(self) -> Path:

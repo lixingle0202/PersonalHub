@@ -366,3 +366,8 @@ body.dark-mode .ant-tag.ant-tag-red:not(.ant-tag-disabled):is(.ant-tag-filled, .
   .page-settings .ant-form > .ant-row { flex-direction: column; }
   .page-settings .ant-form > .ant-row > .ant-col { max-width: 100%; }
 }
+.public-auth-layout { min-height: 100vh; display: grid; place-items: center; padding: 24px; background: var(--background, #edf1f8); }
+.public-auth-card { width: min(100%, 460px); border-radius: 28px; box-shadow: 0 24px 80px rgba(40, 56, 92, .17); }
+.public-auth-card .brand { margin-bottom: 26px; }
+.public-auth-card h2 { margin-bottom: 8px; }
+.public-auth-card .ant-btn-link { margin-top: 12px; padding-left: 0; }

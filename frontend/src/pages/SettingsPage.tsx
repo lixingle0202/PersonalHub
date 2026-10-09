@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Button, Card, Col, ColorPicker, Empty, Form, Input, InputNumber, Row, Select, Switch, Tabs, Tag, Typography, message } from 'antd'
-import { apiRequest, bootstrapApi } from '../api/client'
+import { apiRequest, bootstrapApi, isPublicMode } from '../api/client'
 import { applyAppearance } from '../app/theme'
 import { ConfirmDangerButton } from '../components/ConfirmDangerButton'
 import { OllamaSettingsPanel } from '../components/OllamaSettingsPanel'
@@ -27,6 +27,7 @@ function readableSize(size: number) {
 }
 
 export function SettingsPage() {
+  const hosted = isPublicMode()
   const [searchParams] = useSearchParams()
   const [settings, setSettings] = useState<AppSettings | null>(null)
   const [databasePath, setDatabasePath] = useState('')
@@ -85,7 +86,7 @@ export function SettingsPage() {
   if (!settings) return <LoadingPanel />
 
   const dataPanel = <div className="page-stack">
-    <Card title="本地数据文件" extra={<Button type="primary" loading={busy === 'backup'} onClick={() => void runAction('backup', () => apiRequest('/backups', { method: 'POST' }), '备份已创建')}>立即备份</Button>}>
+    <Card title={hosted ? '个人数据空间' : '本地数据文件'} extra={<Button type="primary" loading={busy === 'backup'} onClick={() => void runAction('backup', () => apiRequest('/backups', { method: 'POST' }), '备份已创建')}>立即备份</Button>}>
       <Typography.Paragraph>正式数据保存在独立文件中，不依赖浏览器缓存。恢复前会自动保存当前数据，选中的备份文件也不会被改写。</Typography.Paragraph>
       <Input value={databasePath} readOnly aria-label="数据库文件位置" />
     </Card>
@@ -114,6 +115,6 @@ export function SettingsPage() {
   return <div className="page-stack"><Tabs defaultActiveKey={searchParams.get('tab') === 'ai' ? 'ai' : 'data'} items={[
     { key: 'data', label: '数据管理', children: dataPanel },
     { key: 'preferences', label: '个性化设置', children: preferencesPanel },
-    { key: 'ai', label: '本地大模型', children: <OllamaSettingsPanel /> },
+    { key: 'ai', label: hosted ? '共享大模型' : '本地大模型', children: <OllamaSettingsPanel /> },
   ]} /></div>
 }

@@ -30,7 +30,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.data_lock = RLock()
     app.add_middleware(
         TrustedHostMiddleware,
-        allowed_hosts=["127.0.0.1", "localhost", "testserver"],
+        allowed_hosts=list(current.allowed_hosts),
     )
     app.add_middleware(LocalWriteTokenMiddleware, token=token)
 
@@ -77,10 +77,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/{full_path:path}", include_in_schema=False)
     def frontend(full_path: str):
-        candidate = frontend_dist / full_path
-        if full_path and candidate.is_file():
+        root = frontend_dist.resolve()
+        candidate = (root / full_path).resolve()
+        if full_path and candidate.is_relative_to(root) and candidate.is_file():
             return FileResponse(candidate)
-        index = frontend_dist / "index.html"
+        index = root / "index.html"
         if index.exists():
             return FileResponse(index)
         return {"message": "Frontend has not been built yet."}

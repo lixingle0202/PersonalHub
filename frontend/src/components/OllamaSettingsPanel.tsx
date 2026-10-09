@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Alert, AutoComplete, Button, Card, Form, Input, Space, Typography, message } from 'antd'
-import { apiRequest } from '../api/client'
+import { apiRequest, isPublicMode } from '../api/client'
 
 export type OllamaSettings = { base_url: string; model: string }
 
@@ -10,10 +10,13 @@ export function OllamaSettingsPanel() {
   const [busy, setBusy] = useState('')
   const [error, setError] = useState('')
   const [connected, setConnected] = useState(false)
+  const hosted = isPublicMode()
 
   useEffect(() => {
     void apiRequest<OllamaSettings>('/ai/ollama/settings').then((values) => form.setFieldsValue(values)).catch((reason: Error) => setError(reason.message))
   }, [form])
+
+  if (hosted) return <Card title="共享大模型"><Typography.Paragraph>学习计划由主机上的模型生成，你无需安装 Ollama。模型只会收到你在生成窗口填写的需求。</Typography.Paragraph><Typography.Text type="secondary">当前模型：qwen2.5:1.5b</Typography.Text></Card>
 
   async function refreshModels() {
     setBusy('models'); setError(''); setConnected(false)

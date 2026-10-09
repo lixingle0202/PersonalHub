@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Alert, Button, DatePicker, Form, Input, InputNumber, Modal, Space, Tag, Typography, message } from 'antd'
 import { BulbOutlined, DeleteOutlined } from '@ant-design/icons'
 import dayjs, { type Dayjs } from 'dayjs'
-import { apiRequest } from '../api/client'
+import { apiRequest, isPublicMode } from '../api/client'
 import type { OllamaSettings } from './OllamaSettingsPanel'
 
 export type LearningPreview = {
@@ -19,6 +19,7 @@ export function AILearningGenerator({ onImported, initialTopic = '', initialObje
   initialTopic?: string
   initialObjective?: string
 }) {
+  const hosted = isPublicMode()
   const [open, setOpen] = useState(false)
   const [config, setConfig] = useState<OllamaSettings | null>(null)
   const [connectionError, setConnectionError] = useState('')
@@ -46,7 +47,7 @@ export function AILearningGenerator({ onImported, initialTopic = '', initialObje
             else { sessionStorage.removeItem(DRAFT_KEY); setDraft(null) }
           } catch { if (!abort.signal.aborted) setError('读取已保存的草稿失败，请重试；也可以重新生成') }
         }
-        if (settings.model) {
+        if (settings.model && !hosted) {
           const result = await apiRequest<{ models: string[] }>('/ai/ollama/models', { method: 'POST', body: JSON.stringify({ base_url: settings.base_url }), signal: abort.signal })
           if (!result.models.includes(settings.model)) setConnectionError('保存的模型尚未安装，请在本地大模型设置中刷新并选择模型')
         }
@@ -102,8 +103,8 @@ export function AILearningGenerator({ onImported, initialTopic = '', initialObje
     <Button aria-label="AI 生成学习计划" icon={<BulbOutlined aria-hidden />} onClick={() => setOpen(true)}>AI 生成学习计划</Button>
     <Modal width={900} title="AI 生成学习计划" open={open} onCancel={close} footer={null} mask={{ closable: false }}>
       <div className="ai-generator">
-        <div className="ai-connection"><Typography.Text type="secondary">本地 Ollama{config?.model ? ` · ${config.model}` : ''}</Typography.Text><a href="/settings?tab=ai">本地大模型设置</a></div>
-        {!config?.model && busy !== 'load' ? <Alert type="info" showIcon title="请先配置本地模型" description="在数据与设置 → 本地大模型中检查连接、选择模型并保存，再打开这个窗口。" /> : null}
+        <div className="ai-connection"><Typography.Text type="secondary">{hosted ? '共享模型' : '本地 Ollama'}{config?.model ? ` · ${config.model}` : ''}</Typography.Text>{hosted ? null : <a href="/settings?tab=ai">本地大模型设置</a>}</div>
+        {!config?.model && busy !== 'load' ? <Alert type="info" showIcon title={hosted ? '共享模型暂不可用' : '请先配置本地模型'} description={hosted ? '请稍后重试。' : '在数据与设置 → 本地大模型中检查连接、选择模型并保存，再打开这个窗口。'} /> : null}
         {connectionError ? <Alert type="warning" showIcon title={connectionError} /> : null}
         {error ? <Alert type="error" showIcon title={error} /> : null}
         {plan ? <>
@@ -122,7 +123,7 @@ export function AILearningGenerator({ onImported, initialTopic = '', initialObje
           <Form.Item name="current_level" label="目前基础"><Input placeholder="例如：会 Java，尚未接触 Android" maxLength={1000} /></Form.Item>
           <div className="ai-request-schedule"><Form.Item name="start_date" label="开始日期" rules={[{ required: true }]}><DatePicker /></Form.Item><Form.Item name="days" label="计划天数" rules={[{ required: true }]}><InputNumber min={1} max={30} /></Form.Item><Form.Item name="daily_minutes" label="每天可用分钟" rules={[{ required: true }]}><InputNumber min={5} max={480} /></Form.Item></div>
           <Form.Item name="preferences" label="补充要求"><Input.TextArea rows={2} placeholder="例如：多安排动手练习，每三天复习一次" maxLength={2000} /></Form.Item>
-          {busy === 'generate' ? <Alert type="info" showIcon title="本地模型正在生成，首次加载可能需要较长时间" description="可以取消等待；取消不会向正式学习计划添加内容。" className="ai-status" /> : null}
+          {busy === 'generate' ? <Alert type="info" showIcon title={hosted ? '共享模型正在生成，请稍候' : '本地模型正在生成，首次加载可能需要较长时间'} description="可以取消等待；取消不会向正式学习计划添加内容。" className="ai-status" /> : null}
           <div className="ai-generator-actions"><Typography.Text type="secondary">生成后先预览，再由你确认加入</Typography.Text><Space><Button aria-label="取消等待" onClick={close}>{busy === 'generate' ? '取消等待' : '取消'}</Button><Button type="primary" htmlType="submit" loading={busy === 'generate'} disabled={Boolean(busy) || !config?.model || Boolean(connectionError)}>生成草稿</Button></Space></div>
         </Form>}
       </div>

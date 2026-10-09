@@ -1,19 +1,29 @@
 export type ApiErrorBody = { detail?: string | Array<{ msg?: string }> }
 
 let localToken = ''
+let bootstrapInfo: Bootstrap | null = null
 
 export type Bootstrap = {
   app_name: string
   version: string
   local_token: string
   database_path: string
+  public_mode?: boolean
+  username?: string
 }
+
+export class AuthenticationRequired extends Error {}
+
+export function isPublicMode() { return bootstrapInfo?.public_mode === true }
+export function currentUsername() { return bootstrapInfo?.username ?? '' }
 
 export async function bootstrapApi(): Promise<Bootstrap> {
   const response = await fetch('/api/v1/bootstrap')
+  if (response.status === 401) throw new AuthenticationRequired('请先登录')
   if (!response.ok) throw new Error('无法连接本地数据服务')
   const data = await response.json() as Bootstrap
   localToken = data.local_token
+  bootstrapInfo = data
   return data
 }
 

@@ -11,6 +11,7 @@ import { Button, Typography } from 'antd'
 import { lazy, Suspense, useState } from 'react'
 import { Link, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { SaveStatus } from '../components/SaveStatus'
+import { currentUsername, isPublicMode } from '../api/client'
 import { LoadingPanel } from '../components/StatePanels'
 import { loadPageModule, PageLoadErrorBoundary } from './pageLoadRecovery'
 
@@ -35,6 +36,11 @@ export function App() {
   const [dataVersion, setDataVersion] = useState(0)
   const location = useLocation()
   const active = pages.find((page) => page.path === location.pathname) ?? pages[0]
+  const hosted = isPublicMode()
+  async function logout() {
+    await fetch('/api/v1/public/logout', { method: 'POST' })
+    window.location.reload()
+  }
   return (
     <div className="app-shell">
       <a className="skip-link" href="#main-content" onClick={() => document.getElementById('main-content')?.focus()}>跳到主要内容</a>
@@ -50,12 +56,13 @@ export function App() {
             <span>{page.label}</span><span className="nav-indicator" aria-hidden="true" />
           </Link>)}
         </nav>
-        <div className="sidebar-footer"><SafetyCertificateOutlined aria-hidden="true" /><div><strong>本地工作空间</strong><span>计划与记录，安心保存在这里</span></div></div>
+        <div className="sidebar-footer"><SafetyCertificateOutlined aria-hidden="true" /><div><strong>{hosted ? '独立个人空间' : '本地工作空间'}</strong><span>{hosted ? '计划与记录仅你可见' : '计划与记录，安心保存在这里'}</span></div></div>
       </aside>
       <div className="app-workspace">
         <header className="app-header">
           <div className="page-heading"><Typography.Title level={3} className="page-title">{active.label}</Typography.Title><span className="page-subtitle">{active.description}</span></div>
           <div className="header-actions">
+            {hosted ? <><Typography.Text>{currentUsername()}</Typography.Text><Button onClick={() => void logout()}>退出登录</Button></> : null}
             <Suspense fallback={null}><GlobalSearch /></Suspense>
             <Button type="primary" aria-label="快速新增" icon={<PlusOutlined aria-hidden="true" />} onClick={() => setQuickOpen(true)}>快速新增</Button>
             <div className="header-save-status"><SaveStatus state="saved" /></div>

@@ -11,6 +11,20 @@ PersonalHub 是只在当前 Windows 电脑上使用的工作与生活管理工�
 
 程序只监听 `127.0.0.1`，同一网络中的其他电脑无法访问。
 
+## 分享独立的多人网页
+
+本机版继续使用自己的数据库和 `127.0.0.1:8765`。多人版使用另一个本机服务 `127.0.0.1:8766`，每位访客注册账号后拥有独立的学习、饮食、设置和备份数据。所有访客的 AI 生成请求由这台主机上的 `qwen2.5:1.5b` 处理，访客电脑不需要 Ollama。生成请求一次只运行一个，每个账号每天最多 12 次，以免轻量模型被并发请求拖慢。
+
+先按“从源码启动”准备 Python 环境并构建前端；在主机上启动 Ollama 和 `qwen2.5:1.5b`。从 [Cloudflare 官方下载页](https://developers.cloudflare.com/tunnel/downloads/)取得 Windows 64 位 `cloudflared.exe`，放到项目下 `.public-runtime/cloudflared.exe`。文件和公开版数据库都保存在本项目的 D 盘目录，已加入 Git 忽略。然后运行：
+
+```powershell
+.\scripts\Start-PublicHub.ps1
+```
+
+脚本验证模型与 cloudflared 的数字签名，启动独立服务和 HTTPS 隧道，并打印可以分享的网址。访客在该网址注册和登录后使用完整网页。关闭分享时运行 `.\scripts\Stop-PublicHub.ps1`；账号数据仍保存在 `.public-hub-data`。主机必须保持开机、联网并运行 Ollama。
+
+当前使用 Cloudflare 临时隧道；重启隧道后网址会改变，也没有长期可用保证。要固定网址，需在自己的 Cloudflare 账号和域名下创建正式隧道，并把它指向 `http://127.0.0.1:8766`。不要把原本的 `8765` 本机服务或 `11434` Ollama 端口公开到互联网。[临时隧道说明](https://developers.cloudflare.com/tunnel/get-started/quick-tunnels/)
+
 ## 使用本地大模型生成学习计划
 
 1. 安装并启动 [Ollama Windows 版](https://ollama.com/download/windows)，在 Ollama 中下载一个支持 JSON 输出的本地模型。首次下载需要联网；模型下载后可在本机使用。
