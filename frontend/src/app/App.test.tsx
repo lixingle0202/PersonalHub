@@ -38,7 +38,7 @@ describe('application shell', () => {
     render(<MemoryRouter><App /></MemoryRouter>)
     await user.click(screen.getByRole('link', { name: /学习计划/ }))
     expect(await screen.findByRole('heading', { name: '学习计划', level: 3 })).toBeInTheDocument()
-    expect(await screen.findByText('从长期目标拆到章节、任务和每次学习记录')).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: '新建学习目标' })).toBeEnabled()
   })
 
   it('exposes one current navigation destination and updates it after navigation', async () => {

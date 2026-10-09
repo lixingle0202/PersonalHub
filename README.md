@@ -108,6 +108,14 @@ node scripts/test-diet-delete-browser.mjs .venv/Scripts/python.exe <playwright�
 
 打包版同样将第一个参数换为程序路径并追加 `--packaged`；每次运行使用新的测试目录。
 
+学习计划逐项编辑与删除浏览器回归测试（独立数据库，验证目标及任务编辑、取消、失败重试、防重复删除、小窗口确认与跨模块同步）：
+
+```powershell
+node scripts/test-learning-delete-browser.mjs .venv/Scripts/python.exe <playwright模块路径> .test-runtime/learning-delete-review
+```
+
+打包版同样支持程序路径和 `--packaged`，每次运行使用新的测试目录。
+
 已安装本机模型时，可执行真实推理验收，测试使用隔离数据库：
 
 ```powershell

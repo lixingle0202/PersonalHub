@@ -184,6 +184,11 @@ body .ant-tag.ant-tag-red:not(.ant-tag-disabled):is(.ant-tag-filled, .ant-tag-ou
 .page-learning .ant-card-head-wrapper { flex-wrap: wrap; gap: 0 12px; }
 .page-learning .ant-card-extra { margin-left: auto; }
 .page-learning .ant-card-extra .ant-input-number { width: 72px; }
+.learning-task-list { display: flex; flex-direction: column; gap: 12px; }
+.learning-task { display: flex; flex-direction: column; gap: 8px; width: 100%; padding: 16px 18px; border: 1px solid var(--surface-line); border-radius: 14px; background: var(--surface); color: var(--text-primary); font: inherit; text-align: left; overflow-wrap: anywhere; cursor: pointer; transition: background .18s, border-color .18s, transform .16s; }
+.learning-task:hover { background: var(--primary-soft); border-color: var(--primary-tint); }
+.learning-task:active { transform: translateY(1px); }
+.learning-task span { color: var(--text-secondary); font-size: 12px; }
 
 .diet-calendar-intro { margin-bottom: 22px; }
 .diet-calendar-intro h4.ant-typography { margin: 0 0 7px; font-size: 20px; letter-spacing: -.4px; }
@@ -218,7 +223,8 @@ body .ant-tag.ant-tag-red:not(.ant-tag-disabled):is(.ant-tag-filled, .ant-tag-ou
 .calendar-empty > div { display: flex; flex-wrap: wrap; gap: 2px 5px; margin-top: 8px; }
 .calendar-empty button { border: 0; border-radius: 5px; background: transparent; color: var(--text-secondary); padding: 4px 2px; font-size: 11px; cursor: pointer; min-height: 28px; }
 .calendar-empty button:hover { background: var(--surface-raised); color: var(--green); }
-.diet-editor-footer { display: flex; justify-content: space-between; gap: 12px; }
+.diet-editor-footer, .editor-footer { display: flex; justify-content: space-between; gap: 12px; }
+.editor-footer { flex-wrap: wrap; }
 .shopping-row { display: flex; justify-content: space-between; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--surface-line); }
 .search-results { display: flex; flex-direction: column; gap: 7px; max-height: 480px; overflow: auto; }
 .search-results > button { border: 1px solid transparent; background: transparent; border-radius: 12px; padding: 14px; text-align: left; display: flex; flex-direction: column; gap: 7px; cursor: pointer; }
