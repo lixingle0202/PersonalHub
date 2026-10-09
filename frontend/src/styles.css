@@ -190,6 +190,8 @@ body .ant-tag.ant-tag-red:not(.ant-tag-disabled):is(.ant-tag-filled, .ant-tag-ou
 .learning-task:active { transform: translateY(1px); }
 .learning-task span { color: var(--text-secondary); font-size: 12px; }
 .learning-task .learning-task-details { color: var(--text-primary); font-size: 14px; white-space: pre-wrap; line-height: 1.6; }
+.native-form-select { width: 100%; min-height: 40px; padding: 7px 12px; border: 1px solid var(--surface-line); border-radius: 10px; background: var(--surface-raised); color: var(--text-primary); font: inherit; cursor: pointer; }
+.native-form-select:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 
 .diet-calendar-intro { margin-bottom: 22px; }
 .diet-calendar-intro h4.ant-typography { margin: 0 0 7px; font-size: 20px; letter-spacing: -.4px; }

@@ -16,12 +16,19 @@ function dialogWithTitle(title: string) {
   return screen.getByText(title).closest('[role="dialog"]') as HTMLElement
 }
 
-function mockApi(initial: Meal[] = [], deleteFails: boolean | (() => boolean) = false) {
+function mockApi(initial: Meal[] = [], deleteFails: boolean | (() => boolean) = false, initialDishes: Array<{ id: string; name: string; instructions: string; nutrition_notes: string; notes: string; ingredients: Array<{ name: string; quantity: number | null; unit: string }> }> = []) {
   let meals = [...initial]
+  let dishes = [...initialDishes]
   return vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
     const url = new URL(String(input), 'http://localhost')
     let body: unknown = []
-    if (url.pathname.includes('/diet/meals/') && init?.method === 'DELETE') {
+    if (url.pathname.includes('/diet/dishes/') && init?.method === 'PATCH') {
+      const values = JSON.parse(String(init.body)) as typeof dishes[number]
+      dishes = dishes.map((dish) => url.pathname.endsWith(`/${dish.id}`) ? { ...dish, ...values } : dish)
+      body = dishes[0]
+    } else if (url.pathname.endsWith('/diet/dishes')) {
+      body = dishes
+    } else if (url.pathname.includes('/diet/meals/') && init?.method === 'DELETE') {
       if (typeof deleteFails === 'function' ? deleteFails() : deleteFails) return new Response(JSON.stringify({ detail: '删除失败，请重试' }), { status: 500 })
       meals = meals.filter((entry) => !url.pathname.endsWith(`/${entry.id}`))
       body = {}
@@ -137,19 +144,41 @@ describe('diet monthly calendar and manual changes', () => {
     render(<DietPage />)
     fireEvent.click(await screen.findByLabelText('安排 2026-10-12 早餐'))
     expect(screen.getByLabelText('日期')).toHaveValue('2026-10-12')
-    expect(screen.getByTitle('早餐')).toBeInTheDocument()
+    expect(screen.getByLabelText('餐次')).toHaveValue('breakfast')
     fireEvent.change(screen.getByLabelText('或填写其他餐食'), { target: { value: '燕麦粥' } })
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: '创建' }))
     expect(await screen.findByText('燕麦粥')).toBeInTheDocument()
     expect(fetchMock.mock.calls.some(([input, init]) => String(input).endsWith('/diet/meals') && init?.method === 'POST' && JSON.parse(String(init.body)).meal_date === '2026-10-12' && JSON.parse(String(init.body)).meal_type === 'breakfast')).toBe(true)
   })
 
+  it('uses native meal and common-dish selectors and edits a recipe', async () => {
+    const fetchMock = mockApi([], false, [{ id: 'dish-1', name: '西红柿炒鸡蛋', instructions: '炒熟', nutrition_notes: '', notes: '', ingredients: [{ name: '鸡蛋', quantity: 2, unit: '个' }] }])
+    render(<DietPage />)
+    fireEvent.click(await screen.findByRole('button', { name: '安排一餐' }))
+    const dialog = within(screen.getByRole('dialog', { name: '安排一餐' }))
+    fireEvent.change(dialog.getByLabelText('餐次'), { target: { value: 'lunch' } })
+    fireEvent.change(dialog.getByLabelText('选择菜品'), { target: { value: 'dish-1' } })
+    expect(dialog.getByLabelText('餐次')).toHaveValue('lunch')
+    expect(dialog.getByLabelText('选择菜品')).toHaveValue('dish-1')
+    expect(dialog.queryByLabelText('实际饮食（可选）')).not.toBeInTheDocument()
+    fireEvent.click(dialog.getByRole('button', { name: '创建' }))
+    await waitFor(() => expect(fetchMock.mock.calls.some(([input, init]) => String(input).endsWith('/diet/meals') && init?.method === 'POST' && JSON.parse(String(init.body)).dish_id === 'dish-1')).toBe(true))
+    fireEvent.click(screen.getByRole('tab', { name: '常用菜品' }))
+    fireEvent.click(screen.getByRole('button', { name: '修改菜品 西红柿炒鸡蛋' }))
+    const recipe = within(screen.getByRole('dialog', { name: '修改菜品' }))
+    fireEvent.change(recipe.getByLabelText('简单做法'), { target: { value: '少油炒熟' } })
+    fireEvent.change(recipe.getByLabelText('食材（每行：名称 | 数量 | 单位）'), { target: { value: '鸡蛋 | 2 | 个\n番茄 | 2 | 个' } })
+    fireEvent.click(recipe.getByRole('button', { name: '保存修改' }))
+    await waitFor(() => expect(fetchMock.mock.calls.some(([input, init]) => String(input).endsWith('/diet/dishes/dish-1') && init?.method === 'PATCH' && JSON.parse(String(init.body)).ingredients.length === 2)).toBe(true))
+    expect(await screen.findByText('少油炒熟')).toBeInTheDocument()
+  }, 30000)
+
   it('saves manual changes and follows a meal moved into another month', async () => {
-    const fetchMock = mockApi([meal('one')])
+    const fetchMock = mockApi([meal('one', { actual_food: '蔬菜沙拉' })])
     render(<DietPage />)
     fireEvent.click(await screen.findByLabelText('修改 2026-10-07 午餐'))
     fireEvent.change(screen.getByLabelText('或填写其他餐食'), { target: { value: '鸡胸肉沙拉' } })
-    fireEvent.change(screen.getByLabelText('实际饮食（可选）'), { target: { value: '蔬菜沙拉' } })
+    expect(screen.queryByLabelText('实际饮食（可选）')).not.toBeInTheDocument()
     fireEvent.change(screen.getByLabelText('日期'), { target: { value: '2026-11-10' } })
     fireEvent.keyDown(screen.getByLabelText('日期'), { key: 'Enter', code: 'Enter' })
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: '保存修改' }))

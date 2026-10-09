@@ -185,7 +185,7 @@ describe('domain-specific module pages', () => {
     fireEvent.click(await screen.findByLabelText(`安排 ${mealDate} 早餐`))
     expect(await screen.findByRole('dialog', { name: '安排一餐' })).toBeInTheDocument()
     expect(screen.getByLabelText('日期')).toHaveValue(mealDate)
-    expect(screen.getByTitle('早餐')).toBeInTheDocument()
+    expect(screen.getByLabelText('餐次')).toHaveValue('breakfast')
   })
 
   it('clears every meal plan only after confirmation', async () => {
