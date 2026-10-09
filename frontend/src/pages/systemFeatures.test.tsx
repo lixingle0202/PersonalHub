@@ -54,30 +54,69 @@ describe('system-wide features', () => {
   })
 
   it('loads, applies and saves local preferences', async () => {
-    const settings = {
+    let settings = {
       nickname: '我', theme_mode: 'light', theme_color: '#1677ff', week_starts_on: 1,
       default_work_start: '09:00', default_work_end: '18:00', default_study_minutes: 60,
       custom_categories: {},
     }
+    let savedPayload: Record<string, unknown> | null = null
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation((input, init) => {
       const url = String(input)
       if (url.endsWith('/bootstrap')) return json({ app_name: 'Personal Hub', version: '0.1.0', local_token: 'new-token', database_path: 'D:/data/personal_hub.db' })
-      if (url.endsWith('/settings') && init?.method === 'PATCH') return json({ ...settings, nickname: '新名字', theme_mode: 'dark' })
+      if (url.endsWith('/settings') && init?.method === 'PATCH') {
+        savedPayload = JSON.parse(String(init.body)) as Record<string, unknown>
+        settings = { ...settings, ...savedPayload } as typeof settings
+        return json(settings)
+      }
       if (url.endsWith('/settings')) return json(settings)
       if (url.endsWith('/backups') || url.endsWith('/trash')) return json([])
       return json({}, 404)
     })
 
-    render(<MemoryRouter initialEntries={['/settings']}><Routes><Route path="/settings" element={<SettingsPage />} /></Routes></MemoryRouter>)
+    const view = render(<MemoryRouter initialEntries={['/settings']}><Routes><Route path="/settings" element={<SettingsPage />} /></Routes></MemoryRouter>)
     expect(await screen.findByDisplayValue('D:/data/personal_hub.db')).toBeInTheDocument()
     fireEvent.click(screen.getByText('个性化设置'))
     const nickname = await screen.findByLabelText('昵称')
     fireEvent.change(nickname, { target: { value: '新名字' } })
+    fireEvent.change(screen.getByLabelText('主题颜色'), { target: { value: '#22aa77' } })
     fireEvent.click(screen.getByRole('switch', { name: '深色模式' }))
+    expect(document.body).toHaveClass('dark-mode')
+    expect(document.documentElement.style.getPropertyValue('--primary-color')).toBe('#22aa77')
     fireEvent.click(screen.getByRole('button', { name: '保存设置' }))
 
-    await waitFor(() => expect(fetchMock.mock.calls.some(([input, init]) => String(input).endsWith('/settings') && init?.method === 'PATCH')).toBe(true))
+    await waitFor(() => expect(savedPayload).toMatchObject({ nickname: '新名字', theme_mode: 'dark', theme_color: '#22aa77' }))
+    expect(fetchMock.mock.calls.some(([input, init]) => String(input).endsWith('/settings') && init?.method === 'PATCH')).toBe(true)
     expect(document.body).toHaveClass('dark-mode')
+    view.unmount()
+    render(<MemoryRouter initialEntries={['/settings']}><Routes><Route path="/settings" element={<SettingsPage />} /></Routes></MemoryRouter>)
+    fireEvent.click(await screen.findByText('个性化设置'))
+    expect(await screen.findByRole('switch', { name: '深色模式' })).toBeChecked()
+    expect(screen.getByLabelText('主题颜色')).toHaveValue('#22aa77')
+  })
+
+  it('reports a failed preference save and discards its preview on leaving', async () => {
+    const settings = {
+      nickname: '', theme_mode: 'light', theme_color: '#1677ff', week_starts_on: 1,
+      default_work_start: '09:00', default_work_end: '18:00', default_study_minutes: 60,
+      custom_categories: {},
+    }
+    vi.spyOn(globalThis, 'fetch').mockImplementation((input, init) => {
+      const url = String(input)
+      if (url.endsWith('/bootstrap')) return json({ app_name: 'Personal Hub', version: '0.1.0', local_token: 'new-token', database_path: 'D:/data/personal_hub.db' })
+      if (url.endsWith('/settings') && init?.method === 'PATCH') return json({ detail: '暂时无法保存设置' }, 503)
+      if (url.endsWith('/settings')) return json(settings)
+      if (url.endsWith('/backups') || url.endsWith('/trash')) return json([])
+      return json({}, 404)
+    })
+
+    const view = render(<MemoryRouter initialEntries={['/settings']}><Routes><Route path="/settings" element={<SettingsPage />} /></Routes></MemoryRouter>)
+    fireEvent.click(await screen.findByText('个性化设置'))
+    fireEvent.click(await screen.findByRole('switch', { name: '深色模式' }))
+    expect(document.body).toHaveClass('dark-mode')
+    fireEvent.click(screen.getByRole('button', { name: '保存设置' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('暂时无法保存设置')
+    view.unmount()
+    expect(document.body).not.toHaveClass('dark-mode')
   })
 
   it('shows verified backups and creates a manual backup', async () => {

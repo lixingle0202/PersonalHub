@@ -30,7 +30,7 @@ body :is(a, button, input, textarea, [tabindex]):focus-visible { outline: 3px so
 .brand > div { display: flex; flex-direction: column; gap: 4px; }
 .brand strong { font-size: 17px; font-weight: 650; letter-spacing: -.55px; }
 .brand-caption { font-size: 11px; color: var(--text-secondary); letter-spacing: 1px; }
-.brand-mark { display: grid; place-items: center; flex-shrink: 0; width: 39px; height: 39px; border-radius: 13px; color: #fff; font-size: 24px; font-weight: 650; background: linear-gradient(145deg, #92a9ff 0%, #6578f2 48%, #7b63d7 100%); border: 1px solid #ffffff90; box-shadow: inset 0 1px 1px #ffffffa0, inset 0 -2px 5px #392ec236, 0 5px 12px #6373cf30; text-shadow: 0 1px 4px #2833a850; }
+.brand-mark { display: grid; place-items: center; flex-shrink: 0; width: 39px; height: 39px; border-radius: 13px; color: #fff; font-size: 24px; font-weight: 650; background: linear-gradient(145deg, var(--primary-color), var(--primary-control)); border: 1px solid #ffffff90; box-shadow: inset 0 1px 1px #ffffffa0, inset 0 -2px 5px #392ec236, 0 5px 12px rgba(var(--primary-rgb), .24); text-shadow: 0 1px 4px #2833a850; }
 .nav-caption { padding: 0 24px 12px; color: var(--text-muted); font-size: 11px; font-weight: 600; letter-spacing: 1px; }
 .primary-nav { display: flex; flex-direction: column; gap: 6px; padding: 0 12px; }
 .primary-nav > a { display: flex; align-items: center; gap: 11px; padding: 11px 12px; min-height: 48px; border: 1px solid transparent; border-radius: 13px; color: var(--text-secondary); font-size: 13px; font-weight: 550; text-decoration: none; transition: background .18s, box-shadow .18s, color .18s, transform .18s; }
@@ -95,6 +95,12 @@ body .header-save-status .ant-tag.ant-tag-success:not(.ant-tag-disabled):is(.ant
 body .ant-tabs .ant-tabs-tab.ant-tabs-tab-active .ant-tabs-tab-btn { color: var(--primary-readable); text-shadow: none; }
 .ant-form-vertical .ant-form-item-label { padding-bottom: 8px; }
 .ant-form-item-label > label { font-size: 12px; font-weight: 550; }
+.theme-color-input { display: inline-flex; align-items: center; gap: 10px; min-height: 38px; padding: 4px 8px 4px 4px; border: 1px solid var(--surface-line); border-radius: 10px; background: var(--surface-raised); color: var(--text-primary); font-size: 12px; }
+.theme-color-input input { width: 30px; height: 28px; padding: 0; border: 0; border-radius: 7px; background: transparent; cursor: pointer; }
+.theme-color-input input::-webkit-color-swatch-wrapper { padding: 0; }
+.theme-color-input input::-webkit-color-swatch { border: 0; border-radius: 7px; }
+.theme-color-input input::-moz-color-swatch { border: 0; border-radius: 7px; }
+.preferences-save-error { margin-bottom: 16px; }
 .ant-modal .ant-modal-container { border: 1px solid var(--glass-edge); padding: 28px; box-shadow: var(--floating-shadow); background: var(--surface-base); }
 .ant-modal .ant-modal-header { margin-bottom: 24px; background: transparent; }
 .ant-modal .ant-modal-title { font-size: 17px; letter-spacing: -.3px; }
