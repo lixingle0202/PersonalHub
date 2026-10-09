@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date
+import re
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field, field_validator
@@ -126,6 +127,7 @@ def task_out(session: Session, task: LearningTask) -> dict:
         plan_date=agenda.plan_date if agenda else None,
         status=agenda.status if agenda else None,
         priority=agenda.priority if agenda else None,
+        estimated_minutes=int(match.group(1)) if agenda and (match := re.search(r"(?m)^预计 (\d+) 分钟$", agenda.notes)) else None,
     )
     return row
 
@@ -135,6 +137,17 @@ def validate_section(session: Session, section_id: str | None, goal_id: str) -> 
         section = active_record(session, LearningSection, section_id, "学习章节")
         if section.goal_id != goal_id:
             raise HTTPException(422, "学习章节不属于当前目标")
+
+
+def updated_task_notes(goal_name: str, details: str, previous: str) -> str:
+    """Keep the AI time estimate and any free-form legacy note when details change."""
+    prefix = f"学习目标：{goal_name}"
+    if previous.startswith("学习目标："):
+        estimate = next((line for line in previous.splitlines()
+                         if line.startswith("预计 ") and line.endswith(" 分钟")), "")
+        return "\n".join(line for line in (prefix, estimate, details) if line).strip()
+    base = previous.split("\n任务详情：", 1)[0].strip() if previous else prefix
+    return f"{base}\n任务详情：{details}".strip() if details else base
 
 
 def goal_out(session: Session, goal: LearningGoal, detail: bool = False) -> dict:
@@ -316,10 +329,12 @@ def update_task(task_id: str, payload: TaskUpdate, session: Session = Depends(ge
             if agenda is None:
                 agenda = next((item for item in agendas if item.id == task.agenda_id), None)
             if agenda is None:
-                agenda = AgendaItem(module="learning", source_type="learning_task", source_id=task.id)
+                agenda = AgendaItem(module="learning", source_type="learning_task", source_id=task.id,
+                                    notes=f"学习目标：{goal.name}\n{task.details}".strip())
                 session.add(agenda)
             agenda.title = task.title
-            agenda.notes = f"学习目标：{goal.name}\n{task.details}".strip()
+            if "details" in changes:
+                agenda.notes = updated_task_notes(goal.name, task.details, agenda.notes)
             agenda.plan_date = changes["plan_date"]
             agenda.module = "learning"
             agenda.source_type = "learning_task"
@@ -334,7 +349,8 @@ def update_task(task_id: str, payload: TaskUpdate, session: Session = Depends(ge
     elif "title" in changes or "details" in changes:
         for agenda in agendas:
             agenda.title = task.title
-            agenda.notes = f"学习目标：{goal.name}\n{task.details}".strip()
+            if "details" in changes:
+                agenda.notes = updated_task_notes(goal.name, task.details, agenda.notes)
         active_agenda = next((agenda for agenda in agendas if agenda.deleted_at is None), None)
         if active_agenda:
             task.agenda_id = active_agenda.id

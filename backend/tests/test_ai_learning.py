@@ -143,11 +143,16 @@ def test_user_edited_draft_is_imported_once_and_visible_in_home_today_and_search
     assert [item['name'] for item in goal['sections']] == MODEL_PLAN['sections']
     assert len(goal['tasks']) == 2
     assert goal['tasks'][0]['details'] == MODEL_PLAN['tasks'][0]['notes']
+    assert goal['tasks'][0]['estimated_minutes'] == 35
     assert client.post(endpoint, json=draft['plan']).json()['id'] == goal['id']
     assert len(client.get('/api/v1/learning/goals').json()) == 1
     today = client.get('/api/v1/agenda?date=2026-12-31').json()
     assert len(today) == 1 and today[0]['title'] == '手动修改的任务'
     assert '预计 35 分钟' in today[0]['notes']
+    edited = client.patch(f"/api/v1/learning/tasks/{goal['tasks'][0]['id']}", json={'details': '改成三道练习'}).json()
+    assert edited['details'] == '改成三道练习'
+    assert edited['estimated_minutes'] == 35
+    assert '预计 35 分钟' in client.get('/api/v1/agenda?date=2026-12-31').json()[0]['notes']
     home = client.get('/api/v1/home?date=2026-12-31').json()
     assert home['stats']['total'] == 1 and home['summaries']['learning']['count'] == 1
     assert client.get('/api/v1/search?q=手动修改的任务').json()

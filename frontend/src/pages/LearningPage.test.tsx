@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { setLocalToken } from '../api/client'
 import { LearningPage } from './LearningPage'
 
-type Task = { id: string; title: string; details?: string; plan_date: string | null; status: string | null }
+type Task = { id: string; title: string; details?: string; estimated_minutes?: number; plan_date: string | null; status: string | null }
 type Goal = {
   id: string; name: string; goal: string; start_date: string | null; target_date: string | null
   estimated_minutes: number; progress: number; progress_is_manual: boolean
@@ -133,10 +133,11 @@ describe('individual learning plan and task changes', () => {
   beforeEach(() => { vi.restoreAllMocks(); setLocalToken('learning-test-token') })
 
   it('shows imported task instructions and keeps them editable', async () => {
-    const { writes } = mockLearning({ goals: [goal('g1', { tasks: [{ id: 'g1-t1', title: '变量和数据类型', details: '学习 Python 基础语法、变量和运算符', plan_date: '2026-10-10', status: 'pending' }] })] })
+    const { writes } = mockLearning({ goals: [goal('g1', { tasks: [{ id: 'g1-t1', title: '变量和数据类型', details: '学习 Python 基础语法、变量和运算符', estimated_minutes: 45, plan_date: '2026-10-10', status: 'pending' }] })] })
     renderLearning()
     fireEvent.click(await screen.findByRole('tab', { name: '学习任务' }))
     expect(await screen.findByText('学习 Python 基础语法、变量和运算符')).toBeInTheDocument()
+    expect(screen.getByText(/预计 45 分钟/)).toBeInTheDocument()
     fireEvent.click(screen.getByLabelText('编辑学习任务 变量和数据类型'))
     const dialog = await editor('编辑学习任务')
     fireEvent.change(dialog.getByLabelText('任务详情'), { target: { value: '完成 3 个变量练习' } })
