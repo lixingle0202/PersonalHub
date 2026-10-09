@@ -13,7 +13,9 @@ PersonalHub 是只在当前 Windows 电脑上使用的工作与生活管理工�
 
 ## 分享独立的多人网页
 
-本机版继续使用自己的数据库和 `127.0.0.1:8765`。多人版使用另一个本机服务 `127.0.0.1:8766`，每位访客注册账号后拥有独立的学习、饮食、设置和备份数据。所有访客的 AI 生成请求由这台主机上的 `qwen2.5:1.5b` 处理，访客电脑不需要 Ollama。生成请求一次只运行一个，每个账号每天最多 12 次，以免轻量模型被并发请求拖慢。
+本机版继续使用自己的数据库和 `127.0.0.1:8765`。多人版使用另一个本机服务 `127.0.0.1:8766`，每位访客注册账号后拥有独立的学习、饮食、设置和备份数据。默认的共享 AI 生成请求由这台主机上的 `qwen2.5:1.5b` 处理，访客电脑不需要 Ollama。共享模型请求一次只运行一个，每个账号每天最多 12 次，以免轻量模型被并发请求拖慢。
+
+访客也可登录共享网页后，在“数据与设置 → 大模型”切换为“本地大模型”，让浏览器直接访问访客电脑上的 Ollama；不会通过网站主机转发 Ollama 请求。访客需要先安装、启动 Ollama 并下载模型，把网页显示的**准确来源**加入本机 Ollama 的 `OLLAMA_ORIGINS`，重启 Ollama，再允许浏览器提出的本地网络访问请求。服务地址只能填写访客电脑的 `http://127.0.0.1:11434`（或其他本机端口），不可填写公网地址。检查连接、选择已安装模型并保存后，“学习计划 → AI 生成学习计划”会使用该模型。切回“共享大模型”即可继续使用主机模型；访客本地模式不消耗共享模型的每日次数。访客本机模型设置保存在该浏览器、该账号的本地存储中，换电脑或浏览器需要重新配置；生成草稿仍按账号保存在网页数据空间。临时隧道网址改变后，访客需要更新 `OLLAMA_ORIGINS` 中允许的来源。[Ollama 来源配置说明](https://docs.ollama.com/faq#how-can-i-allow-additional-web-origins-to-access-ollama)
 
 先按“从源码启动”准备 Python 环境并构建前端；在主机上启动 Ollama 和 `qwen2.5:1.5b`。从 [Cloudflare 官方下载页](https://developers.cloudflare.com/tunnel/downloads/)取得 Windows 64 位 `cloudflared.exe`，放到项目下 `.public-runtime/cloudflared.exe`。文件和公开版数据库都保存在本项目的 D 盘目录，已加入 Git 忽略。然后运行：
 
@@ -105,6 +107,12 @@ node scripts/test-ai-browser.mjs .venv/Scripts/python.exe <playwright模块路�
 ```
 
 将第一个参数换为 `dist/PersonalHub/PersonalHub.exe` 并添加 `--packaged`，可对打包版执行同样的浏览器集成验收。
+
+访客本机模型浏览器验收（独立的公开账号数据库、模拟访客本机 Ollama，真实 Chromium 验证切换、跨源请求、草稿校验和导入）：
+
+```powershell
+node scripts/test-visitor-model-browser.mjs .venv/Scripts/python.exe <playwright模块路径> .test-runtime/visitor-model-browser-review
+```
 
 视觉与交互浏览器验收（使用独立数据库，涵盖五个页面、明暗模式、键盘操作、窄屏布局、减少动态效果/透明度和玻璃材质回退）：
 

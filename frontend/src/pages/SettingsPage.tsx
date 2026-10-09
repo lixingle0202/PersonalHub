@@ -115,6 +115,6 @@ export function SettingsPage() {
   return <div className="page-stack"><Tabs defaultActiveKey={searchParams.get('tab') === 'ai' ? 'ai' : 'data'} items={[
     { key: 'data', label: '数据管理', children: dataPanel },
     { key: 'preferences', label: '个性化设置', children: preferencesPanel },
-    { key: 'ai', label: hosted ? '共享大模型' : '本地大模型', children: <OllamaSettingsPanel /> },
+    { key: 'ai', label: hosted ? '大模型' : '本地大模型', children: <OllamaSettingsPanel /> },
   ]} /></div>
 }

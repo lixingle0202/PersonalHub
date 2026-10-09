@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { Alert, Button, DatePicker, Form, Input, InputNumber, Modal, Space, Tag, Typography, message } from 'antd'
 import { BulbOutlined, DeleteOutlined } from '@ant-design/icons'
 import dayjs, { type Dayjs } from 'dayjs'
-import { apiRequest, isPublicMode } from '../api/client'
+import { apiRequest, currentUsername, isPublicMode } from '../api/client'
+import { readVisitorModel, visitorGenerate, visitorModels } from '../api/visitorModel'
 import type { OllamaSettings } from './OllamaSettingsPanel'
 
 export type LearningPreview = {
@@ -13,6 +14,7 @@ export type LearningPreview = {
 type Draft = { id: string; plan: LearningPreview; imported_goal_id: string | null }
 type Requirements = { topic: string; objective: string; current_level: string; preferences?: string; start_date: Dayjs; days: number; daily_minutes: number }
 const DRAFT_KEY = 'personalhub:ai-learning-draft'
+function draftKey(hosted: boolean) { return hosted ? `${DRAFT_KEY}:${currentUsername()}` : DRAFT_KEY }
 
 export function AILearningGenerator({ onImported, initialTopic = '', initialObjective = '' }: {
   onImported: (goalId: string) => Promise<void> | void
@@ -22,6 +24,7 @@ export function AILearningGenerator({ onImported, initialTopic = '', initialObje
   const hosted = isPublicMode()
   const [open, setOpen] = useState(false)
   const [config, setConfig] = useState<OllamaSettings | null>(null)
+  const [provider, setProvider] = useState<'shared' | 'local'>(hosted ? 'shared' : 'local')
   const [connectionError, setConnectionError] = useState('')
   const [draft, setDraft] = useState<Draft | null>(null)
   const [error, setError] = useState('')
@@ -33,23 +36,29 @@ export function AILearningGenerator({ onImported, initialTopic = '', initialObje
     if (!open) return
     const abort = new AbortController()
     controller.current = abort
-    setBusy('load'); setError(''); setConnectionError('')
+    setBusy('load'); setError(''); setConnectionError(''); setConfig(null)
     form.setFieldsValue({ topic: initialTopic, objective: initialObjective, current_level: '零基础', start_date: dayjs(), days: 7, daily_minutes: 45 })
     void (async () => {
       try {
-        const settings = await apiRequest<OllamaSettings>('/ai/ollama/settings', { signal: abort.signal })
+        const preference = hosted ? readVisitorModel() : null
+        const selectedProvider = preference?.provider ?? 'local'
+        setProvider(selectedProvider)
+        const settings = hosted && selectedProvider === 'local'
+          ? { base_url: preference!.base_url, model: preference!.model }
+          : await apiRequest<OllamaSettings>('/ai/ollama/settings', { signal: abort.signal })
         setConfig(settings)
-        const savedId = sessionStorage.getItem(DRAFT_KEY)
+        const savedId = sessionStorage.getItem(draftKey(hosted))
         if (savedId) {
           try {
             const saved = await apiRequest<Draft>(`/ai/learning/drafts/${savedId}`, { signal: abort.signal })
             if (!saved.imported_goal_id) setDraft((current) => current?.id === saved.id ? current : saved)
-            else { sessionStorage.removeItem(DRAFT_KEY); setDraft(null) }
+            else { sessionStorage.removeItem(draftKey(hosted)); setDraft(null) }
           } catch { if (!abort.signal.aborted) setError('读取已保存的草稿失败，请重试；也可以重新生成') }
         }
-        if (settings.model && !hosted) {
-          const result = await apiRequest<{ models: string[] }>('/ai/ollama/models', { method: 'POST', body: JSON.stringify({ base_url: settings.base_url }), signal: abort.signal })
-          if (!result.models.includes(settings.model)) setConnectionError('保存的模型尚未安装，请在本地大模型设置中刷新并选择模型')
+        if (settings.model && selectedProvider === 'local') {
+          const models = hosted ? await visitorModels(settings.base_url, abort.signal)
+            : (await apiRequest<{ models: string[] }>('/ai/ollama/models', { method: 'POST', body: JSON.stringify({ base_url: settings.base_url }), signal: abort.signal })).models
+          if (!models.includes(settings.model)) setConnectionError('保存的模型尚未安装，请在大模型设置中刷新并选择模型')
         }
       } catch (reason) { if (!abort.signal.aborted) setConnectionError(reason instanceof Error ? reason.message : '读取模型设置失败') }
       finally { if (!abort.signal.aborted) setBusy('') }
@@ -68,11 +77,23 @@ export function AILearningGenerator({ onImported, initialTopic = '', initialObje
     controller.current = abort
     setBusy('generate'); setError('')
     try {
-      const generated = await apiRequest<Draft>('/ai/learning/generate', {
-        method: 'POST', signal: abort.signal,
-        body: JSON.stringify({ ...values, start_date: values.start_date.format('YYYY-MM-DD') }),
-      })
-      if (!abort.signal.aborted) { setDraft(generated); sessionStorage.setItem(DRAFT_KEY, generated.id) }
+      const requirements = { ...values, start_date: values.start_date.format('YYYY-MM-DD') }
+      let generated: Draft
+      if (hosted && provider === 'local') {
+        if (!config?.model) throw new Error('请先在数据与设置中选择本地模型')
+        const prepared = await apiRequest<Record<string, unknown>>('/ai/learning/visitor/prepare', {
+          method: 'POST', signal: abort.signal, body: JSON.stringify(requirements),
+        })
+        const result = await visitorGenerate(config.base_url, config.model, prepared, abort.signal)
+        generated = await apiRequest<Draft>('/ai/learning/visitor/draft', {
+          method: 'POST', signal: abort.signal, body: JSON.stringify({ requirements, ...result }),
+        })
+      } else {
+        generated = await apiRequest<Draft>('/ai/learning/generate', {
+          method: 'POST', signal: abort.signal, body: JSON.stringify(requirements),
+        })
+      }
+      if (!abort.signal.aborted) { setDraft(generated); sessionStorage.setItem(draftKey(hosted), generated.id) }
     } catch (reason) { if (!abort.signal.aborted) setError(reason instanceof Error ? reason.message : '生成失败，请重试') }
     finally { if (!abort.signal.aborted) setBusy('') }
   }
@@ -90,7 +111,7 @@ export function AILearningGenerator({ onImported, initialTopic = '', initialObje
     setBusy('import'); setError('')
     try {
       const result = await apiRequest<{ id: string }>(`/ai/learning/drafts/${draft.id}/import`, { method: 'POST', body: JSON.stringify(draft.plan) })
-      sessionStorage.removeItem(DRAFT_KEY)
+      sessionStorage.removeItem(draftKey(hosted))
       setDraft(null); setOpen(false)
       await onImported(result.id)
       message.success('学习计划已加入，按日期同步到首页和今日计划')
@@ -103,8 +124,8 @@ export function AILearningGenerator({ onImported, initialTopic = '', initialObje
     <Button aria-label="AI 生成学习计划" icon={<BulbOutlined aria-hidden />} onClick={() => setOpen(true)}>AI 生成学习计划</Button>
     <Modal width={900} title="AI 生成学习计划" open={open} onCancel={close} footer={null} mask={{ closable: false }}>
       <div className="ai-generator">
-        <div className="ai-connection"><Typography.Text type="secondary">{hosted ? '共享模型' : '本地 Ollama'}{config?.model ? ` · ${config.model}` : ''}</Typography.Text>{hosted ? null : <a href="/settings?tab=ai">本地大模型设置</a>}</div>
-        {!config?.model && busy !== 'load' ? <Alert type="info" showIcon title={hosted ? '共享模型暂不可用' : '请先配置本地模型'} description={hosted ? '请稍后重试。' : '在数据与设置 → 本地大模型中检查连接、选择模型并保存，再打开这个窗口。'} /> : null}
+        <div className="ai-connection"><Typography.Text type="secondary">{provider === 'shared' ? '共享大模型' : '本地大模型'}{config?.model ? ` · ${config.model}` : ''}</Typography.Text><a href="/settings?tab=ai">大模型设置</a></div>
+        {!config?.model && busy !== 'load' ? <Alert type="info" showIcon title={provider === 'shared' ? '共享模型暂不可用' : '请先配置本地模型'} description={provider === 'shared' ? '请稍后重试。' : '在数据与设置 → 大模型中检查连接、选择模型并保存，再打开这个窗口。'} /> : null}
         {connectionError ? <Alert type="warning" showIcon title={connectionError} /> : null}
         {error ? <Alert type="error" showIcon title={error} /> : null}
         {plan ? <>
@@ -116,14 +137,14 @@ export function AILearningGenerator({ onImported, initialTopic = '', initialObje
             <Input aria-label={`任务 ${index + 1} 标题`} value={task.title} onChange={(event) => editPlan((value) => ({ ...value, tasks: value.tasks.map((entry, offset) => offset === index ? { ...entry, title: event.target.value } : entry) }))} />
             <Input.TextArea aria-label={`任务 ${index + 1} 说明`} rows={2} value={task.notes} onChange={(event) => editPlan((value) => ({ ...value, tasks: value.tasks.map((entry, offset) => offset === index ? { ...entry, notes: event.target.value } : entry) }))} />
           </div>)}</div>
-          <div className="ai-generator-actions"><Button disabled={Boolean(busy)} onClick={() => { setDraft(null); sessionStorage.removeItem(DRAFT_KEY); setError('') }}>重新填写需求</Button><Space><Button aria-label="取消" disabled={busy === 'import'} onClick={close}>取消</Button><Button type="primary" loading={busy === 'import'} disabled={Boolean(busy) || !plan.tasks.length} onClick={() => void importPlan()}>确认加入学习计划</Button></Space></div>
+          <div className="ai-generator-actions"><Button disabled={Boolean(busy)} onClick={() => { setDraft(null); sessionStorage.removeItem(draftKey(hosted)); setError('') }}>重新填写需求</Button><Space><Button aria-label="取消" disabled={busy === 'import'} onClick={close}>取消</Button><Button type="primary" loading={busy === 'import'} disabled={Boolean(busy) || !plan.tasks.length} onClick={() => void importPlan()}>确认加入学习计划</Button></Space></div>
         </> : <Form form={form} layout="vertical" onFinish={(values) => void generate(values)}>
           <Form.Item name="topic" label="学习主题" rules={[{ required: true, whitespace: true, message: '请输入学习主题' }]}><Input placeholder="例如：Android 开发、Python、大学物理" maxLength={200} /></Form.Item>
           <Form.Item name="objective" label="希望达到的目标" rules={[{ required: true, whitespace: true, message: '请描述希望达到的目标' }]}><Input.TextArea rows={2} placeholder="例如：独立完成一个待办清单 Android 应用" maxLength={2000} /></Form.Item>
           <Form.Item name="current_level" label="目前基础"><Input placeholder="例如：会 Java，尚未接触 Android" maxLength={1000} /></Form.Item>
           <div className="ai-request-schedule"><Form.Item name="start_date" label="开始日期" rules={[{ required: true }]}><DatePicker /></Form.Item><Form.Item name="days" label="计划天数" rules={[{ required: true }]}><InputNumber min={1} max={30} /></Form.Item><Form.Item name="daily_minutes" label="每天可用分钟" rules={[{ required: true }]}><InputNumber min={5} max={480} /></Form.Item></div>
           <Form.Item name="preferences" label="补充要求"><Input.TextArea rows={2} placeholder="例如：多安排动手练习，每三天复习一次" maxLength={2000} /></Form.Item>
-          {busy === 'generate' ? <Alert type="info" showIcon title={hosted ? '共享模型正在生成，请稍候' : '本地模型正在生成，首次加载可能需要较长时间'} description="可以取消等待；取消不会向正式学习计划添加内容。" className="ai-status" /> : null}
+          {busy === 'generate' ? <Alert type="info" showIcon title={provider === 'shared' ? '共享模型正在生成，请稍候' : '本地模型正在生成，首次加载可能需要较长时间'} description="可以取消等待；取消不会向正式学习计划添加内容。" className="ai-status" /> : null}
           <div className="ai-generator-actions"><Typography.Text type="secondary">生成后先预览，再由你确认加入</Typography.Text><Space><Button aria-label="取消等待" onClick={close}>{busy === 'generate' ? '取消等待' : '取消'}</Button><Button type="primary" htmlType="submit" loading={busy === 'generate'} disabled={Boolean(busy) || !config?.model || Boolean(connectionError)}>生成草稿</Button></Space></div>
         </Form>}
       </div>

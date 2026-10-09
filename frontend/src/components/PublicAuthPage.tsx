@@ -29,7 +29,7 @@ export function PublicAuthPage() {
     <Card className="public-auth-card">
       <div className="brand"><span className="brand-mark" aria-hidden="true">P</span><div><strong>PersonalHub</strong><span className="brand-caption">生活，有条不紊</span></div></div>
       <Typography.Title level={2}>{register ? '创建个人空间' : '欢迎回来'}</Typography.Title>
-      <Typography.Paragraph type="secondary">每个人的计划和记录独立保存。AI 由主机上的共享模型生成，访问者无需安装 Ollama。</Typography.Paragraph>
+      <Typography.Paragraph type="secondary">每个人的计划和记录独立保存。默认使用主机上的共享模型，无需安装 Ollama；你也可以登录后选择自己电脑上的模型。</Typography.Paragraph>
       {error ? <Alert type="error" showIcon title={error} className="ai-status" /> : null}
       <Form layout="vertical" onFinish={(values) => void submit(values)}>
         <Form.Item name="username" label="用户名" rules={[{ required: true, min: 3, max: 32, pattern: /^[A-Za-z0-9_]+$/, message: '请输入 3 至 32 位英文字母、数字或下划线' }]}><Input autoComplete="username" /></Form.Item>

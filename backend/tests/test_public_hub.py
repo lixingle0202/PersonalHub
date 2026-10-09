@@ -157,3 +157,42 @@ def test_shared_model_generates_only_in_signed_in_users_space_and_limits_usage(t
                         headers={"x-local-token": bob_token}).status_code == 200
         assert alice.get("/api/v1/learning/goals").json() == []
         assert len(requests) == DAILY_GENERATIONS + 1
+
+
+def test_visitor_model_uses_browser_result_without_host_inference_and_keeps_drafts_private(tmp_path, monkeypatch):
+    def host_model_must_not_run(*_args, **_kwargs):
+        raise AssertionError('visitor model must run in the browser, not on the host')
+
+    monkeypatch.setattr(ollama, 'ollama_request', host_model_must_not_run)
+    root = tmp_path / 'shared'
+    public = create_public_app(root)
+    with TestClient(public, base_url=HOST) as alice, TestClient(public, base_url=HOST) as bob:
+        alice_token = register(alice, 'alice')
+        register(bob, 'bob')
+        prepare = '/api/v1/ai/learning/visitor/prepare'
+        save = '/api/v1/ai/learning/visitor/draft'
+        assert alice.post(prepare, json=REQUIREMENTS).status_code == 403
+        prepared = alice.post(prepare, json=REQUIREMENTS, headers={'x-local-token': alice_token})
+        assert prepared.status_code == 200, prepared.text
+        assert prepared.json()['format']['properties']['tasks']['minItems'] == 2
+        assert '私人笔记' not in json.dumps(prepared.json(), ensure_ascii=False)
+        assert 'model' not in prepared.json()
+        assert alice.post(save, json={'requirements': REQUIREMENTS, 'content': json.dumps(PLAN)}).status_code == 403
+        invalid = {**PLAN, 'tasks': PLAN['tasks'][:1]}
+        rejected = alice.post(save, json={'requirements': REQUIREMENTS, 'content': json.dumps(invalid)},
+                              headers={'x-local-token': alice_token})
+        assert rejected.status_code == 502
+        draft = alice.post(save, json={'requirements': REQUIREMENTS, 'content': json.dumps(PLAN)},
+                           headers={'x-local-token': alice_token})
+        assert draft.status_code == 200, draft.text
+        draft_id = draft.json()['id']
+        assert draft.json()['plan']['tasks'][1]['plan_date'] == '2027-01-01'
+        assert bob.get(f'/api/v1/ai/learning/drafts/{draft_id}').status_code == 404
+        assert alice.get('/api/v1/learning/goals').json() == []
+        imported = alice.post(f'/api/v1/ai/learning/drafts/{draft_id}/import', json=draft.json()['plan'],
+                              headers={'x-local-token': alice_token})
+        assert imported.status_code == 201, imported.text
+        assert alice.get('/api/v1/learning/goals').json()[0]['id'] == imported.json()['id']
+        assert bob.get('/api/v1/learning/goals').json() == []
+    with sqlite3.connect(root / 'accounts.sqlite3') as database:
+        assert database.execute('SELECT count(*) FROM model_usage').fetchone()[0] == 0

@@ -3,15 +3,23 @@ from __future__ import annotations
 import json
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from .deps import get_session
 from .learning import goal_out
 from ..models import AILearningDraft, AgendaItem, LearningGoal, LearningSection, LearningTask, Setting, new_id, utc_now
-from ..services.ollama import LearningGenerateRequest, LearningPreview, LocalEndpoint, OllamaSettings, generate_learning_plan, list_models
+from ..services.ollama import LearningGenerateRequest, LearningPreview, LocalEndpoint, OllamaSettings, generate_learning_plan, learning_chat_payload, learning_preview_from_response, list_models
 
 router = APIRouter(prefix="/ai", tags=["local-ai"])
 CONFIG_KEY = 'ai_ollama'
+
+
+class VisitorModelResult(BaseModel):
+    requirements: LearningGenerateRequest
+    content: str = Field(min_length=1, max_length=160_000)
+    done: bool | None = None
+    done_reason: str | None = Field(default=None, max_length=50)
 
 
 def read_config(session: Session) -> OllamaSettings:
@@ -51,6 +59,23 @@ def generate_learning(payload: LearningGenerateRequest, request: Request):
         session.add(draft)
         session.flush()
         return {'id': draft.id, 'plan': plan, 'imported_goal_id': None}
+
+
+@router.post('/learning/visitor/prepare')
+def prepare_visitor_learning(payload: LearningGenerateRequest):
+    # The browser calls its own loopback Ollama; the server never receives a URL.
+    return learning_chat_payload(payload)
+
+
+@router.post('/learning/visitor/draft')
+def save_visitor_learning(payload: VisitorModelResult, session: Session = Depends(get_session)):
+    plan = learning_preview_from_response(payload.requirements, {
+        'message': {'content': payload.content}, 'done': payload.done, 'done_reason': payload.done_reason,
+    })
+    draft = AILearningDraft(plan_json=plan.model_dump_json())
+    session.add(draft)
+    session.flush()
+    return {'id': draft.id, 'plan': plan, 'imported_goal_id': None}
 
 
 @router.get('/learning/drafts/{draft_id}')

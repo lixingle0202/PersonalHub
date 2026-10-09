@@ -144,9 +144,7 @@ def list_models(settings: LocalEndpoint) -> list[str]:
     return sorted({model['name'] for model in models if isinstance(model, dict) and isinstance(model.get('name'), str)})
 
 
-def generate_learning_plan(settings: OllamaSettings, request: LearningGenerateRequest) -> LearningPreview:
-    if not settings.model:
-        raise HTTPException(422, "请先在数据与设置 → 本地大模型中选择并保存一个 Ollama 模型")
+def learning_chat_payload(request: LearningGenerateRequest) -> dict:
     schema = ModelLearningPlan.model_json_schema()
     # Exact daily slots and enumerated minutes also constrain small local models.
     # Keep the preview validator independent: imported drafts may contain several tasks per day.
@@ -171,12 +169,15 @@ def generate_learning_plan(settings: OllamaSettings, request: LearningGenerateRe
         'JSON 结构：{"name":"计划名称","goal":"目标","sections":["章节名称"],'
         '"tasks":[{"day_number":1,"section_index":0,"title":"具体任务","minutes":30,"notes":"练习步骤和成果"}]}。'
     )
-    data = ollama_request(settings, "/api/chat", {
-        "model": settings.model, "stream": False, "think": False, "format": schema,
+    return {
+        "stream": False, "think": False, "format": schema,
         "options": {"temperature": 0, "num_predict": 8192},
         "messages": [{"role": "system", "content": instructions},
                      {"role": "user", "content": request.model_dump_json()}],
-    })
+    }
+
+
+def learning_preview_from_response(request: LearningGenerateRequest, data: dict) -> LearningPreview:
     try:
         if data.get('done') is False or data.get('done_reason') == 'length':
             raise ValueError("模型输出未完成，请缩短计划天数后重试")
@@ -193,3 +194,10 @@ def generate_learning_plan(settings: OllamaSettings, request: LearningGenerateRe
     except (ValidationError, KeyError, TypeError, ValueError) as exc:
         detail = exc.errors()[0]['msg'] if isinstance(exc, ValidationError) else str(exc)
         raise HTTPException(502, f"生成的学习计划未通过校验：{detail}。尚未写入学习计划，可重新生成。") from exc
+
+
+def generate_learning_plan(settings: OllamaSettings, request: LearningGenerateRequest) -> LearningPreview:
+    if not settings.model:
+        raise HTTPException(422, "请先在数据与设置 → 本地大模型中选择并保存一个 Ollama 模型")
+    data = ollama_request(settings, "/api/chat", {"model": settings.model, **learning_chat_payload(request)})
+    return learning_preview_from_response(request, data)
