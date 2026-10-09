@@ -288,6 +288,15 @@ class StudySession(LifecycleMixin, Base):
     next_step: Mapped[str] = mapped_column(Text, default="")
 
 
+class StudyFocusSession(TimestampMixin, Base):
+    __tablename__ = "study_focus_sessions"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    goal_id: Mapped[str] = mapped_column(ForeignKey("learning_goals.id", ondelete="CASCADE"), index=True)
+    task_id: Mapped[str | None] = mapped_column(ForeignKey("learning_tasks.id", ondelete="SET NULL"))
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class LearningResource(LifecycleMixin, Base):
     __tablename__ = "learning_resources"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
