@@ -52,3 +52,25 @@ def test_task_must_belong_to_the_selected_learning_goal(clocked_client):
     second = client.post("/api/v1/learning/goals", json={"name": "乙"}).json()
     task = client.post(f"/api/v1/learning/goals/{first['id']}/tasks", json={"title": "练习"}).json()
     assert client.post("/api/v1/learning/focus/start", json={"goal_id": second["id"], "task_id": task["id"]}).status_code == 422
+
+
+def test_reset_discards_unfinished_time_and_keeps_completed_daily_time(clocked_client):
+    client, clock = clocked_client
+    goal = client.post("/api/v1/learning/goals", json={"name": "复习"}).json()
+    task = client.post(f"/api/v1/learning/goals/{goal['id']}/tasks", json={"title": "听力"}).json()
+    path = "/api/v1/learning/focus"
+    assert client.post(path + "/reset").status_code == 409
+    client.post(path + "/start", json={"goal_id": goal["id"], "task_id": task["id"]})
+    clock["now"] = datetime(2026, 10, 9, 14, 5, tzinfo=timezone.utc)
+    client.post(path + "/stop")
+    client.post(path + "/start", json={"goal_id": goal["id"], "task_id": task["id"]})
+    clock["now"] = datetime(2026, 10, 9, 14, 15, tzinfo=timezone.utc)
+    reset = client.post(path + "/reset")
+    assert reset.status_code == 200
+    current = client.get(path + "/today").json()
+    assert current["seconds"] == 300
+    assert current["running"]["task_id"] == task["id"]
+    assert current["running"]["id"] == reset.json()["id"]
+    clock["now"] = datetime(2026, 10, 9, 14, 17, tzinfo=timezone.utc)
+    assert client.post(path + "/stop").json()["seconds"] == 120
+    assert client.get(path + "/today").json()["seconds"] == 420

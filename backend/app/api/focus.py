@@ -78,3 +78,19 @@ def stop_focus(request: Request):
         running.ended_at = max(utc_now(), aware(running.started_at))
         session.flush()
         return {"id": running.id, "seconds": int((aware(running.ended_at) - aware(running.started_at)).total_seconds())}
+
+
+@router.post("/reset")
+def reset_focus(request: Request):
+    """Discard the unfinished interval and restart it without adding it to daily totals."""
+    with request.app.state.data_lock, request.app.state.database.session() as session:
+        running = session.scalar(select(StudyFocusSession).where(StudyFocusSession.ended_at.is_(None)))
+        if not running:
+            raise HTTPException(409, "当前没有正在进行的专注")
+        goal_id, task_id = running.goal_id, running.task_id
+        session.delete(running)
+        session.flush()
+        replacement = StudyFocusSession(goal_id=goal_id, task_id=task_id, started_at=utc_now())
+        session.add(replacement)
+        session.flush()
+        return {"id": replacement.id, "started_at": replacement.started_at}
