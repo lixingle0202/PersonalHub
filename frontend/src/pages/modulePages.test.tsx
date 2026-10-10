@@ -42,7 +42,7 @@ describe('domain-specific module pages', () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation((input) => String(input).endsWith('/goals') ? json([goal]) : json({ ...goal, sections: [{ id: 's1', name: '语法基础', is_completed: true }], tasks: [], sessions: [], resources: [] }))
     render(<MemoryRouter><LearningPage /></MemoryRouter>)
     expect((await screen.findAllByText('学习 Python')).length).toBeGreaterThan(0)
-    for (const label of ['学习路线', '学习任务', '学习记录', '笔记与资料']) expect(await screen.findByText(label)).toBeInTheDocument()
+    for (const label of ['学习计划', '学习记录', '笔记与资料']) expect(await screen.findByText(label)).toBeInTheDocument()
     expect(screen.getByText('50%')).toBeInTheDocument()
     expect(screen.getByText('50% · 点击修改')).toBeInTheDocument()
   })

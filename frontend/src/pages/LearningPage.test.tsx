@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { setLocalToken } from '../api/client'
 import { LearningPage } from './LearningPage'
 
-type Task = { id: string; title: string; details?: string; estimated_minutes?: number; plan_date: string | null; status: string | null }
+type Task = { id: string; title: string; details?: string; estimated_minutes?: number; section_id?: string | null; agenda_id?: string | null; plan_date: string | null; status: string | null }
 type Goal = {
   id: string; name: string; goal: string; start_date: string | null; target_date: string | null
   estimated_minutes: number; progress: number; progress_is_manual: boolean
@@ -80,7 +80,7 @@ function mockLearning(options: {
       if (!owner || !item) return json({ detail: '任务不存在' }, 404)
       if (method === 'PATCH') {
         Object.assign(item, values)
-        item.status = item.plan_date ? 'pending' : null
+        if ('plan_date' in values) item.status = item.plan_date ? 'pending' : null
         return json(item)
       }
       if (method === 'DELETE') {
@@ -102,6 +102,13 @@ function mockLearning(options: {
         owner.sections = owner.sections.filter((entry) => entry.id !== sectionId)
         return json(section)
       }
+    }
+    const agendaId = path.match(/^\/agenda\/([^/]+)\/(complete|reschedule)$/)?.[1]
+    if (agendaId && method === 'POST') {
+      const task = goals.flatMap((entry) => entry.tasks).find((entry) => entry.agenda_id === agendaId)
+      if (!task) return json({ detail: '今日计划不存在' }, 404)
+      task.status = path.endsWith('/complete') ? 'completed' : 'pending'
+      return json({ id: agendaId, status: task.status })
     }
     return json({ detail: `未预期的请求 ${method} ${path}` }, 404)
   })
@@ -125,7 +132,7 @@ async function openGoal(name = 'Python 入门') {
 }
 
 async function openTask(title = '练习基础语法') {
-  fireEvent.click(await screen.findByRole('tab', { name: '学习任务' }))
+  fireEvent.click(await screen.findByRole('tab', { name: '学习计划' }))
   fireEvent.click(await screen.findByLabelText(`编辑学习任务 ${title}`))
   return editor('编辑学习任务')
 }
@@ -146,7 +153,7 @@ describe('individual learning plan and task changes', () => {
   it('shows imported task instructions and keeps them editable', async () => {
     const { writes } = mockLearning({ goals: [goal('g1', { tasks: [{ id: 'g1-t1', title: '变量和数据类型', details: '学习 Python 基础语法、变量和运算符', estimated_minutes: 45, plan_date: '2026-10-10', status: 'pending' }] })] })
     renderLearning()
-    fireEvent.click(await screen.findByRole('tab', { name: '学习任务' }))
+    fireEvent.click(await screen.findByRole('tab', { name: '学习计划' }))
     expect(await screen.findByText('学习 Python 基础语法、变量和运算符')).toBeInTheDocument()
     expect(screen.getByText(/预计 45 分钟/)).toBeInTheDocument()
     fireEvent.click(screen.getByLabelText('编辑学习任务 变量和数据类型'))
@@ -156,6 +163,32 @@ describe('individual learning plan and task changes', () => {
     await waitFor(() => expect(writes.some((write) => write.path === '/learning/tasks/g1-t1' && write.body.details === '完成 3 个变量练习')).toBe(true))
     expect(await screen.findByText('完成 3 个变量练习')).toBeInTheDocument()
   })
+
+  it('shows daily tasks with their full instructions and toggles completion both ways', async () => {
+    const api = mockLearning({ goals: [goal('g1', { tasks: [{ id: 'g1-t1', title: '变量练习', details: '先读变量说明\n再写三个例子', estimated_minutes: 45, section_id: 'g1-s1', agenda_id: 'agenda-1', plan_date: '2026-10-10', status: 'pending' }] })] })
+    renderLearning()
+    expect(await screen.findByRole('tab', { name: '学习计划' })).toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: '学习路线' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: '学习任务' })).not.toBeInTheDocument()
+    expect(await screen.findByText(/先读变量说明/)).toHaveTextContent('再写三个例子')
+    expect(screen.getByText(/预计 45 分钟/)).toBeInTheDocument()
+    const checkbox = screen.getByRole('checkbox', { name: '完成学习任务 变量练习' })
+    fireEvent.click(checkbox)
+    await waitFor(() => expect(checkbox).toBeChecked())
+    fireEvent.click(checkbox)
+    await waitFor(() => expect(checkbox).not.toBeChecked())
+    expect(api.writes.filter((entry) => entry.path.startsWith('/agenda/'))).toEqual([
+      { method: 'POST', path: '/agenda/agenda-1/complete', body: {} },
+      { method: 'POST', path: '/agenda/agenda-1/reschedule', body: { plan_date: '2026-10-10' } },
+    ])
+    fireEvent.click(screen.getByLabelText('编辑学习任务 变量练习'))
+    const dialog = await editor('编辑学习任务')
+    fireEvent.change(dialog.getByLabelText('任务详情'), { target: { value: '完成五道练习' } })
+    fireEvent.change(dialog.getByLabelText('预计分钟'), { target: { value: '60' } })
+    fireEvent.click(dialog.getByLabelText('保存修改'))
+    await waitFor(() => expect(api.writes.some((entry) => entry.path === '/learning/tasks/g1-t1' && entry.body.details === '完成五道练习' && entry.body.estimated_minutes === 60)).toBe(true))
+    expect(await screen.findByText('完成五道练习')).toBeInTheDocument()
+  }, 70000)
 
   it('edits and deletes an imported chapter while keeping its daily task available', async () => {
     const { writes } = mockLearning({ goals: [goal('g1')] })
@@ -169,7 +202,7 @@ describe('individual learning plan and task changes', () => {
     fireEvent.click((await editor('编辑学习章节')).getByLabelText('删除此章节'))
     fireEvent.click((await editor('确认删除此学习章节？')).getByLabelText('确认删除'))
     await waitFor(() => expect(screen.queryByLabelText('修改学习章节 基础训练')).not.toBeInTheDocument())
-    fireEvent.click(screen.getByRole('tab', { name: '学习任务' }))
+    fireEvent.click(screen.getByRole('tab', { name: '学习计划' }))
     expect(screen.getByLabelText('编辑学习任务 练习基础语法')).toBeInTheDocument()
     expect(writes.some((entry) => entry.method === 'DELETE' && entry.path === '/learning/sections/g1-s1')).toBe(true)
   }, 60000)

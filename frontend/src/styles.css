@@ -191,9 +191,12 @@ body .ant-tag.ant-tag-red:not(.ant-tag-disabled):is(.ant-tag-filled, .ant-tag-ou
 .page-learning .ant-card-extra { margin-left: auto; }
 .page-learning .ant-card-extra .ant-input-number { width: 72px; }
 .learning-task-list { display: flex; flex-direction: column; gap: 12px; }
-.learning-task { display: flex; flex-direction: column; gap: 8px; width: 100%; padding: 16px 18px; border: 1px solid var(--surface-line); border-radius: 14px; background: var(--surface); color: var(--text-primary); font: inherit; text-align: left; overflow-wrap: anywhere; cursor: pointer; transition: background .18s, border-color .18s, transform .16s; }
+.learning-day { margin: 18px 0 24px; }
+.learning-task { display: flex; align-items: flex-start; gap: 12px; width: 100%; padding: 16px 18px; border: 1px solid var(--surface-line); border-radius: 14px; background: var(--surface); color: var(--text-primary); font: inherit; text-align: left; overflow-wrap: anywhere; transition: background .18s, border-color .18s, transform .16s; }
 .learning-task:hover { background: var(--primary-soft); border-color: var(--primary-tint); }
-.learning-task:active { transform: translateY(1px); }
+.learning-task > input[type="checkbox"] { width: 20px; height: 20px; margin-top: 2px; flex: none; accent-color: var(--primary-readable); cursor: pointer; }
+.learning-task-content { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 7px; }
+.learning-task > .ant-btn { flex: none; }
 .learning-task span { color: var(--text-secondary); font-size: 12px; }
 .learning-task .learning-task-details { color: var(--text-primary); font-size: 14px; white-space: pre-wrap; line-height: 1.6; }
 .native-form-select { width: 100%; min-height: 40px; padding: 7px 12px; border: 1px solid var(--surface-line); border-radius: 10px; background: var(--surface-raised); color: var(--text-primary); font: inherit; cursor: pointer; }

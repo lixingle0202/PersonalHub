@@ -7,7 +7,7 @@ import { ConfirmDangerButton } from '../components/ConfirmDangerButton'
 import { FocusTimer } from '../components/FocusTimer'
 import { EmptyStatePanel, ErrorPanel, LoadingPanel } from '../components/StatePanels'
 
-type LearningTask = { id: string; title: string; details?: string; estimated_minutes?: number | null; plan_date: string | null; status: string | null }
+type LearningTask = { id: string; title: string; details?: string; estimated_minutes?: number | null; plan_date: string | null; status: string | null; section_id?: string | null; agenda_id?: string | null }
 type LearningSection = { id: string; name: string; is_completed: boolean }
 type Editor = 'goal' | 'editGoal' | 'section' | 'editSection' | 'task' | 'editTask' | 'session' | 'resource'
 type LearningGoal = {
@@ -37,6 +37,7 @@ export function LearningPage() {
   const [progressValue, setProgressValue] = useState(0)
   const [savingProgress, setSavingProgress] = useState(false)
   const [resetting, setResetting] = useState(false)
+  const [togglingTaskId, setTogglingTaskId] = useState<string | null>(null)
   const [form] = Form.useForm()
   const selectedRef = useRef(selectedId)
   selectedRef.current = selectedId
@@ -98,7 +99,7 @@ export function LearningPage() {
     if (!detail || detail.id !== selectedId) return
     form.resetFields()
     setEditingGoal(detail); setEditingTask(task); setSaveError('')
-    form.setFieldsValue({ title: task.title, details: task.details ?? '', plan_date: task.plan_date ? dayjs(task.plan_date) : null })
+    form.setFieldsValue({ title: task.title, details: task.details ?? '', section_id: task.section_id ?? '', estimated_minutes: task.estimated_minutes ?? null, plan_date: task.plan_date ? dayjs(task.plan_date) : null })
     setModal('editTask')
   }
 
@@ -130,6 +131,7 @@ export function LearningPage() {
     const convertDate = (name: string) => dayjs.isDayjs(values[name]) ? (values[name] as Dayjs).format('YYYY-MM-DD') : values[name]
     const body: Record<string, unknown> = { ...values, start_date: convertDate('start_date'), target_date: convertDate('target_date'), plan_date: convertDate('plan_date'), studied_on: convertDate('studied_on') }
     if (modal === 'goal' || modal === 'editGoal') body.estimated_minutes = values.estimated_minutes ?? 0
+    if (modal === 'task') body.section_id = values.section_id || null
     try {
       if (modal === 'goal') {
         const result = await apiRequest<LearningGoal>('/learning/goals', { method: 'POST', body: JSON.stringify(body) })
@@ -140,7 +142,7 @@ export function LearningPage() {
         if (selectedRef.current === updated.id) setDetail(updated)
         await loadGoals(); message.success('学习目标已更新')
       } else if (modal === 'editTask' && editingTask) {
-        await apiRequest(`/learning/tasks/${editingTask.id}`, { method: 'PATCH', body: JSON.stringify({ title: values.title, details: values.details ?? '', plan_date: convertDate('plan_date') ?? null }) })
+        await apiRequest(`/learning/tasks/${editingTask.id}`, { method: 'PATCH', body: JSON.stringify({ title: values.title, details: values.details ?? '', section_id: values.section_id || null, estimated_minutes: values.estimated_minutes ?? null, plan_date: convertDate('plan_date') ?? null }) })
         await Promise.all([loadDetail(), loadGoals()]); message.success('学习任务已更新')
       } else if (modal === 'editSection' && editingSection) {
         await apiRequest(`/learning/sections/${editingSection.id}`, { method: 'PATCH', body: JSON.stringify({ name: values.name }) })
@@ -192,6 +194,18 @@ export function LearningPage() {
     await apiRequest(`/learning/sections/${id}`, { method: 'PATCH', body: JSON.stringify({ is_completed: completed }) })
     await Promise.all([loadDetail(), loadGoals()])
   }
+  async function toggleTask(task: LearningTask) {
+    if (!task.agenda_id || !task.plan_date || togglingTaskId) return
+    setTogglingTaskId(task.id)
+    try {
+      const completed = task.status === 'completed'
+      await apiRequest(`/agenda/${task.agenda_id}/${completed ? 'reschedule' : 'complete'}`, {
+        method: 'POST', body: JSON.stringify(completed ? { plan_date: task.plan_date } : {}),
+      })
+      await Promise.all([loadDetail(), loadGoals()])
+    } catch (reason) { message.error(reason instanceof Error ? reason.message : '更新任务完成状态失败') }
+    finally { setTogglingTaskId(null) }
+  }
   async function saveProgress() {
     if (!detail) return
     const goalId = detail.id
@@ -219,6 +233,14 @@ export function LearningPage() {
     }
   }
 
+  const taskGroups = Object.entries([...(detail?.tasks ?? [])]
+    .sort((left, right) => (left.plan_date ?? '9999-12-31').localeCompare(right.plan_date ?? '9999-12-31'))
+    .reduce<Record<string, LearningTask[]>>((groups, task) => {
+      const date = task.plan_date ?? '未排期'
+      ;(groups[date] ??= []).push(task)
+      return groups
+    }, {}))
+
   if (error) return <ErrorPanel message={error} onRetry={() => void loadGoals()} />
   if (!goals) return <LoadingPanel />
   return <div className="page-stack">
@@ -226,8 +248,7 @@ export function LearningPage() {
     <Row gutter={20}>
       <Col span={7}><Card title="学习目标"><div className="selectable-list">{goals.map((goal) => <button type="button" aria-label={`编辑学习目标 ${goal.name}`} disabled={editorBusy || savingProgress} key={goal.id} className={goal.id === selectedId ? 'selected' : ''} onClick={() => openGoalEditor(goal)}><strong>{goal.name}</strong><span>{goal.progress}% · 点击修改</span></button>)}</div></Card></Col>
       <Col span={17}>{detailError ? <ErrorPanel message={detailError} onRetry={() => void loadDetail()} /> : selectedId && detail?.id !== selectedId ? <LoadingPanel /> : detail ? <Card title={detail.name} extra={<Space><Typography.Text type="secondary">{detail.progress_is_manual ? '手动进度' : '按章节计算'}</Typography.Text><InputNumber aria-label="学习进度" min={0} max={100} value={progressValue} onChange={(value) => setProgressValue(value ?? 0)} /><Typography.Text>%</Typography.Text><Button type="primary" loading={savingProgress} onClick={() => void saveProgress()}>保存进度</Button></Space>}><Typography.Paragraph>{detail.goal}</Typography.Paragraph><Typography.Text type="secondary">计划：{detail.start_date ?? '未设置'} 至 {detail.target_date ?? '未设置'} · 预计投入 {detail.estimated_minutes} 分钟</Typography.Text><Progress percent={detail.progress} /><FocusTimer goalId={detail.id} tasks={detail.tasks ?? []} /><Tabs items={[
-        { key: 'route', label: '学习路线', children: <><div className="tab-actions"><Button onClick={() => openChildEditor('section')}>添加章节</Button></div><div className="record-grid">{(detail.sections ?? []).map((item) => <Card size="small" key={item.id} className={item.is_completed ? 'record-complete' : ''}><label><input type="checkbox" checked={item.is_completed} onChange={(event) => void toggleSection(item.id, event.target.checked)} /> {item.name}</label><Button aria-label={`修改学习章节 ${item.name}`} onClick={() => openSectionEditor(item)}>修改或删除</Button></Card>)}</div></> },
-        { key: 'tasks', label: '学习任务', children: <><div className="tab-actions"><Button onClick={() => openChildEditor('task')}>安排学习任务</Button></div><div className="learning-task-list">{(detail.tasks ?? []).map((item) => <button type="button" className="learning-task" aria-label={`编辑学习任务 ${item.title}`} key={item.id} onClick={() => openTaskEditor(item)}><strong>{item.title}</strong>{item.details ? <span className="learning-task-details">{item.details}</span> : null}<span>{item.plan_date ?? '未排期'}{item.estimated_minutes ? ` · 预计 ${item.estimated_minutes} 分钟` : ''} · {item.status ?? '未加入计划'} · 点击修改或删除</span></button>)}</div></> },
+        { key: 'plan', label: '学习计划', children: <><div className="tab-actions"><Space><Button onClick={() => openChildEditor('section')}>添加章节</Button><Button onClick={() => openChildEditor('task')}>安排学习任务</Button></Space></div>{(detail.sections ?? []).length ? <><Typography.Title level={5}>学习阶段</Typography.Title><div className="record-grid">{(detail.sections ?? []).map((item) => <Card size="small" key={item.id} className={item.is_completed ? 'record-complete' : ''}><label><input type="checkbox" aria-label={`完成阶段 ${item.name}`} checked={item.is_completed} onChange={(event) => void toggleSection(item.id, event.target.checked)} /> {item.name}</label><Button aria-label={`修改学习章节 ${item.name}`} onClick={() => openSectionEditor(item)}>修改或删除</Button></Card>)}</div></> : null}<Typography.Title level={5}>每日学习任务</Typography.Title>{taskGroups.length ? taskGroups.map(([date, tasks]) => <section className="learning-day" key={date}><Typography.Title level={5}>{date}</Typography.Title><div className="learning-task-list">{tasks.map((item) => <div className={`learning-task ${item.status === 'completed' ? 'record-complete' : ''}`} key={item.id}><input type="checkbox" aria-label={`完成学习任务 ${item.title}`} checked={item.status === 'completed'} disabled={!item.agenda_id || Boolean(togglingTaskId)} onChange={() => void toggleTask(item)} /><div className="learning-task-content"><strong>{item.title}</strong>{item.details ? <span className="learning-task-details">{item.details}</span> : null}<span>{detail.sections?.find((section) => section.id === item.section_id)?.name ?? '未分类'}{item.estimated_minutes ? ` · 预计 ${item.estimated_minutes} 分钟` : ''} · {item.status === 'completed' ? '已完成' : item.agenda_id ? '待完成' : '先设置日期后可勾选'}</span></div><Button aria-label={`编辑学习任务 ${item.title}`} onClick={() => openTaskEditor(item)}>修改或删除</Button></div>)}</div></section>) : <Typography.Text type="secondary">还没有学习任务，点击“安排学习任务”添加。</Typography.Text>}</> },
         { key: 'sessions', label: '学习记录', children: <><div className="tab-actions"><Button onClick={() => openChildEditor('session')}>记录一次学习</Button></div>{(detail.sessions ?? []).map((item) => <Card size="small" key={item.id}><strong>{item.studied_on} · {item.actual_minutes} 分钟</strong><p>{item.notes}</p><Typography.Text type="secondary">下一步：{item.next_step || '未填写'}</Typography.Text></Card>)}</> },
         { key: 'resources', label: '笔记与资料', children: <><div className="tab-actions"><Button onClick={() => openChildEditor('resource')}>添加资料</Button></div>{(detail.resources ?? []).map((item) => <Card size="small" key={item.id}><a href={item.link} target="_blank" rel="noreferrer">{item.name}</a><p>{item.notes}</p></Card>)}</> },
       ]} /></Card> : <EmptyStatePanel description="选择或创建学习目标" />}</Col>
@@ -239,7 +260,7 @@ export function LearningPage() {
       <Form form={form} layout="vertical" onFinish={(values) => void submit(values)}>
         {modal === 'goal' || modal === 'editGoal' ? <><Form.Item name="name" label="学习主题" rules={[{ required: true }]}><Input /></Form.Item><Form.Item name="goal" label="学习目标"><Input.TextArea /></Form.Item><Row gutter={12}><Col span={12}><Form.Item name="start_date" label="开始日期"><DatePicker /></Form.Item></Col><Col span={12}><Form.Item name="target_date" label="计划完成"><DatePicker /></Form.Item></Col></Row><Form.Item name="estimated_minutes" label="预计投入分钟"><InputNumber min={0} /></Form.Item></> : null}
         {modal === 'section' || modal === 'editSection' ? <Form.Item name="name" label="章节名称" rules={[{ required: true }]}><Input /></Form.Item> : null}
-        {modal === 'task' || modal === 'editTask' ? <><Form.Item name="title" label="学习任务" rules={[{ required: true }]}><Input /></Form.Item><Form.Item name="details" label="任务详情"><Input.TextArea rows={4} placeholder="具体内容、练习步骤或完成标准" /></Form.Item><Form.Item name="plan_date" label="计划日期"><DatePicker /></Form.Item></> : null}
+        {modal === 'task' || modal === 'editTask' ? <><Form.Item name="title" label="学习任务" rules={[{ required: true }]}><Input /></Form.Item><Form.Item name="details" label="任务详情"><Input.TextArea rows={4} placeholder="具体内容、练习步骤或完成标准" /></Form.Item><Form.Item name="section_id" label="所属阶段"><select className="native-form-select"><option value="">未分类</option>{detail?.sections?.map((section) => <option value={section.id} key={section.id}>{section.name}</option>)}</select></Form.Item><Form.Item name="estimated_minutes" label="预计分钟"><InputNumber min={1} max={1440} /></Form.Item><Form.Item name="plan_date" label="计划日期"><DatePicker /></Form.Item></> : null}
         {modal === 'session' ? <><Form.Item name="studied_on" label="学习日期" rules={[{ required: true }]}><DatePicker /></Form.Item><Form.Item name="actual_minutes" label="实际分钟" rules={[{ required: true }]}><InputNumber min={0} /></Form.Item><Form.Item name="notes" label="学习笔记"><Input.TextArea /></Form.Item><Form.Item name="problems" label="遇到的问题"><Input.TextArea /></Form.Item><Form.Item name="next_step" label="下一步"><Input /></Form.Item></> : null}
         {modal === 'resource' ? <><Form.Item name="name" label="资料名称" rules={[{ required: true }]}><Input /></Form.Item><Form.Item name="link" label="链接"><Input /></Form.Item><Form.Item name="notes" label="备注"><Input.TextArea /></Form.Item></> : null}
       </Form>

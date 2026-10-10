@@ -66,6 +66,7 @@ class TaskIn(BaseModel):
     section_id: str | None = None
     plan_date: date | None = None
     priority: str = "normal"
+    estimated_minutes: int | None = Field(default=None, ge=1, le=1440)
 
 
 class TaskUpdate(BaseModel):
@@ -73,6 +74,7 @@ class TaskUpdate(BaseModel):
     details: str | None = None
     section_id: str | None = None
     plan_date: date | None = None
+    estimated_minutes: int | None = Field(default=None, ge=1, le=1440)
 
     @field_validator("title")
     @classmethod
@@ -148,6 +150,13 @@ def updated_task_notes(goal_name: str, details: str, previous: str) -> str:
         return "\n".join(line for line in (prefix, estimate, details) if line).strip()
     base = previous.split("\n任务详情：", 1)[0].strip() if previous else prefix
     return f"{base}\n任务详情：{details}".strip() if details else base
+
+
+def notes_with_estimate(notes: str, minutes: int | None) -> str:
+    lines = [line for line in notes.splitlines() if not re.fullmatch(r"预计 \d+ 分钟", line)]
+    if minutes is not None:
+        lines.insert(1 if lines else 0, f"预计 {minutes} 分钟")
+    return "\n".join(lines).strip()
 
 
 def goal_out(session: Session, goal: LearningGoal, detail: bool = False) -> dict:
@@ -297,12 +306,13 @@ def add_task(goal_id: str, payload: TaskIn, session: Session = Depends(get_sessi
         agenda = AgendaItem(
             title=payload.title, plan_date=payload.plan_date, priority=payload.priority,
             module="learning", source_type="learning_task", source_id=task.id,
-            notes=f"学习目标：{goal.name}\n{payload.details}".strip(),
+            notes=notes_with_estimate(f"学习目标：{goal.name}\n{payload.details}".strip(), payload.estimated_minutes),
         )
         session.add(agenda); session.flush(); task.agenda_id = agenda.id
     session.flush()
     row = model_dict(task)
-    row.update(plan_date=payload.plan_date, status="pending" if payload.plan_date else None, priority=payload.priority)
+    row.update(plan_date=payload.plan_date, status="pending" if payload.plan_date else None, priority=payload.priority,
+               estimated_minutes=payload.estimated_minutes)
     return commit_response(session, row)
 
 
@@ -333,8 +343,10 @@ def update_task(task_id: str, payload: TaskUpdate, session: Session = Depends(ge
                                     notes=f"学习目标：{goal.name}\n{task.details}".strip())
                 session.add(agenda)
             agenda.title = task.title
-            if "details" in changes:
+            if "details" in changes or "estimated_minutes" in changes:
                 agenda.notes = updated_task_notes(goal.name, task.details, agenda.notes)
+            if "estimated_minutes" in changes:
+                agenda.notes = notes_with_estimate(agenda.notes, changes["estimated_minutes"])
             agenda.plan_date = changes["plan_date"]
             agenda.module = "learning"
             agenda.source_type = "learning_task"
@@ -349,8 +361,10 @@ def update_task(task_id: str, payload: TaskUpdate, session: Session = Depends(ge
     elif "title" in changes or "details" in changes:
         for agenda in agendas:
             agenda.title = task.title
-            if "details" in changes:
+            if "details" in changes or "estimated_minutes" in changes:
                 agenda.notes = updated_task_notes(goal.name, task.details, agenda.notes)
+            if "estimated_minutes" in changes:
+                agenda.notes = notes_with_estimate(agenda.notes, changes["estimated_minutes"])
         active_agenda = next((agenda for agenda in agendas if agenda.deleted_at is None), None)
         if active_agenda:
             task.agenda_id = active_agenda.id
