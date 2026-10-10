@@ -19,6 +19,28 @@ type LearningGoal = {
   resources?: Array<{ id: string; name: string; link: string; notes: string }>
 }
 
+function dailyTaskGroups(goal: LearningGoal): Array<[string, LearningTask[]]> {
+  const groups = new Map<string, LearningTask[]>()
+  for (const task of goal.tasks ?? []) {
+    const date = task.plan_date ?? '未排期'
+    groups.set(date, [...(groups.get(date) ?? []), task])
+  }
+
+  const datedTasks = [...groups.keys()].filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(date)).sort()
+  const start = goal.start_date && dayjs(goal.start_date).isValid() ? dayjs(goal.start_date) : null
+  const end = goal.target_date && dayjs(goal.target_date).isValid() ? dayjs(goal.target_date) : null
+  const plannedSpan = start && end ? end.diff(start, 'day') : -1
+  const first = plannedSpan >= 0 && plannedSpan <= 366 ? start : datedTasks.length ? dayjs(datedTasks[0]) : null
+  const last = plannedSpan >= 0 && plannedSpan <= 366 ? end : datedTasks.length ? dayjs(datedTasks[datedTasks.length - 1]) : null
+  if (first && last && last.diff(first, 'day') <= 366) {
+    for (let date = first; !date.isAfter(last, 'day'); date = date.add(1, 'day')) {
+      const key = date.format('YYYY-MM-DD')
+      if (!groups.has(key)) groups.set(key, [])
+    }
+  }
+  return [...groups].sort(([left], [right]) => left === '未排期' ? 1 : right === '未排期' ? -1 : left.localeCompare(right))
+}
+
 export function LearningPage() {
   const [goals, setGoals] = useState<LearningGoal[] | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -111,10 +133,11 @@ export function LearningPage() {
     setModal('editSection')
   }
 
-  function openChildEditor(next: 'section' | 'task' | 'session' | 'resource') {
+  function openChildEditor(next: 'section' | 'task' | 'session' | 'resource', planDate?: string) {
     if (!detail || detail.id !== selectedId) return
     form.resetFields()
     setEditingGoal(detail); setEditingTask(null); setEditingSection(null); setSaveError('')
+    if (next === 'task' && planDate) form.setFieldsValue({ plan_date: dayjs(planDate) })
     setModal(next)
   }
 
@@ -191,8 +214,10 @@ export function LearningPage() {
     finally { mutationLock.current = false; setDeleting(false) }
   }
   async function toggleSection(id: string, completed: boolean) {
-    await apiRequest(`/learning/sections/${id}`, { method: 'PATCH', body: JSON.stringify({ is_completed: completed }) })
-    await Promise.all([loadDetail(), loadGoals()])
+    try {
+      await apiRequest(`/learning/sections/${id}`, { method: 'PATCH', body: JSON.stringify({ is_completed: completed }) })
+      await Promise.all([loadDetail(), loadGoals()])
+    } catch (reason) { message.error(reason instanceof Error ? reason.message : '更新学习阶段失败') }
   }
   async function toggleTask(task: LearningTask) {
     if (!task.agenda_id || !task.plan_date || togglingTaskId) return
@@ -233,13 +258,27 @@ export function LearningPage() {
     }
   }
 
-  const taskGroups = Object.entries([...(detail?.tasks ?? [])]
-    .sort((left, right) => (left.plan_date ?? '9999-12-31').localeCompare(right.plan_date ?? '9999-12-31'))
-    .reduce<Record<string, LearningTask[]>>((groups, task) => {
-      const date = task.plan_date ?? '未排期'
-      ;(groups[date] ??= []).push(task)
-      return groups
-    }, {}))
+  const taskGroups = detail ? dailyTaskGroups(detail) : []
+  const linkedSectionIds = new Set(detail?.tasks?.map((task) => task.section_id).filter(Boolean))
+  const unassignedSections = detail?.sections?.filter((section) => !linkedSectionIds.has(section.id)) ?? []
+  const planTab = detail ? <>
+    <div className="tab-actions"><Space><Button onClick={() => openChildEditor('section')}>添加章节</Button><Button onClick={() => openChildEditor('task')}>安排学习任务</Button></Space></div>
+    <Typography.Title level={5}>每日学习任务</Typography.Title>
+    {taskGroups.length ? taskGroups.map(([date, tasks]) => <section className="learning-day" key={date}>
+      <div className="learning-day-header"><Typography.Title level={5}>{date}</Typography.Title>{date !== '未排期' ? <Button type="text" className="learning-day-add" aria-label={`添加 ${date} 学习任务`} onClick={() => openChildEditor('task', date)}>＋</Button> : null}</div>
+      {tasks.length ? <div className="learning-task-list">{tasks.map((item) => {
+        const section = detail.sections?.find((candidate) => candidate.id === item.section_id)
+        return <div className={`learning-task ${item.status === 'completed' ? 'record-complete' : ''}`} key={item.id}>
+          <input type="checkbox" aria-label={`完成学习任务 ${item.title}`} checked={item.status === 'completed'} disabled={!item.agenda_id || Boolean(togglingTaskId)} onChange={() => void toggleTask(item)} />
+          <div className="learning-task-content"><strong>{item.title}</strong>{item.details ? <span className="learning-task-details">{item.details}</span> : null}
+            {section ? <div className="learning-task-stage"><span>学习阶段：</span><Button type="link" size="small" aria-label={`修改学习章节 ${section.name}`} onClick={() => openSectionEditor(section)}>{section.name}</Button><label><input type="checkbox" aria-label={`完成阶段 ${section.name}`} checked={section.is_completed} onChange={(event) => void toggleSection(section.id, event.target.checked)} /> 阶段完成</label></div> : null}
+            <span>{item.estimated_minutes ? `预计 ${item.estimated_minutes} 分钟 · ` : ''}{item.status === 'completed' ? '已完成' : item.agenda_id ? '待完成' : '先设置日期后可勾选'}</span>
+          </div><Button aria-label={`编辑学习任务 ${item.title}`} onClick={() => openTaskEditor(item)}>修改或删除</Button>
+        </div>
+      })}</div> : <Typography.Text type="secondary" className="learning-day-empty">当天暂无任务，点击日期旁的 ＋ 添加。</Typography.Text>}
+    </section>) : <Typography.Text type="secondary">还没有学习任务，点击“安排学习任务”添加。</Typography.Text>}
+    {unassignedSections.length ? <div className="learning-unassigned-sections"><Typography.Text type="secondary">尚未安排任务的阶段：</Typography.Text>{unassignedSections.map((section) => <Space key={section.id}><Button size="small" aria-label={`修改学习章节 ${section.name}`} onClick={() => openSectionEditor(section)}>{section.name}</Button><label><input type="checkbox" aria-label={`完成阶段 ${section.name}`} checked={section.is_completed} onChange={(event) => void toggleSection(section.id, event.target.checked)} /> 阶段完成</label></Space>)}</div> : null}
+  </> : null
 
   if (error) return <ErrorPanel message={error} onRetry={() => void loadGoals()} />
   if (!goals) return <LoadingPanel />
@@ -248,7 +287,7 @@ export function LearningPage() {
     <Row gutter={20}>
       <Col span={7}><Card title="学习目标"><div className="selectable-list">{goals.map((goal) => <button type="button" aria-label={`编辑学习目标 ${goal.name}`} disabled={editorBusy || savingProgress} key={goal.id} className={goal.id === selectedId ? 'selected' : ''} onClick={() => openGoalEditor(goal)}><strong>{goal.name}</strong><span>{goal.progress}% · 点击修改</span></button>)}</div></Card></Col>
       <Col span={17}>{detailError ? <ErrorPanel message={detailError} onRetry={() => void loadDetail()} /> : selectedId && detail?.id !== selectedId ? <LoadingPanel /> : detail ? <Card title={detail.name} extra={<Space><Typography.Text type="secondary">{detail.progress_is_manual ? '手动进度' : '按章节计算'}</Typography.Text><InputNumber aria-label="学习进度" min={0} max={100} value={progressValue} onChange={(value) => setProgressValue(value ?? 0)} /><Typography.Text>%</Typography.Text><Button type="primary" loading={savingProgress} onClick={() => void saveProgress()}>保存进度</Button></Space>}><Typography.Paragraph>{detail.goal}</Typography.Paragraph><Typography.Text type="secondary">计划：{detail.start_date ?? '未设置'} 至 {detail.target_date ?? '未设置'} · 预计投入 {detail.estimated_minutes} 分钟</Typography.Text><Progress percent={detail.progress} /><FocusTimer goalId={detail.id} tasks={detail.tasks ?? []} /><Tabs items={[
-        { key: 'plan', label: '学习计划', children: <><div className="tab-actions"><Space><Button onClick={() => openChildEditor('section')}>添加章节</Button><Button onClick={() => openChildEditor('task')}>安排学习任务</Button></Space></div>{(detail.sections ?? []).length ? <><Typography.Title level={5}>学习阶段</Typography.Title><div className="record-grid">{(detail.sections ?? []).map((item) => <Card size="small" key={item.id} className={item.is_completed ? 'record-complete' : ''}><label><input type="checkbox" aria-label={`完成阶段 ${item.name}`} checked={item.is_completed} onChange={(event) => void toggleSection(item.id, event.target.checked)} /> {item.name}</label><Button aria-label={`修改学习章节 ${item.name}`} onClick={() => openSectionEditor(item)}>修改或删除</Button></Card>)}</div></> : null}<Typography.Title level={5}>每日学习任务</Typography.Title>{taskGroups.length ? taskGroups.map(([date, tasks]) => <section className="learning-day" key={date}><Typography.Title level={5}>{date}</Typography.Title><div className="learning-task-list">{tasks.map((item) => <div className={`learning-task ${item.status === 'completed' ? 'record-complete' : ''}`} key={item.id}><input type="checkbox" aria-label={`完成学习任务 ${item.title}`} checked={item.status === 'completed'} disabled={!item.agenda_id || Boolean(togglingTaskId)} onChange={() => void toggleTask(item)} /><div className="learning-task-content"><strong>{item.title}</strong>{item.details ? <span className="learning-task-details">{item.details}</span> : null}<span>{detail.sections?.find((section) => section.id === item.section_id)?.name ?? '未分类'}{item.estimated_minutes ? ` · 预计 ${item.estimated_minutes} 分钟` : ''} · {item.status === 'completed' ? '已完成' : item.agenda_id ? '待完成' : '先设置日期后可勾选'}</span></div><Button aria-label={`编辑学习任务 ${item.title}`} onClick={() => openTaskEditor(item)}>修改或删除</Button></div>)}</div></section>) : <Typography.Text type="secondary">还没有学习任务，点击“安排学习任务”添加。</Typography.Text>}</> },
+        { key: 'plan', label: '学习计划', children: planTab },
         { key: 'sessions', label: '学习记录', children: <><div className="tab-actions"><Button onClick={() => openChildEditor('session')}>记录一次学习</Button></div>{(detail.sessions ?? []).map((item) => <Card size="small" key={item.id}><strong>{item.studied_on} · {item.actual_minutes} 分钟</strong><p>{item.notes}</p><Typography.Text type="secondary">下一步：{item.next_step || '未填写'}</Typography.Text></Card>)}</> },
         { key: 'resources', label: '笔记与资料', children: <><div className="tab-actions"><Button onClick={() => openChildEditor('resource')}>添加资料</Button></div>{(detail.resources ?? []).map((item) => <Card size="small" key={item.id}><a href={item.link} target="_blank" rel="noreferrer">{item.name}</a><p>{item.notes}</p></Card>)}</> },
       ]} /></Card> : <EmptyStatePanel description="选择或创建学习目标" />}</Col>
@@ -267,7 +306,7 @@ export function LearningPage() {
     </Modal>
     <Modal title={editingTask ? '确认删除此学习任务？' : editingSection ? '确认删除此学习章节？' : '确认删除此学习计划？'} centered width={440} open={deleteConfirmOpen} onOk={() => void deleteCurrentPlan()} onCancel={() => { if (!deleting) { setDeleteConfirmOpen(false); setDeleteError('') } }} okText="确认" cancelText="取消" confirmLoading={deleting} okButtonProps={{ danger: true, disabled: editorBusy, 'aria-label': '确认删除' }} cancelButtonProps={{ disabled: deleting, 'aria-label': '取消删除' }} closable={!deleting} keyboard={!deleting} mask={{ closable: !deleting }}>
       <Typography.Paragraph><Typography.Text strong>{editingTask?.title ?? editingSection?.name ?? editingGoal?.name}</Typography.Text></Typography.Paragraph>
-      <Typography.Paragraph>{editingTask ? '此任务将从学习计划、首页、今日计划和搜索中移除，所属目标和其他任务保留。' : editingSection ? '此章节将从学习路线移除；关联的学习任务仍会保留，可单独修改或删除。' : '此计划及其章节、任务、学习记录和资料将移至回收站，首页、今日计划和搜索也会同步移除关联任务。'}</Typography.Paragraph>
+      <Typography.Paragraph>{editingTask ? '此任务将从学习计划、首页、今日计划和搜索中移除，所属目标和其他任务保留。' : editingSection ? '此阶段将从学习计划移除；关联的学习任务仍会保留，可单独修改或删除。' : '此计划及其章节、任务、学习记录和资料将移至回收站，首页、今日计划和搜索也会同步移除关联任务。'}</Typography.Paragraph>
       {deleteError ? <Alert type="error" showIcon title={deleteError} /> : null}
     </Modal>
   </div>

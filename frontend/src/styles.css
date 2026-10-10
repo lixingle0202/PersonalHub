@@ -192,6 +192,10 @@ body .ant-tag.ant-tag-red:not(.ant-tag-disabled):is(.ant-tag-filled, .ant-tag-ou
 .page-learning .ant-card-extra .ant-input-number { width: 72px; }
 .learning-task-list { display: flex; flex-direction: column; gap: 12px; }
 .learning-day { margin: 18px 0 24px; }
+.learning-day-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.learning-day-header .ant-typography { margin: 0; }
+.learning-day-add.ant-btn { width: 30px; height: 30px; padding: 0; border-radius: 9px; color: var(--primary-readable); font-size: 22px; line-height: 1; }
+.learning-day-empty { display: block; padding: 8px 2px 4px; }
 .learning-task { display: flex; align-items: flex-start; gap: 12px; width: 100%; padding: 16px 18px; border: 1px solid var(--surface-line); border-radius: 14px; background: var(--surface); color: var(--text-primary); font: inherit; text-align: left; overflow-wrap: anywhere; transition: background .18s, border-color .18s, transform .16s; }
 .learning-task:hover { background: var(--primary-soft); border-color: var(--primary-tint); }
 .learning-task > input[type="checkbox"] { width: 20px; height: 20px; margin-top: 2px; flex: none; accent-color: var(--primary-readable); cursor: pointer; }
@@ -199,6 +203,11 @@ body .ant-tag.ant-tag-red:not(.ant-tag-disabled):is(.ant-tag-filled, .ant-tag-ou
 .learning-task > .ant-btn { flex: none; }
 .learning-task span { color: var(--text-secondary); font-size: 12px; }
 .learning-task .learning-task-details { color: var(--text-primary); font-size: 14px; white-space: pre-wrap; line-height: 1.6; }
+.learning-task-stage { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; }
+.learning-task-stage .ant-btn { padding: 0; height: auto; }
+.learning-task-stage label, .learning-unassigned-sections label { display: inline-flex; align-items: center; gap: 5px; color: var(--text-secondary); font-size: 12px; cursor: pointer; }
+.learning-task-stage input, .learning-unassigned-sections input { accent-color: var(--primary-readable); }
+.learning-unassigned-sections { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 22px; }
 .native-form-select { width: 100%; min-height: 40px; padding: 7px 12px; border: 1px solid var(--surface-line); border-radius: 10px; background: var(--surface-raised); color: var(--text-primary); font: inherit; cursor: pointer; }
 .native-form-select:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 .diet-template-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }

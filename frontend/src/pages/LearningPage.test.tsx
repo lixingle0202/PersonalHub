@@ -103,6 +103,20 @@ function mockLearning(options: {
         return json(section)
       }
     }
+    const taskGoalId = path.match(/^\/learning\/goals\/([^/]+)\/tasks$/)?.[1]
+    if (taskGoalId && method === 'POST') {
+      const owner = goals.find((entry) => entry.id === taskGoalId)
+      if (!owner) return json({ detail: '目标不存在' }, 404)
+      const task: Task = {
+        id: `${taskGoalId}-added-${owner.tasks.length + 1}`,
+        title: String(values.title), details: String(values.details ?? ''),
+        plan_date: String(values.plan_date ?? ''), status: 'pending',
+        section_id: values.section_id ? String(values.section_id) : null,
+        estimated_minutes: values.estimated_minutes ? Number(values.estimated_minutes) : undefined,
+      }
+      owner.tasks.push(task)
+      return json(task, 201)
+    }
     const agendaId = path.match(/^\/agenda\/([^/]+)\/(complete|reschedule)$/)?.[1]
     if (agendaId && method === 'POST') {
       const task = goals.flatMap((entry) => entry.tasks).find((entry) => entry.agenda_id === agendaId)
@@ -120,7 +134,7 @@ function mockLearning(options: {
 }
 
 async function editor(title: string) {
-  const element = (await screen.findByText(title, { exact: true })).closest<HTMLElement>('[role="dialog"]')
+  const element = (await screen.findByText(title, { exact: true, selector: '.ant-modal-title' })).closest<HTMLElement>('[role="dialog"]')
   expect(element).not.toBeNull()
   await waitFor(() => expect(element).toBeVisible())
   return within(element!)
@@ -188,6 +202,47 @@ describe('individual learning plan and task changes', () => {
     fireEvent.click(dialog.getByLabelText('保存修改'))
     await waitFor(() => expect(api.writes.some((entry) => entry.path === '/learning/tasks/g1-t1' && entry.body.details === '完成五道练习' && entry.body.estimated_minutes === 60)).toBe(true))
     expect(await screen.findByText('完成五道练习')).toBeInTheDocument()
+  }, 70000)
+
+  it('merges a linked stage into its daily task and lets it be edited there', async () => {
+    mockLearning({ goals: [goal('g1', { tasks: [{ id: 'g1-t1', title: '语法训练', section_id: 'g1-s1', plan_date: '2026-10-10', status: 'pending' }] })] })
+    renderLearning()
+    const task = (await screen.findByLabelText('编辑学习任务 语法训练')).closest('.learning-task')!
+    expect(screen.queryByRole('heading', { name: '学习阶段' })).not.toBeInTheDocument()
+    expect(within(task as HTMLElement).getByLabelText('修改学习章节 基础阶段')).toBeInTheDocument()
+    fireEvent.click(within(task as HTMLElement).getByLabelText('修改学习章节 基础阶段'))
+    expect((await editor('编辑学习章节')).getByLabelText('章节名称')).toHaveValue('基础阶段')
+  })
+
+  it('keeps an emptied date and adds multiple tasks from the plus beside that date', async () => {
+    const api = mockLearning({ goals: [goal('g1', {
+      start_date: '2026-10-13', target_date: '2026-10-15',
+      tasks: [
+        { id: 'g1-t13', title: '十三日任务', plan_date: '2026-10-13', status: 'pending' },
+        { id: 'g1-t14', title: '十四日任务', plan_date: '2026-10-14', status: 'pending' },
+        { id: 'g1-t15', title: '十五日任务', plan_date: '2026-10-15', status: 'pending' },
+      ],
+    })] })
+    renderLearning()
+    fireEvent.click(await screen.findByLabelText('编辑学习任务 十四日任务'))
+    fireEvent.click((await editor('编辑学习任务')).getByLabelText('删除此任务'))
+    fireEvent.click((await editor('确认删除此学习任务？')).getByLabelText('确认删除'))
+    await waitFor(() => expect(screen.queryByLabelText('编辑学习任务 十四日任务')).not.toBeInTheDocument())
+    expect(screen.getByRole('heading', { name: '2026-10-14' })).toBeInTheDocument()
+    expect(screen.getByText('当天暂无任务，点击日期旁的 ＋ 添加。')).toBeInTheDocument()
+
+    for (const title of ['重新安排十四日', '追加十四日练习']) {
+      fireEvent.click(screen.getByLabelText('添加 2026-10-14 学习任务'))
+      const form = await editor('安排学习任务')
+      expect(form.getByLabelText('计划日期')).toHaveValue('2026-10-14')
+      fireEvent.change(form.getByLabelText('学习任务'), { target: { value: title } })
+      fireEvent.click(form.getByLabelText('创建'))
+      expect(await screen.findByLabelText(`编辑学习任务 ${title}`)).toBeInTheDocument()
+    }
+    expect(api.writes.filter((entry) => entry.method === 'POST' && entry.path === '/learning/goals/g1/tasks')).toEqual([
+      expect.objectContaining({ body: expect.objectContaining({ title: '重新安排十四日', plan_date: '2026-10-14' }) }),
+      expect.objectContaining({ body: expect.objectContaining({ title: '追加十四日练习', plan_date: '2026-10-14' }) }),
+    ])
   }, 70000)
 
   it('edits and deletes an imported chapter while keeping its daily task available', async () => {
