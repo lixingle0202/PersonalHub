@@ -71,3 +71,34 @@ def test_multiple_dishes_share_one_meal_and_update_all_views(client):
 
     legacy = client.post('/api/v1/diet/meals', json={**base, 'dish_id': rice['id']}).json()
     assert legacy['dish_ids'] == [rice['id']]
+
+
+def test_generated_monthly_shopping_can_be_extended_edited_and_deleted(client):
+    dish = client.post('/api/v1/diet/dishes', json={
+        'name': '米饭', 'ingredients': [{'name': '大米', 'quantity': 100, 'unit': '克'}],
+    }).json()
+    for meal_date in ['2026-10-09', '2026-10-10', '2026-11-01']:
+        client.post('/api/v1/diet/meals', json={
+            'meal_date': meal_date, 'meal_type': 'lunch', 'dish_id': dish['id'],
+        })
+    base = '/api/v1/diet'
+    period = {'name': '十月采购', 'start_date': '2026-10-01', 'end_date': '2026-10-31'}
+    generated = client.post(base + '/shopping-lists/generate', json=period).json()
+    assert [(item['ingredient_name'], item['quantity_text']) for item in generated['items']] == [('大米', '200克')]
+    created = client.post(f"{base}/shopping-lists/{generated['id']}/items", json={
+        'ingredient_name': '牛奶', 'quantity_text': '2盒',
+    })
+    assert created.status_code == 201 and created.json()['is_manual'] is True
+    item_id = created.json()['id']
+    changed = client.patch(f'{base}/shopping-items/{item_id}', json={
+        'ingredient_name': '酸奶', 'quantity_text': '3盒', 'is_completed': True,
+    })
+    assert changed.status_code == 200
+    items = client.get(base + '/shopping-lists').json()[0]['items']
+    assert [(item['ingredient_name'], item['quantity_text'], item['is_completed']) for item in items] == [
+        ('大米', '200克', False), ('酸奶', '3盒', True),
+    ]
+    assert client.delete(f'{base}/shopping-items/{item_id}').status_code == 200
+    assert [item['ingredient_name'] for item in client.get(base + '/shopping-lists').json()[0]['items']] == ['大米']
+    empty = client.post(base + '/shopping-lists', json={**period, 'name': '手动采购'})
+    assert empty.status_code == 201 and empty.json()['items'] == []

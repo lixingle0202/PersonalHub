@@ -66,8 +66,14 @@ class ShoppingGenerate(BaseModel):
 
 
 class ShoppingItemPatch(BaseModel):
+    ingredient_name: str | None = Field(default=None, min_length=1, max_length=200)
     is_completed: bool | None = None
     quantity_text: str | None = None
+
+
+class ShoppingItemIn(BaseModel):
+    ingredient_name: str = Field(min_length=1, max_length=200)
+    quantity_text: str = Field(default="按需", max_length=100)
 
 
 MEAL_NAMES = {"breakfast": "早餐", "lunch": "午餐", "dinner": "晚餐", "snack": "加餐"}
@@ -306,9 +312,38 @@ def list_shopping_lists(session: Session = Depends(get_session)):
     ).order_by(ShoppingList.created_at.desc())).all()]
 
 
+@router.post("/shopping-lists", status_code=status.HTTP_201_CREATED)
+def create_shopping_list(payload: ShoppingGenerate, session: Session = Depends(get_session)):
+    if payload.end_date < payload.start_date:
+        raise HTTPException(422, "结束日期不能早于开始日期")
+    shopping = ShoppingList(**payload.model_dump())
+    session.add(shopping)
+    session.flush()
+    return shopping_out(session, shopping)
+
+
+@router.post("/shopping-lists/{list_id}/items", status_code=status.HTTP_201_CREATED)
+def add_shopping_item(list_id: str, payload: ShoppingItemIn, session: Session = Depends(get_session)):
+    active_record(session, ShoppingList, list_id, "购物清单")
+    item = ShoppingItem(shopping_list_id=list_id, is_manual=True, **payload.model_dump())
+    session.add(item)
+    session.flush()
+    return model_dict(item)
+
+
 @router.patch("/shopping-items/{item_id}")
 def update_shopping_item(item_id: str, payload: ShoppingItemPatch, session: Session = Depends(get_session)):
     item = active_record(session, ShoppingItem, item_id, "购物项目")
+    active_record(session, ShoppingList, item.shopping_list_id, "购物清单")
     apply_changes(item, payload.model_dump(exclude_unset=True), set(ShoppingItemPatch.model_fields))
+    session.flush()
+    return model_dict(item)
+
+
+@router.delete("/shopping-items/{item_id}")
+def delete_shopping_item(item_id: str, session: Session = Depends(get_session)):
+    item = active_record(session, ShoppingItem, item_id, "购物项目")
+    active_record(session, ShoppingList, item.shopping_list_id, "购物清单")
+    soft_delete(item)
     session.flush()
     return model_dict(item)

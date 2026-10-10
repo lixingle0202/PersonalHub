@@ -19,6 +19,7 @@ function dialogWithTitle(title: string) {
 function mockApi(initial: Meal[] = [], deleteFails: boolean | (() => boolean) = false, initialDishes: Array<{ id: string; name: string; instructions: string; nutrition_notes: string; notes: string; ingredients: Array<{ name: string; quantity: number | null; unit: string }> }> = []) {
   let meals = [...initial]
   let dishes = [...initialDishes]
+  let shopping: Array<{ id: string; name: string; start_date: string; end_date: string; items: Array<{ id: string; ingredient_name: string; quantity_text: string; is_completed: boolean }> }> = []
   let profile = { height_cm: null as number | null, weight_kg: null as number | null }
   const dishName = (values: Partial<Meal>) => values.dish_ids?.length
     ? values.dish_ids.map((id) => dishes.find((dish) => dish.id === id)?.name).filter(Boolean).join('、')
@@ -26,7 +27,29 @@ function mockApi(initial: Meal[] = [], deleteFails: boolean | (() => boolean) = 
   return vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
     const url = new URL(String(input), 'http://localhost')
     let body: unknown = []
-    if (url.pathname.includes('/diet/dishes/') && init?.method === 'PATCH') {
+    if (url.pathname.endsWith('/diet/shopping-lists/generate') && init?.method === 'POST') {
+      const values = JSON.parse(String(init.body))
+      shopping = [{ id: 'list-1', ...values, items: [{ id: 'item-1', ingredient_name: '大米', quantity_text: '200克', is_completed: false }] }, ...shopping]
+      body = shopping[0]
+    } else if (url.pathname.endsWith('/diet/shopping-lists') && init?.method === 'POST') {
+      shopping = [{ id: 'list-1', ...JSON.parse(String(init.body)), items: [] }, ...shopping]
+      body = shopping[0]
+    } else if (url.pathname.endsWith('/diet/shopping-lists')) {
+      body = shopping
+    } else if (url.pathname.includes('/diet/shopping-lists/') && url.pathname.endsWith('/items') && init?.method === 'POST') {
+      const listId = url.pathname.split('/').at(-2)
+      const item = { id: 'manual-1', ...JSON.parse(String(init.body)), is_completed: false }
+      shopping = shopping.map((list) => list.id === listId ? { ...list, items: [...list.items, item] } : list)
+      body = item
+    } else if (url.pathname.includes('/diet/shopping-items/') && init?.method === 'PATCH') {
+      const itemId = url.pathname.split('/').at(-1)
+      shopping = shopping.map((list) => ({ ...list, items: list.items.map((item) => item.id === itemId ? { ...item, ...JSON.parse(String(init.body)) } : item) }))
+      body = {}
+    } else if (url.pathname.includes('/diet/shopping-items/') && init?.method === 'DELETE') {
+      const itemId = url.pathname.split('/').at(-1)
+      shopping = shopping.map((list) => ({ ...list, items: list.items.filter((item) => item.id !== itemId) }))
+      body = {}
+    } else if (url.pathname.includes('/diet/dishes/') && init?.method === 'PATCH') {
       const values = JSON.parse(String(init.body)) as typeof dishes[number]
       dishes = dishes.map((dish) => url.pathname.endsWith(`/${dish.id}`) ? { ...dish, ...values } : dish)
       body = dishes[0]
@@ -104,6 +127,28 @@ describe('diet monthly calendar and manual changes', () => {
     fireEvent.click(screen.getByRole('button', { name: '保存身体资料' }))
     await waitFor(() => expect(fetchMock.mock.calls.some(([input, init]) => String(input).endsWith('/diet/profile') && init?.method === 'PUT' && JSON.parse(String(init.body)).height_cm === 175)).toBe(true))
   })
+
+  it('generates this month’s list and lets a person add and edit an item', async () => {
+    const fetchMock = mockApi()
+    render(<DietPage />)
+    fireEvent.click(await screen.findByRole('tab', { name: '购物清单' }))
+    fireEvent.click(screen.getByRole('button', { name: '按当前月份饮食生成' }))
+    fireEvent.click(within(screen.getByRole('dialog', { name: '生成购物清单' })).getByRole('button', { name: '创建' }))
+    expect(await screen.findByText('大米')).toBeInTheDocument()
+    expect(fetchMock.mock.calls.some(([input, init]) => String(input).endsWith('/diet/shopping-lists/generate') && init?.method === 'POST' && JSON.parse(String(init.body)).start_date === '2026-10-01' && JSON.parse(String(init.body)).end_date === '2026-10-31')).toBe(true)
+    fireEvent.click(screen.getByRole('button', { name: '手动添加物品' }))
+    const add = within(screen.getByRole('dialog', { name: '手动添加物品' }))
+    fireEvent.change(add.getByLabelText('物品名称'), { target: { value: '牛奶' } })
+    fireEvent.change(add.getByLabelText('数量或备注'), { target: { value: '2盒' } })
+    fireEvent.click(add.getByRole('button', { name: '创建' }))
+    expect(await screen.findByText('牛奶')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '修改购物项目 牛奶' }))
+    const edit = within(screen.getByRole('dialog', { name: '修改购物项目' }))
+    fireEvent.change(edit.getByLabelText('物品名称'), { target: { value: '酸奶' } })
+    fireEvent.click(edit.getByRole('button', { name: '保存修改' }))
+    expect(await screen.findByText('酸奶')).toBeInTheDocument()
+    expect(screen.queryByText('牛奶')).not.toBeInTheDocument()
+  }, 180000)
 
   it('changes the requested date range when navigating months and returning to today', async () => {
     const fetchMock = mockApi()
