@@ -6,12 +6,28 @@ import { ConfirmDangerButton } from '../components/ConfirmDangerButton'
 import { DietTemplates } from '../components/DietTemplates'
 import { calendarRange, DietCalendar, mealTypes, type Meal, type MealType } from '../components/DietCalendar'
 import { ErrorPanel, LoadingPanel } from '../components/StatePanels'
+import '../components/DishMultiSelect.css'
 
 type Ingredient = { id?: string; name: string; quantity: number | null; unit: string }
 type Dish = { id: string; name: string; instructions: string; nutrition_notes: string; notes: string; estimated_kcal?: number | null; ingredients: Ingredient[] }
 type DietProfile = { height_cm: number | null; weight_kg: number | null }
 type Shopping = { id: string; name: string; start_date: string; end_date: string; items: Array<{ id: string; ingredient_name: string; quantity_text: string; is_completed: boolean }> }
 type Health = { log_date: string; water_ml: number; weight_kg: number | null; feeling: string }
+
+function DishMultiSelect({ dishes, value = [], onChange }: {
+  dishes: Dish[]; value?: string[]; onChange?: (ids: string[]) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const names = dishes.filter((dish) => value.includes(dish.id)).map((dish) => dish.name)
+  return <div className="dish-multi-select">
+    <button type="button" className="native-form-select dish-multi-trigger" aria-label="选择菜品" aria-expanded={open} onClick={() => setOpen(!open)}>
+      <span>{names.length ? names.join('、') : '不选择常用菜品'}</span><span aria-hidden="true">{open ? '⌃' : '⌄'}</span>
+    </button>
+    {open ? <div className="dish-multi-options" role="group" aria-label="常用菜品">
+      {dishes.length ? dishes.map((dish) => <label key={dish.id}><input type="checkbox" checked={value.includes(dish.id)} onChange={(event) => onChange?.(event.target.checked ? [...value, dish.id] : value.filter((id) => id !== dish.id))} />{dish.name}</label>) : <span>暂无常用菜品，可先在“常用菜品”中添加</span>}
+    </div> : null}
+  </div>
+}
 
 export function DietPage() {
   const [month, setMonth] = useState(dayjs().startOf('month'))
@@ -67,9 +83,10 @@ export function DietPage() {
         message.success(editingDish ? '菜品已更新' : '菜品已创建')
       } else if (modal === 'meal') {
         const mealDate = (values.meal_date as Dayjs).format('YYYY-MM-DD')
+        const dishIds = (values.dish_ids as string[] | undefined) ?? []
         await apiRequest(editingMeal ? `/diet/meals/${editingMeal.id}` : '/diet/meals', {
           method: editingMeal ? 'PATCH' : 'POST',
-          body: JSON.stringify({ ...values, dish_id: values.dish_id || null, meal_date: mealDate, actual_food: editingMeal?.actual_food ?? '' }),
+          body: JSON.stringify({ ...values, dish_ids: dishIds, dish_id: dishIds[0] ?? null, meal_date: mealDate, actual_food: editingMeal?.actual_food ?? '' }),
         })
         message.success(editingMeal ? '饮食安排已更新' : '饮食安排已创建')
         if (!dayjs(mealDate).isSame(month, 'month')) nextMonth = dayjs(mealDate).startOf('month')
@@ -89,7 +106,7 @@ export function DietPage() {
     form.setFieldsValue({
       meal_date: mealDate,
       meal_type: mealType,
-      dish_id: meal?.dish_id ?? '',
+      dish_ids: meal?.dish_ids ?? (meal?.dish_id ? [meal.dish_id] : []),
       custom_name: meal?.custom_name ?? '',
       estimated_kcal: meal?.estimated_kcal ?? null,
     })
@@ -172,7 +189,7 @@ export function DietPage() {
     <Modal forceRender title={modal === 'dish' ? editingDish ? '修改菜品' : '新增菜品' : modal === 'meal' ? editingMeal ? '修改饮食安排' : '安排一餐' : '生成购物清单'} open={Boolean(modal)} closable={{ disabled: saving || deleting }} keyboard={!saving && !deleting} mask={{ closable: !saving && !deleting }} onCancel={() => { if (!saving && !deleting) closeModal() }} footer={<div className="diet-editor-footer"><div>{editingMeal ? <Button aria-label="删除这餐" danger disabled={saving || deleting} onClick={() => { setDeleteError(''); setDeleteConfirmOpen(true) }}>删除这餐</Button> : null}</div><Space><Button aria-label="取消" disabled={saving || deleting} onClick={closeModal}>取消</Button><Button aria-label={editingMeal || editingDish ? '保存修改' : '创建'} type="primary" loading={saving} disabled={deleting} onClick={() => form.submit()}>{editingMeal || editingDish ? '保存修改' : '创建'}</Button></Space></div>}>
       <Form form={form} layout="vertical" onFinish={(values) => void submit(values)}>
         {modal === 'dish' ? <><Form.Item name="name" label="菜品名称" rules={[{ required: true }]}><Input /></Form.Item><Form.Item name="instructions" label="简单做法"><Input.TextArea /></Form.Item><Form.Item name="ingredients_text" label="食材（每行：名称 | 数量 | 单位）"><Input.TextArea rows={5} placeholder={'鸡蛋 | 2 | 个\n番茄 | 2 | 个'} /></Form.Item><Form.Item name="estimated_kcal" label="每份热量（kcal，可选）"><InputNumber min={0} max={10000} /></Form.Item><Form.Item name="nutrition_notes" label="营养备注"><Input.TextArea /></Form.Item></> : null}
-        {modal === 'meal' ? <><Form.Item name="meal_date" label="日期" rules={[{ required: true }]}><DatePicker /></Form.Item><Form.Item name="meal_type" label="餐次" rules={[{ required: true }]}><select className="native-form-select">{mealTypes.map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></Form.Item><Form.Item name="dish_id" label="选择菜品"><select className="native-form-select"><option value="">不选择常用菜品</option>{dishes.map((dish) => <option value={dish.id} key={dish.id}>{dish.name}</option>)}</select></Form.Item><Form.Item name="custom_name" label="或填写其他餐食"><Input /></Form.Item><Form.Item name="estimated_kcal" label="这餐热量（kcal，可选）"><InputNumber min={0} max={10000} placeholder="留空自动粗估" /></Form.Item></> : null}
+        {modal === 'meal' ? <><Form.Item name="meal_date" label="日期" rules={[{ required: true }]}><DatePicker /></Form.Item><Form.Item name="meal_type" label="餐次" rules={[{ required: true }]}><select className="native-form-select">{mealTypes.map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></Form.Item><Form.Item name="dish_ids" label="选择菜品"><DishMultiSelect dishes={dishes} /></Form.Item><Form.Item name="custom_name" label="或填写其他餐食"><Input /></Form.Item><Form.Item name="estimated_kcal" label="这餐热量（kcal，可选）"><InputNumber min={0} max={10000} placeholder="留空自动粗估" /></Form.Item></> : null}
         {modal === 'shopping' ? <Form.Item name="name" label="清单名称" initialValue="本月采购" rules={[{ required: true }]}><Input /></Form.Item> : null}
       </Form>
     </Modal>

@@ -6,7 +6,7 @@ import dayjs, { type Dayjs } from 'dayjs'
 export const mealTypes = [['breakfast', '早餐'], ['lunch', '午餐'], ['dinner', '晚餐'], ['snack', '加餐']] as const
 export type MealType = typeof mealTypes[number][0]
 export type Meal = {
-  id: string; meal_date: string; meal_type: MealType; dish_id: string | null
+  id: string; meal_date: string; meal_type: MealType; dish_id: string | null; dish_ids?: string[]
   custom_name: string; dish_name: string; actual_food: string; status: string | null
   estimated_kcal?: number | null; display_kcal?: number; calorie_source?: string
 }

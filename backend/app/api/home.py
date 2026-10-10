@@ -9,8 +9,9 @@ from sqlalchemy.orm import Session
 from .deps import get_session
 from ..models import (
     AgendaItem, Consultation, DailyHealthLog, DevIssue, DevMilestone, DevProject,
-    Dish, LearningGoal, MealPlan, MediaContent, QuickNote,
+    LearningGoal, MealPlan, MediaContent, QuickNote,
 )
+from ..services.diet import meal_display_name
 from ..schemas import AgendaOut, QuickNoteOut
 
 
@@ -87,8 +88,7 @@ def home_summary(date: date, session: Session = Depends(get_session)):
     next_meal = meals[0] if meals else None
     next_meal_name = ""
     if next_meal:
-        dish = session.get(Dish, next_meal.dish_id) if next_meal.dish_id else None
-        next_meal_name = dish.name if dish else next_meal.custom_name
+        next_meal_name = meal_display_name(session, next_meal)
     health = session.scalar(select(DailyHealthLog).where(
         DailyHealthLog.log_date == date, DailyHealthLog.deleted_at.is_(None)
     ))

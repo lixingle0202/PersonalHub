@@ -1,0 +1,7 @@
+.dish-multi-trigger { display: flex; align-items: center; justify-content: space-between; gap: 12px; text-align: left; }
+.dish-multi-trigger span:first-child { min-width: 0; overflow-wrap: anywhere; }
+.dish-multi-options { display: flex; flex-direction: column; gap: 4px; max-height: 220px; margin-top: 6px; padding: 6px; overflow-y: auto; border: 1px solid var(--surface-line); border-radius: 10px; background: var(--surface-raised); color: var(--text-primary); }
+.dish-multi-options label { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; cursor: pointer; }
+.dish-multi-options label:hover { background: var(--primary-soft); }
+.dish-multi-options input { accent-color: var(--primary-control); }
+.dish-multi-options > span { padding: 8px 10px; color: var(--text-secondary); }

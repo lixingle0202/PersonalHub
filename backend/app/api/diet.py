@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from .deps import get_session
 from .utils import active_record, apply_changes, model_dict, soft_delete
-from ..services.diet import delete_meal_plan
+from ..services.diet import delete_meal_plan, meal_dish_ids, meal_dishes, meal_display_name, replace_meal_dishes
 from ..services.calories import estimate_meal
 from ..models import (
     AgendaItem, DailyHealthLog, Dish, DishIngredient, MealPlan, ShoppingItem,
@@ -42,6 +42,7 @@ class MealIn(BaseModel):
     meal_date: date
     meal_type: Literal["breakfast", "lunch", "dinner", "snack"]
     dish_id: str | None = None
+    dish_ids: list[str] | None = Field(default=None, max_length=20)
     custom_name: str = ""
     actual_food: str = ""
     estimated_kcal: int | None = Field(default=None, ge=0, le=10000)
@@ -82,16 +83,26 @@ def dish_out(session: Session, dish: Dish) -> dict:
 
 def meal_out(session: Session, meal: MealPlan) -> dict:
     data = model_dict(meal)
-    dish = session.get(Dish, meal.dish_id) if meal.dish_id else None
+    dishes = meal_dishes(session, meal)
     agenda = session.get(AgendaItem, meal.agenda_id) if meal.agenda_id else None
-    kcal, source = estimate_meal(session, meal.meal_type, dish, meal.estimated_kcal)
+    kcal, source = estimate_meal(session, meal.meal_type, dishes, meal.estimated_kcal)
     data.update(
-        dish_name=dish.name if dish else meal.custom_name,
+        dish_ids=meal_dish_ids(session, meal),
+        dish_name=meal_display_name(session, meal),
         status=agenda.status if agenda else None,
         display_kcal=kcal,
         calorie_source=source,
     )
     return data
+
+
+def selected_dish_ids(payload: MealIn) -> list[str]:
+    ids = payload.dish_ids if payload.dish_ids is not None else ([payload.dish_id] if payload.dish_id else [])
+    if len(ids) != len(set(ids)) or any(not dish_id for dish_id in ids):
+        raise HTTPException(422, "请勿重复选择菜品")
+    if not ids and not payload.custom_name.strip():
+        raise HTTPException(422, "请选择菜品或填写餐食名称")
+    return ids
 
 
 @router.get("/profile")
@@ -185,14 +196,14 @@ def reset_meal_plans(session: Session = Depends(get_session)):
 
 @router.post("/meals", status_code=status.HTTP_201_CREATED)
 def create_meal(payload: MealIn, session: Session = Depends(get_session)):
-    if not payload.dish_id and not payload.custom_name.strip():
-        raise HTTPException(422, "请选择菜品或填写餐食名称")
-    dish = active_record(session, Dish, payload.dish_id, "菜品") if payload.dish_id else None
-    meal = MealPlan(id=new_id(), **payload.model_dump())
-    session.add(meal)
-    display_name = dish.name if dish else payload.custom_name
+    dish_ids = selected_dish_ids(payload)
+    for dish_id in dish_ids:
+        active_record(session, Dish, dish_id, "菜品")
+    meal = MealPlan(id=new_id(), **payload.model_dump(exclude={"dish_ids"}))
+    session.add(meal); session.flush()
+    replace_meal_dishes(session, meal, dish_ids)
     agenda = AgendaItem(
-        title=f"{MEAL_NAMES[payload.meal_type]}：{display_name}",
+        title=f"{MEAL_NAMES[payload.meal_type]}：{meal_display_name(session, meal)}",
         plan_date=payload.meal_date,
         module="diet", source_type="meal_plan", source_id=meal.id,
     )
@@ -204,10 +215,11 @@ def create_meal(payload: MealIn, session: Session = Depends(get_session)):
 @router.patch("/meals/{meal_id}")
 def update_meal(meal_id: str, payload: MealIn, session: Session = Depends(get_session)):
     meal = active_record(session, MealPlan, meal_id, "饮食安排")
-    if not payload.dish_id and not payload.custom_name.strip():
-        raise HTTPException(422, "请选择菜品或填写餐食名称")
-    dish = active_record(session, Dish, payload.dish_id, "菜品") if payload.dish_id else None
-    apply_changes(meal, payload.model_dump(), set(MealIn.model_fields))
+    dish_ids = selected_dish_ids(payload)
+    for dish_id in dish_ids:
+        active_record(session, Dish, dish_id, "菜品")
+    apply_changes(meal, payload.model_dump(exclude={"dish_ids"}), set(MealIn.model_fields) - {"dish_ids"})
+    replace_meal_dishes(session, meal, dish_ids)
     agenda = session.get(AgendaItem, meal.agenda_id) if meal.agenda_id else None
     if not agenda:
         agenda = AgendaItem(
@@ -217,7 +229,7 @@ def update_meal(meal_id: str, payload: MealIn, session: Session = Depends(get_se
         session.add(agenda); session.flush(); meal.agenda_id = agenda.id
     if agenda:
         agenda.plan_date = meal.meal_date
-        agenda.title = f"{MEAL_NAMES[meal.meal_type]}：{dish.name if dish else meal.custom_name}"
+        agenda.title = f"{MEAL_NAMES[meal.meal_type]}：{meal_display_name(session, meal)}"
     session.flush()
     return meal_out(session, meal)
 
@@ -256,12 +268,12 @@ def generate_shopping_list(payload: ShoppingGenerate, session: Session = Depends
         raise HTTPException(422, "结束日期不能早于开始日期")
     meals = session.scalars(select(MealPlan).where(
         MealPlan.meal_date >= payload.start_date, MealPlan.meal_date <= payload.end_date,
-        MealPlan.dish_id.is_not(None), MealPlan.deleted_at.is_(None),
+        MealPlan.deleted_at.is_(None),
     )).all()
     dish_counts: dict[str, int] = defaultdict(int)
     for meal in meals:
-        if meal.dish_id:
-            dish_counts[meal.dish_id] += 1
+        for dish_id in meal_dish_ids(session, meal):
+            dish_counts[dish_id] += 1
     dish_ids = set(dish_counts)
     totals: dict[tuple[str, str], float | None] = defaultdict(float)
     for ingredient in session.scalars(select(DishIngredient).where(DishIngredient.dish_id.in_(dish_ids))).all() if dish_ids else []:

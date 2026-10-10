@@ -1,4 +1,6 @@
 """Approximate per-serving food energy, never a clinical nutrition calculation."""
+from collections.abc import Sequence
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -37,15 +39,23 @@ def ingredient_kcal(item: DishIngredient) -> float | None:
     return grams * KCAL_100G[key] / 100
 
 
-def estimate_meal(session: Session, meal_type: str, dish: Dish | None,
+def estimate_meal(session: Session, meal_type: str, dishes: Sequence[Dish],
                   override: int | None = None) -> tuple[int, str]:
     if override is not None:
         return override, "手动填写"
-    if dish and dish.estimated_kcal is not None:
-        return dish.estimated_kcal, "菜品设置"
-    if dish:
+    totals: list[int] = []
+    sources: set[str] = set()
+    for dish in dishes:
+        if dish.estimated_kcal is not None:
+            totals.append(dish.estimated_kcal)
+            sources.add("菜品设置")
+            continue
         items = session.scalars(select(DishIngredient).where(DishIngredient.dish_id == dish.id)).all()
         values = [ingredient_kcal(item) for item in items]
-        if values and all(value is not None for value in values):
-            return round(sum(values)), "食材粗估"
+        if not values or any(value is None for value in values):
+            return MEAL_FALLBACK[meal_type], "餐次粗估"
+        totals.append(round(sum(values)))
+        sources.add("食材粗估")
+    if totals:
+        return sum(totals), sources.pop() if len(sources) == 1 else "菜品与食材粗估"
     return MEAL_FALLBACK[meal_type], "餐次粗估"
