@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="560" viewBox="0 0 1200 560" role="img" aria-labelledby="title desc">
+  <title id="title">PersonalHub 计划生成与执行流程</title>
+  <desc id="desc">用户可以手工创建或用大模型生成草稿，经编辑确认后导入学习或饮食计划，再同步到首页和今日计划；完成、改期、删除和自动顺延会同步更新相关页面。</desc>
+  <defs>
+    <linearGradient id="bg2" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#f4f7ff"/><stop offset="1" stop-color="#f6f2ff"/></linearGradient>
+    <linearGradient id="accent2" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#5b6cff"/><stop offset="1" stop-color="#8059e9"/></linearGradient>
+    <filter id="s2" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#52608c" flood-opacity=".15"/></filter>
+    <marker id="a2" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#7683a6"/></marker>
+    <style>
+      text{font-family:Inter,"Microsoft YaHei",sans-serif;fill:#202b45}.t{font-size:30px;font-weight:700}.st{font-size:15px;fill:#66718a}.nt{font-size:18px;font-weight:700}.b{font-size:14px;fill:#5d6880}.w{fill:white}.l{stroke:#7683a6;stroke-width:3;fill:none;marker-end:url(#a2)}
+    </style>
+  </defs>
+  <rect width="1200" height="560" rx="32" fill="url(#bg2)"/>
+  <text x="60" y="58" class="t">从制定计划到每日执行</text>
+  <text x="60" y="88" class="st">AI 只生成可编辑草稿，用户确认后才进入正式计划</text>
+
+  <g filter="url(#s2)">
+    <rect x="55" y="155" width="180" height="105" rx="22" fill="#fff" stroke="#dae2f3"/>
+    <text x="145" y="195" text-anchor="middle" class="nt">提出需求</text>
+    <text x="145" y="225" text-anchor="middle" class="b">学习目标或饮食偏好</text>
+  </g>
+  <g filter="url(#s2)">
+    <rect x="290" y="135" width="210" height="145" rx="22" fill="#fff" stroke="#dae2f3"/>
+    <text x="395" y="177" text-anchor="middle" class="nt">选择制定方式</text>
+    <rect x="320" y="200" width="70" height="42" rx="13" fill="#eef1ff"/><text x="355" y="226" text-anchor="middle" class="b">手工</text>
+    <rect x="405" y="200" width="70" height="42" rx="13" fill="#f4edff"/><text x="440" y="226" text-anchor="middle" class="b">AI</text>
+  </g>
+  <g filter="url(#s2)">
+    <rect x="555" y="135" width="210" height="145" rx="22" fill="#fff" stroke="#dae2f3"/>
+    <text x="660" y="177" text-anchor="middle" class="nt">预览与修改</text>
+    <text x="660" y="210" text-anchor="middle" class="b">调整日期、内容、时长</text>
+    <text x="660" y="238" text-anchor="middle" class="b">删除不需要的任务或餐次</text>
+  </g>
+  <g filter="url(#s2)">
+    <rect x="820" y="135" width="210" height="145" rx="22" fill="url(#accent2)"/>
+    <text x="925" y="177" text-anchor="middle" class="nt w">确认导入</text>
+    <text x="925" y="210" text-anchor="middle" class="b w">写入学习任务或饮食日历</text>
+    <text x="925" y="238" text-anchor="middle" class="b w">关联统一日程</text>
+  </g>
+  <path d="M235 207 H280" class="l"/><path d="M500 207 H545" class="l"/><path d="M765 207 H810" class="l"/>
+
+  <g filter="url(#s2)">
+    <rect x="790" y="355" width="270" height="120" rx="22" fill="#eaf8f2" stroke="#caeadc"/>
+    <text x="925" y="395" text-anchor="middle" class="nt">首页与今日计划</text>
+    <text x="925" y="426" text-anchor="middle" class="b">按日期聚合，形成当天执行入口</text>
+    <text x="925" y="451" text-anchor="middle" class="b">任务和餐次状态保持一致</text>
+  </g>
+  <path d="M925 280 V345" class="l"/>
+
+  <g filter="url(#s2)">
+    <rect x="430" y="355" width="270" height="120" rx="22" fill="#fff" stroke="#dae2f3"/>
+    <text x="565" y="395" text-anchor="middle" class="nt">执行与调整</text>
+    <text x="565" y="426" text-anchor="middle" class="b">勾选完成 · 改期 · 删除</text>
+    <text x="565" y="451" text-anchor="middle" class="b">超时提醒与学习任务顺延</text>
+  </g>
+  <path d="M780 415 H710" class="l"/>
+
+  <g filter="url(#s2)">
+    <rect x="70" y="355" width="270" height="120" rx="22" fill="#fff7e9" stroke="#f0dfbc"/>
+    <text x="205" y="395" text-anchor="middle" class="nt">同步与沉淀</text>
+    <text x="205" y="426" text-anchor="middle" class="b">进度、专注时间、热量与记录</text>
+    <text x="205" y="451" text-anchor="middle" class="b">备份、回收站与数据恢复</text>
+  </g>
+  <path d="M420 415 H350" class="l"/>
+  <path d="M205 345 C205 310 395 315 395 290" class="l"/>
+  <text x="267" y="321" class="st">继续完善下一轮计划</text>
+
+  <text x="60" y="525" class="st">核心原则：草稿与正式数据分离；修改或删除后，学习页、饮食日历、首页和今日计划同步更新。</text>
+</svg>

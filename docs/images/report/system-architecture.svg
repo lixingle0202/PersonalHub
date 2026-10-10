@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="650" viewBox="0 0 1200 650" role="img" aria-labelledby="title desc">
+  <title id="title">PersonalHub 系统总体架构</title>
+  <desc id="desc">浏览器中的五个主要页面通过 FastAPI 访问业务服务和个人 SQLite 数据，AI 生成可以选择主机共享 Ollama 或用户本机 Ollama。</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#edf3ff"/><stop offset="1" stop-color="#f7f1ff"/></linearGradient>
+    <linearGradient id="primary" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#6479ff"/><stop offset="1" stop-color="#7257e8"/></linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#5362a0" flood-opacity=".16"/></filter>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#7080a9"/></marker>
+    <style>
+      text{font-family:Inter,"Microsoft YaHei",sans-serif;fill:#1f2a44}.title{font-size:30px;font-weight:700}.subtitle{font-size:16px;fill:#65708a}.node-title{font-size:20px;font-weight:700}.body{font-size:15px;fill:#59647c}.white{fill:#fff}.line{stroke:#7080a9;stroke-width:3;fill:none;marker-end:url(#arrow)}
+    </style>
+  </defs>
+  <rect width="1200" height="650" rx="32" fill="url(#bg)"/>
+  <text x="60" y="58" class="title">PersonalHub 系统总体架构</text>
+  <text x="60" y="88" class="subtitle">同一套业务界面支持本机私人空间与共享账号空间</text>
+
+  <g filter="url(#shadow)">
+    <rect x="60" y="145" width="250" height="180" rx="24" fill="#fff" stroke="#dce4f5"/>
+    <rect x="60" y="145" width="250" height="52" rx="24" fill="url(#primary)"/>
+    <rect x="60" y="177" width="250" height="20" fill="url(#primary)"/>
+    <text x="185" y="178" text-anchor="middle" class="node-title white">用户浏览器</text>
+    <text x="88" y="230" class="body">首页总览 · 今日计划</text>
+    <text x="88" y="260" class="body">学习计划 · 饮食计划</text>
+    <text x="88" y="290" class="body">数据与设置</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="435" y="132" width="330" height="205" rx="24" fill="#fff" stroke="#dce4f5"/>
+    <text x="600" y="177" text-anchor="middle" class="node-title">React 前端</text>
+    <text x="600" y="210" text-anchor="middle" class="body">TypeScript + Vite + Ant Design</text>
+    <rect x="475" y="242" width="250" height="58" rx="16" fill="#eef1ff"/>
+    <text x="600" y="270" text-anchor="middle" class="body">表单校验 · 状态反馈</text>
+    <text x="600" y="291" text-anchor="middle" class="body">响应式布局 · 深浅主题</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="890" y="145" width="250" height="180" rx="24" fill="#fff" stroke="#dce4f5"/>
+    <text x="1015" y="190" text-anchor="middle" class="node-title">FastAPI 后端</text>
+    <text x="1015" y="226" text-anchor="middle" class="body">学习与饮食业务接口</text>
+    <text x="1015" y="256" text-anchor="middle" class="body">统一日程与软删除</text>
+    <text x="1015" y="286" text-anchor="middle" class="body">账号隔离与数据校验</text>
+  </g>
+
+  <path d="M310 235 H425" class="line"/>
+  <path d="M765 235 H880" class="line"/>
+
+  <g filter="url(#shadow)">
+    <rect x="890" y="420" width="250" height="120" rx="22" fill="#eaf8f2" stroke="#cceade"/>
+    <text x="1015" y="465" text-anchor="middle" class="node-title">SQLite 个人数据</text>
+    <text x="1015" y="499" text-anchor="middle" class="body">计划 · 草稿 · 备份 · 设置</text>
+  </g>
+  <path d="M1015 325 V410" class="line"/>
+
+  <g filter="url(#shadow)">
+    <rect x="435" y="420" width="330" height="120" rx="22" fill="#fff7e9" stroke="#f2dfba"/>
+    <text x="600" y="460" text-anchor="middle" class="node-title">大模型生成通道</text>
+    <text x="600" y="493" text-anchor="middle" class="body">草稿生成 → 结构校验 → 人工确认</text>
+    <text x="600" y="519" text-anchor="middle" class="body">正式计划写入后再参与日程联动</text>
+  </g>
+  <path d="M600 337 V410" class="line"/>
+  <path d="M775 480 H880" class="line"/>
+
+  <g filter="url(#shadow)">
+    <rect x="60" y="405" width="250" height="70" rx="18" fill="#eef1ff" stroke="#d8defb"/>
+    <text x="185" y="435" text-anchor="middle" class="node-title">主机共享 Ollama</text>
+    <text x="185" y="460" text-anchor="middle" class="body">访客无需安装模型</text>
+    <rect x="60" y="500" width="250" height="70" rx="18" fill="#f5efff" stroke="#e3d6f8"/>
+    <text x="185" y="530" text-anchor="middle" class="node-title">用户本机 Ollama</text>
+    <text x="185" y="555" text-anchor="middle" class="body">浏览器访问本机回环地址</text>
+  </g>
+  <path d="M310 440 H425" class="line"/>
+  <path d="M310 535 H425" class="line"/>
+
+  <text x="60" y="620" class="subtitle">数据边界：本机版与共享版数据库分离；共享版不同账号的数据彼此隔离。</text>
+</svg>
