@@ -97,6 +97,23 @@ describe('local model configuration and learning-plan preview', () => {
     expect(sessionStorage.getItem('personalhub:ai-learning-draft')).toBeNull()
   })
 
+  it('removes a generated chapter with its tasks and reindexes the remaining plan before import', async () => {
+    const fetchMock = mockApi()
+    render(<AILearningGenerator onImported={vi.fn()} />)
+    const dialog = await openAndFill()
+    fireEvent.click(dialog.getByRole('button', { name: '生成草稿' }))
+    await dialog.findByLabelText('章节 1')
+    fireEvent.click(dialog.getByRole('button', { name: '移除章节 1' }))
+    expect(dialog.queryByLabelText('任务 2 标题')).not.toBeInTheDocument()
+    expect(dialog.getByLabelText('章节 1')).toHaveValue('状态')
+    fireEvent.click(dialog.getByRole('button', { name: '确认加入学习计划' }))
+    await waitFor(() => expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith('/drafts/draft-1/import'))).toBe(true))
+    const imported = fetchMock.mock.calls.find(([input]) => String(input).endsWith('/drafts/draft-1/import'))!
+    const body = JSON.parse(String(imported[1]?.body)) as LearningPreview
+    expect(body.sections).toEqual(['状态'])
+    expect(body.tasks).toEqual([expect.objectContaining({ title: '保存状态', section_index: 0 })])
+  })
+
   it('retains the preview after import failure so confirmation can be retried', async () => {
     const onImported = vi.fn()
     mockApi({ failImport: true })

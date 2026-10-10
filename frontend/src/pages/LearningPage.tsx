@@ -8,11 +8,12 @@ import { FocusTimer } from '../components/FocusTimer'
 import { EmptyStatePanel, ErrorPanel, LoadingPanel } from '../components/StatePanels'
 
 type LearningTask = { id: string; title: string; details?: string; estimated_minutes?: number | null; plan_date: string | null; status: string | null }
-type Editor = 'goal' | 'editGoal' | 'section' | 'task' | 'editTask' | 'session' | 'resource'
+type LearningSection = { id: string; name: string; is_completed: boolean }
+type Editor = 'goal' | 'editGoal' | 'section' | 'editSection' | 'task' | 'editTask' | 'session' | 'resource'
 type LearningGoal = {
   id: string; name: string; goal: string; start_date: string | null; target_date: string | null
   estimated_minutes: number; progress: number; progress_is_manual?: boolean
-  sections?: Array<{ id: string; name: string; is_completed: boolean }>
+  sections?: LearningSection[]
   tasks?: LearningTask[]
   sessions?: Array<{ id: string; studied_on: string; actual_minutes: number; notes: string; problems: string; next_step: string }>
   resources?: Array<{ id: string; name: string; link: string; notes: string }>
@@ -26,6 +27,7 @@ export function LearningPage() {
   const [modal, setModal] = useState<Editor | null>(null)
   const [editingGoal, setEditingGoal] = useState<LearningGoal | null>(null)
   const [editingTask, setEditingTask] = useState<LearningTask | null>(null)
+  const [editingSection, setEditingSection] = useState<LearningSection | null>(null)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
   const [deleting, setDeleting] = useState(false)
@@ -100,16 +102,24 @@ export function LearningPage() {
     setModal('editTask')
   }
 
+  function openSectionEditor(section: LearningSection) {
+    if (!detail || detail.id !== selectedId) return
+    form.resetFields()
+    setEditingGoal(detail); setEditingTask(null); setEditingSection(section); setSaveError('')
+    form.setFieldsValue({ name: section.name })
+    setModal('editSection')
+  }
+
   function openChildEditor(next: 'section' | 'task' | 'session' | 'resource') {
     if (!detail || detail.id !== selectedId) return
     form.resetFields()
-    setEditingGoal(detail); setEditingTask(null); setSaveError('')
+    setEditingGoal(detail); setEditingTask(null); setEditingSection(null); setSaveError('')
     setModal(next)
   }
 
   function closeEditor() {
     form.resetFields()
-    setModal(null); setEditingGoal(null); setEditingTask(null)
+    setModal(null); setEditingGoal(null); setEditingTask(null); setEditingSection(null)
     setSaveError(''); setDeleteConfirmOpen(false); setDeleteError('')
   }
 
@@ -132,6 +142,9 @@ export function LearningPage() {
       } else if (modal === 'editTask' && editingTask) {
         await apiRequest(`/learning/tasks/${editingTask.id}`, { method: 'PATCH', body: JSON.stringify({ title: values.title, details: values.details ?? '', plan_date: convertDate('plan_date') ?? null }) })
         await Promise.all([loadDetail(), loadGoals()]); message.success('学习任务已更新')
+      } else if (modal === 'editSection' && editingSection) {
+        await apiRequest(`/learning/sections/${editingSection.id}`, { method: 'PATCH', body: JSON.stringify({ name: values.name }) })
+        await Promise.all([loadDetail(), loadGoals()]); message.success('学习章节已更新')
       } else if (editingGoal) {
         const resource = modal === 'section' ? 'sections' : modal === 'task' ? 'tasks' : modal === 'session' ? 'sessions' : 'resources'
         await apiRequest(`/learning/goals/${editingGoal.id}/${resource}`, { method: 'POST', body: JSON.stringify(body) })
@@ -155,6 +168,11 @@ export function LearningPage() {
         closeEditor()
         await Promise.all([loadDetail(), loadGoals()])
         message.success('学习任务已删除，其他模块已同步移除')
+      } else if (editingSection) {
+        await apiRequest(`/learning/sections/${editingSection.id}`, { method: 'DELETE' })
+        closeEditor()
+        await Promise.all([loadDetail(), loadGoals()])
+        message.success('学习章节已删除，原有任务仍可单独修改或删除')
       } else {
         const goalId = editingGoal.id
         await apiRequest(`/learning/goals/${goalId}`, { method: 'DELETE' })
@@ -208,27 +226,27 @@ export function LearningPage() {
     <Row gutter={20}>
       <Col span={7}><Card title="学习目标"><div className="selectable-list">{goals.map((goal) => <button type="button" aria-label={`编辑学习目标 ${goal.name}`} disabled={editorBusy || savingProgress} key={goal.id} className={goal.id === selectedId ? 'selected' : ''} onClick={() => openGoalEditor(goal)}><strong>{goal.name}</strong><span>{goal.progress}% · 点击修改</span></button>)}</div></Card></Col>
       <Col span={17}>{detailError ? <ErrorPanel message={detailError} onRetry={() => void loadDetail()} /> : selectedId && detail?.id !== selectedId ? <LoadingPanel /> : detail ? <Card title={detail.name} extra={<Space><Typography.Text type="secondary">{detail.progress_is_manual ? '手动进度' : '按章节计算'}</Typography.Text><InputNumber aria-label="学习进度" min={0} max={100} value={progressValue} onChange={(value) => setProgressValue(value ?? 0)} /><Typography.Text>%</Typography.Text><Button type="primary" loading={savingProgress} onClick={() => void saveProgress()}>保存进度</Button></Space>}><Typography.Paragraph>{detail.goal}</Typography.Paragraph><Typography.Text type="secondary">计划：{detail.start_date ?? '未设置'} 至 {detail.target_date ?? '未设置'} · 预计投入 {detail.estimated_minutes} 分钟</Typography.Text><Progress percent={detail.progress} /><FocusTimer goalId={detail.id} tasks={detail.tasks ?? []} /><Tabs items={[
-        { key: 'route', label: '学习路线', children: <><div className="tab-actions"><Button onClick={() => openChildEditor('section')}>添加章节</Button></div><div className="record-grid">{(detail.sections ?? []).map((item) => <Card size="small" key={item.id} className={item.is_completed ? 'record-complete' : ''}><label><input type="checkbox" checked={item.is_completed} onChange={(event) => void toggleSection(item.id, event.target.checked)} /> {item.name}</label></Card>)}</div></> },
+        { key: 'route', label: '学习路线', children: <><div className="tab-actions"><Button onClick={() => openChildEditor('section')}>添加章节</Button></div><div className="record-grid">{(detail.sections ?? []).map((item) => <Card size="small" key={item.id} className={item.is_completed ? 'record-complete' : ''}><label><input type="checkbox" checked={item.is_completed} onChange={(event) => void toggleSection(item.id, event.target.checked)} /> {item.name}</label><Button aria-label={`修改学习章节 ${item.name}`} onClick={() => openSectionEditor(item)}>修改或删除</Button></Card>)}</div></> },
         { key: 'tasks', label: '学习任务', children: <><div className="tab-actions"><Button onClick={() => openChildEditor('task')}>安排学习任务</Button></div><div className="learning-task-list">{(detail.tasks ?? []).map((item) => <button type="button" className="learning-task" aria-label={`编辑学习任务 ${item.title}`} key={item.id} onClick={() => openTaskEditor(item)}><strong>{item.title}</strong>{item.details ? <span className="learning-task-details">{item.details}</span> : null}<span>{item.plan_date ?? '未排期'}{item.estimated_minutes ? ` · 预计 ${item.estimated_minutes} 分钟` : ''} · {item.status ?? '未加入计划'} · 点击修改或删除</span></button>)}</div></> },
         { key: 'sessions', label: '学习记录', children: <><div className="tab-actions"><Button onClick={() => openChildEditor('session')}>记录一次学习</Button></div>{(detail.sessions ?? []).map((item) => <Card size="small" key={item.id}><strong>{item.studied_on} · {item.actual_minutes} 分钟</strong><p>{item.notes}</p><Typography.Text type="secondary">下一步：{item.next_step || '未填写'}</Typography.Text></Card>)}</> },
         { key: 'resources', label: '笔记与资料', children: <><div className="tab-actions"><Button onClick={() => openChildEditor('resource')}>添加资料</Button></div>{(detail.resources ?? []).map((item) => <Card size="small" key={item.id}><a href={item.link} target="_blank" rel="noreferrer">{item.name}</a><p>{item.notes}</p></Card>)}</> },
       ]} /></Card> : <EmptyStatePanel description="选择或创建学习目标" />}</Col>
     </Row>
-    <Modal forceRender title={{ goal: '新建学习目标', editGoal: '编辑学习目标', section: '添加章节', task: '安排学习任务', editTask: '编辑学习任务', session: '记录学习', resource: '添加学习资料' }[modal ?? 'goal']} open={Boolean(modal)} closable={{ disabled: editorBusy }} keyboard={!editorBusy} mask={{ closable: !editorBusy }} onCancel={() => { if (!editorBusy) closeEditor() }} footer={
-      <div className="editor-footer"><div>{modal === 'editGoal' || modal === 'editTask' ? <Button danger aria-label={modal === 'editTask' ? '删除此任务' : '删除此计划'} disabled={editorBusy} onClick={() => { setDeleteError(''); setDeleteConfirmOpen(true) }}>{modal === 'editTask' ? '删除此任务' : '删除此计划'}</Button> : null}</div><Space><Button aria-label="取消" disabled={editorBusy} onClick={closeEditor}>取消</Button><Button type="primary" aria-label={modal === 'editGoal' || modal === 'editTask' ? '保存修改' : '创建'} loading={saving} disabled={deleting} onClick={() => form.submit()}>{modal === 'editGoal' || modal === 'editTask' ? '保存修改' : '创建'}</Button></Space></div>
+    <Modal forceRender title={{ goal: '新建学习目标', editGoal: '编辑学习目标', section: '添加章节', editSection: '编辑学习章节', task: '安排学习任务', editTask: '编辑学习任务', session: '记录学习', resource: '添加学习资料' }[modal ?? 'goal']} open={Boolean(modal)} closable={{ disabled: editorBusy }} keyboard={!editorBusy} mask={{ closable: !editorBusy }} onCancel={() => { if (!editorBusy) closeEditor() }} footer={
+      <div className="editor-footer"><div>{modal === 'editGoal' || modal === 'editTask' || modal === 'editSection' ? <Button danger aria-label={modal === 'editTask' ? '删除此任务' : modal === 'editSection' ? '删除此章节' : '删除此计划'} disabled={editorBusy} onClick={() => { setDeleteError(''); setDeleteConfirmOpen(true) }}>{modal === 'editTask' ? '删除此任务' : modal === 'editSection' ? '删除此章节' : '删除此计划'}</Button> : null}</div><Space><Button aria-label="取消" disabled={editorBusy} onClick={closeEditor}>取消</Button><Button type="primary" aria-label={modal === 'editGoal' || modal === 'editTask' || modal === 'editSection' ? '保存修改' : '创建'} loading={saving} disabled={deleting} onClick={() => form.submit()}>{modal === 'editGoal' || modal === 'editTask' || modal === 'editSection' ? '保存修改' : '创建'}</Button></Space></div>
     }>
       {saveError ? <Alert type="error" showIcon title={saveError} /> : null}
       <Form form={form} layout="vertical" onFinish={(values) => void submit(values)}>
         {modal === 'goal' || modal === 'editGoal' ? <><Form.Item name="name" label="学习主题" rules={[{ required: true }]}><Input /></Form.Item><Form.Item name="goal" label="学习目标"><Input.TextArea /></Form.Item><Row gutter={12}><Col span={12}><Form.Item name="start_date" label="开始日期"><DatePicker /></Form.Item></Col><Col span={12}><Form.Item name="target_date" label="计划完成"><DatePicker /></Form.Item></Col></Row><Form.Item name="estimated_minutes" label="预计投入分钟"><InputNumber min={0} /></Form.Item></> : null}
-        {modal === 'section' ? <Form.Item name="name" label="章节名称" rules={[{ required: true }]}><Input /></Form.Item> : null}
+        {modal === 'section' || modal === 'editSection' ? <Form.Item name="name" label="章节名称" rules={[{ required: true }]}><Input /></Form.Item> : null}
         {modal === 'task' || modal === 'editTask' ? <><Form.Item name="title" label="学习任务" rules={[{ required: true }]}><Input /></Form.Item><Form.Item name="details" label="任务详情"><Input.TextArea rows={4} placeholder="具体内容、练习步骤或完成标准" /></Form.Item><Form.Item name="plan_date" label="计划日期"><DatePicker /></Form.Item></> : null}
         {modal === 'session' ? <><Form.Item name="studied_on" label="学习日期" rules={[{ required: true }]}><DatePicker /></Form.Item><Form.Item name="actual_minutes" label="实际分钟" rules={[{ required: true }]}><InputNumber min={0} /></Form.Item><Form.Item name="notes" label="学习笔记"><Input.TextArea /></Form.Item><Form.Item name="problems" label="遇到的问题"><Input.TextArea /></Form.Item><Form.Item name="next_step" label="下一步"><Input /></Form.Item></> : null}
         {modal === 'resource' ? <><Form.Item name="name" label="资料名称" rules={[{ required: true }]}><Input /></Form.Item><Form.Item name="link" label="链接"><Input /></Form.Item><Form.Item name="notes" label="备注"><Input.TextArea /></Form.Item></> : null}
       </Form>
     </Modal>
-    <Modal title={editingTask ? '确认删除此学习任务？' : '确认删除此学习计划？'} centered width={440} open={deleteConfirmOpen} onOk={() => void deleteCurrentPlan()} onCancel={() => { if (!deleting) { setDeleteConfirmOpen(false); setDeleteError('') } }} okText="确认" cancelText="取消" confirmLoading={deleting} okButtonProps={{ danger: true, disabled: editorBusy, 'aria-label': '确认删除' }} cancelButtonProps={{ disabled: deleting, 'aria-label': '取消删除' }} closable={!deleting} keyboard={!deleting} mask={{ closable: !deleting }}>
-      <Typography.Paragraph><Typography.Text strong>{editingTask?.title ?? editingGoal?.name}</Typography.Text></Typography.Paragraph>
-      <Typography.Paragraph>{editingTask ? '此任务将从学习计划、首页、今日计划和搜索中移除，所属目标和其他任务保留。' : '此计划及其章节、任务、学习记录和资料将移至回收站，首页、今日计划和搜索也会同步移除关联任务。'}</Typography.Paragraph>
+    <Modal title={editingTask ? '确认删除此学习任务？' : editingSection ? '确认删除此学习章节？' : '确认删除此学习计划？'} centered width={440} open={deleteConfirmOpen} onOk={() => void deleteCurrentPlan()} onCancel={() => { if (!deleting) { setDeleteConfirmOpen(false); setDeleteError('') } }} okText="确认" cancelText="取消" confirmLoading={deleting} okButtonProps={{ danger: true, disabled: editorBusy, 'aria-label': '确认删除' }} cancelButtonProps={{ disabled: deleting, 'aria-label': '取消删除' }} closable={!deleting} keyboard={!deleting} mask={{ closable: !deleting }}>
+      <Typography.Paragraph><Typography.Text strong>{editingTask?.title ?? editingSection?.name ?? editingGoal?.name}</Typography.Text></Typography.Paragraph>
+      <Typography.Paragraph>{editingTask ? '此任务将从学习计划、首页、今日计划和搜索中移除，所属目标和其他任务保留。' : editingSection ? '此章节将从学习路线移除；关联的学习任务仍会保留，可单独修改或删除。' : '此计划及其章节、任务、学习记录和资料将移至回收站，首页、今日计划和搜索也会同步移除关联任务。'}</Typography.Paragraph>
       {deleteError ? <Alert type="error" showIcon title={deleteError} /> : null}
     </Modal>
   </div>

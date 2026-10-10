@@ -252,6 +252,7 @@ body .ant-tag.ant-tag-red:not(.ant-tag-disabled):is(.ant-tag-filled, .ant-tag-ou
 .ai-status { margin-bottom: 16px; }
 .ai-preview-heading { display: flex; flex-direction: column; gap: 8px; }
 .ai-sections { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.ai-section-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .ai-task-preview { display: flex; flex-direction: column; gap: 12px; max-height: 360px; overflow-y: auto; padding: 3px; }
 .ai-task-card { display: flex; flex-direction: column; gap: 10px; padding: 16px; border: 1px solid var(--surface-line); border-radius: 14px; background: var(--surface-raised); }
 .ai-task-row { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }

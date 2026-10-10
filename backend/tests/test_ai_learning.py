@@ -161,6 +161,23 @@ def test_user_edited_draft_is_imported_once_and_visible_in_home_today_and_search
     assert client.post(endpoint, json=draft['plan']).status_code == 409
 
 
+def test_import_accepts_a_draft_after_removing_a_chapter_and_its_tasks(client, monkeypatch):
+    draft = generate_draft(client, monkeypatch)
+    remaining = draft['plan']['tasks'][1]
+    remaining['section_index'] = 0
+    draft['plan']['sections'] = ['状态']
+    draft['plan']['tasks'] = [remaining]
+    imported = client.post(f"/api/v1/ai/learning/drafts/{draft['id']}/import", json=draft['plan'])
+    assert imported.status_code == 201
+    goal = imported.json()
+    assert [section['name'] for section in goal['sections']] == ['状态']
+    assert [task['title'] for task in goal['tasks']] == ['保存状态']
+    assert client.delete(f"/api/v1/learning/sections/{goal['sections'][0]['id']}").status_code == 200
+    refreshed = client.get(f"/api/v1/learning/goals/{goal['id']}").json()
+    assert refreshed['sections'] == []
+    assert [task['title'] for task in refreshed['tasks']] == ['保存状态']
+
+
 @pytest.mark.parametrize('change', ['bad_section', 'missing_section', 'missing_day', 'over_budget', 'duplicate', 'blank_title'])
 def test_invalid_model_results_are_rejected_without_any_draft_or_live_plan(client, monkeypatch, change):
     plan = deepcopy(MODEL_PLAN)

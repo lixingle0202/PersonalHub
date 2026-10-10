@@ -92,6 +92,17 @@ function mockLearning(options: {
         return remove()
       }
     }
+    const sectionId = path.match(/^\/learning\/sections\/([^/]+)$/)?.[1]
+    if (sectionId) {
+      const owner = goals.find((entry) => entry.sections.some((section) => section.id === sectionId))
+      const section = owner?.sections.find((entry) => entry.id === sectionId)
+      if (!owner || !section) return json({ detail: '章节不存在' }, 404)
+      if (method === 'PATCH') { Object.assign(section, values); return json(section) }
+      if (method === 'DELETE') {
+        owner.sections = owner.sections.filter((entry) => entry.id !== sectionId)
+        return json(section)
+      }
+    }
     return json({ detail: `未预期的请求 ${method} ${path}` }, 404)
   })
   return {
@@ -145,6 +156,23 @@ describe('individual learning plan and task changes', () => {
     await waitFor(() => expect(writes.some((write) => write.path === '/learning/tasks/g1-t1' && write.body.details === '完成 3 个变量练习')).toBe(true))
     expect(await screen.findByText('完成 3 个变量练习')).toBeInTheDocument()
   })
+
+  it('edits and deletes an imported chapter while keeping its daily task available', async () => {
+    const { writes } = mockLearning({ goals: [goal('g1')] })
+    renderLearning()
+    fireEvent.click(await screen.findByLabelText('修改学习章节 基础阶段'))
+    const firstEditor = await editor('编辑学习章节')
+    fireEvent.change(firstEditor.getByLabelText('章节名称'), { target: { value: '基础训练' } })
+    fireEvent.click(firstEditor.getByLabelText('保存修改'))
+    expect(await screen.findByLabelText('修改学习章节 基础训练')).toBeInTheDocument()
+    fireEvent.click(screen.getByLabelText('修改学习章节 基础训练'))
+    fireEvent.click((await editor('编辑学习章节')).getByLabelText('删除此章节'))
+    fireEvent.click((await editor('确认删除此学习章节？')).getByLabelText('确认删除'))
+    await waitFor(() => expect(screen.queryByLabelText('修改学习章节 基础训练')).not.toBeInTheDocument())
+    fireEvent.click(screen.getByRole('tab', { name: '学习任务' }))
+    expect(screen.getByLabelText('编辑学习任务 练习基础语法')).toBeInTheDocument()
+    expect(writes.some((entry) => entry.method === 'DELETE' && entry.path === '/learning/sections/g1-s1')).toBe(true)
+  }, 60000)
 
   it('saves every editable goal field to the goal that was opened', async () => {
     const api = mockLearning()
