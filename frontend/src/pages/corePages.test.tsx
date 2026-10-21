@@ -3,11 +3,12 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { setLocalToken } from '../api/client'
+import type { AgendaItem } from '../types'
 import { HomePage } from './HomePage'
 import { TodayPage } from './TodayPage'
 import { DevelopmentPage } from './DevelopmentPage'
 
-const agenda = [{
+const agenda: AgendaItem[] = [{
   id: 'a1', title: '完成核心闭环', plan_date: '2026-09-30', start_time: null,
   end_time: null, priority: 'high', bucket: 'must', status: 'pending', sort_order: 1,
   module: 'development', source_type: 'dev_task', source_id: 't1', notes: '', completed_at: null,
@@ -59,6 +60,39 @@ describe('core pages', () => {
     expect(screen.queryByText('游戏：休闲游戏')).not.toBeInTheDocument()
   })
 
+  it('toggles a completed item back to pending from the home overview', async () => {
+    const user = userEvent.setup()
+    let current = { ...agenda[0], module: 'learning', source_type: 'learning_task', source_id: 'task-1' }
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation((input, init) => {
+      const url = String(input)
+      if (url.endsWith('/agenda/a1/complete') && init?.method === 'POST') {
+        current = { ...current, status: 'completed', completed_at: '2026-10-21T01:00:00Z' }
+        return json(current)
+      }
+      if (url.endsWith('/agenda/a1/reopen') && init?.method === 'POST') {
+        current = { ...current, status: 'pending', completed_at: null }
+        return json(current)
+      }
+      return json({
+        date: '2026-10-21',
+        stats: { total: 1, completed: current.status === 'completed' ? 1 : 0, completion_rate: current.status === 'completed' ? 100 : 0, must: current.status === 'pending' ? 1 : 0, overdue: 0, due_soon: 0 },
+        agenda: [current], quick_notes: [],
+        summaries: {
+          media: { title: '暂无内容', count: 0 }, development: { title: '暂无项目', count: 0 },
+          consulting: { title: '暂无咨询', count: 0 }, learning: { title: '当前目标：测试', count: 1 },
+          diet: { title: '暂无饮食安排', count: 0 },
+        },
+      })
+    })
+    render(<MemoryRouter><HomePage /></MemoryRouter>)
+
+    await user.click(await screen.findByLabelText('完成 完成核心闭环'))
+    await user.click(await screen.findByLabelText('恢复未完成 完成核心闭环'))
+    expect(await screen.findByLabelText('完成 完成核心闭环')).not.toBeChecked()
+    expect(fetchMock).toHaveBeenCalledWith('/api/v1/agenda/a1/complete', expect.objectContaining({ method: 'POST' }))
+    expect(fetchMock).toHaveBeenCalledWith('/api/v1/agenda/a1/reopen', expect.objectContaining({ method: 'POST' }))
+  }, 30000)
+
   it('edits and deletes a quick note from the home overview', async () => {
     const user = userEvent.setup()
     let quickNotes = [{ id: 'n1', content: '写eda作业', is_important: false, is_archived: false, converted_type: null, converted_id: null, created_at: '2026-09-30T00:00:00Z' }]
@@ -102,19 +136,28 @@ describe('core pages', () => {
     expect(fetchMock).toHaveBeenCalledWith('/api/v1/quick-notes/n1', expect.objectContaining({ method: 'DELETE' }))
   }, 30000)
 
-  it('completes an item from today page through the protected API', async () => {
+  it('toggles completion in both directions from the today page', async () => {
+    const user = userEvent.setup()
+    let current = { ...agenda[0] }
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation((input, init) => {
       const url = String(input)
-      if (url.includes('/complete')) return json({ ...agenda[0], status: 'completed' })
-      return json(agenda)
+      if (url.endsWith('/agenda/a1/complete') && init?.method === 'POST') {
+        current = { ...current, status: 'completed', completed_at: '2026-10-21T01:00:00Z' }
+        return json(current)
+      }
+      if (url.endsWith('/agenda/a1/reopen') && init?.method === 'POST') {
+        current = { ...current, status: 'pending', completed_at: null }
+        return json(current)
+      }
+      return json([current])
     })
     render(<MemoryRouter><TodayPage /></MemoryRouter>)
-    await userEvent.click(await screen.findByLabelText('完成 完成核心闭环'))
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
-      '/api/v1/agenda/a1/complete',
-      expect.objectContaining({ method: 'POST', headers: expect.any(Headers) }),
-    ))
-  })
+    await user.click(await screen.findByLabelText('完成 完成核心闭环'))
+    await user.click(await screen.findByLabelText('恢复未完成 完成核心闭环'))
+    expect(await screen.findByLabelText('完成 完成核心闭环')).not.toBeChecked()
+    expect(fetchMock).toHaveBeenCalledWith('/api/v1/agenda/a1/complete', expect.objectContaining({ method: 'POST', headers: expect.any(Headers) }))
+    expect(fetchMock).toHaveBeenCalledWith('/api/v1/agenda/a1/reopen', expect.objectContaining({ method: 'POST', headers: expect.any(Headers) }))
+  }, 30000)
 
   it('renders development projects and their domain-specific tasks', async () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {

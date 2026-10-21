@@ -19,7 +19,12 @@ def test_daily_learning_task_completion_and_detail_changes_sync_with_agenda(tmp_
         assert client.post(f'/api/v1/agenda/{agenda_id}/complete').status_code == 200
         completed = client.get(f"/api/v1/learning/goals/{goal['id']}").json()['tasks'][0]
         assert completed['status'] == 'completed'
-        assert client.post(f'/api/v1/agenda/{agenda_id}/reschedule', json={'plan_date': '2026-10-10'}).status_code == 200
+        reopened = client.post(f'/api/v1/agenda/{agenda_id}/reopen')
+        assert reopened.status_code == 200
+        assert reopened.json()['status'] == 'pending'
+        assert reopened.json()['completed_at'] is None
+        restored = client.get(f"/api/v1/learning/goals/{goal['id']}").json()['tasks'][0]
+        assert restored['status'] == 'pending'
         changed = client.patch(f"/api/v1/learning/tasks/{task['id']}", json={
             'details': '独立完成五道题', 'estimated_minutes': 60,
         }).json()

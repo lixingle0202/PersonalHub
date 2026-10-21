@@ -20,13 +20,13 @@ function sourceLink(item: AgendaItem) {
 
 export function AgendaList({
   items,
-  onComplete,
+  onToggleComplete,
   onRescheduleTomorrow,
   onReorder,
   compact = false,
 }: {
   items: AgendaItem[]
-  onComplete?: (item: AgendaItem) => void
+  onToggleComplete?: (item: AgendaItem) => void
   onRescheduleTomorrow?: (item: AgendaItem) => void
   onReorder?: (ordered: AgendaItem[]) => void
   compact?: boolean
@@ -58,10 +58,10 @@ export function AgendaList({
             onDrop={(event) => dropOn(item.id, event.dataTransfer.getData('text/plain'))}
           >
             <Checkbox
-              aria-label={`完成 ${item.title}`}
+              aria-label={item.status === 'completed' ? `恢复未完成 ${item.title}` : `完成 ${item.title}`}
               checked={item.status === 'completed'}
-              disabled={item.status !== 'pending'}
-              onChange={() => onComplete?.(item)}
+              disabled={!onToggleComplete || item.status === 'cancelled'}
+              onChange={() => onToggleComplete?.(item)}
             />
             <div className="agenda-main">
               <Space size={6} wrap>

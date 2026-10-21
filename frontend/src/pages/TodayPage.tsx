@@ -47,8 +47,9 @@ export function TodayPage() {
     await load()
   }
 
-  async function complete(item: AgendaItem) {
-    await apiRequest(`/agenda/${item.id}/complete`, { method: 'POST' })
+  async function toggleComplete(item: AgendaItem) {
+    const action = item.status === 'completed' ? 'reopen' : 'complete'
+    await apiRequest(`/agenda/${item.id}/${action}`, { method: 'POST' })
     await load()
   }
 
@@ -100,7 +101,7 @@ export function TodayPage() {
         <Card className={`agenda-group agenda-group-${key}`} title={<span className="agenda-group-title"><span className="group-dot" aria-hidden="true" />{label} · {grouped[key].length}</span>} key={key}>
           <AgendaList
             items={grouped[key]}
-            onComplete={key === 'completed' ? undefined : (item) => void complete(item)}
+            onToggleComplete={(item) => void toggleComplete(item)}
             onRescheduleTomorrow={key === 'completed' ? undefined : (item) => void tomorrow(item)}
             onReorder={key === 'completed' ? undefined : (ordered) => void reorder(ordered)}
           />

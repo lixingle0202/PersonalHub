@@ -35,8 +35,9 @@ export function HomePage() {
 
   useEffect(() => { void load() }, [load])
 
-  async function complete(item: AgendaItem) {
-    await apiRequest(`/agenda/${item.id}/complete`, { method: 'POST' })
+  async function toggleComplete(item: AgendaItem) {
+    const action = item.status === 'completed' ? 'reopen' : 'complete'
+    await apiRequest(`/agenda/${item.id}/${action}`, { method: 'POST' })
     await load()
   }
 
@@ -126,7 +127,7 @@ export function HomePage() {
               })}
             </div>
             <Typography.Title level={5}>今天要完成（{data.agenda.length} 项）</Typography.Title>
-            <AgendaList items={data.agenda} onComplete={(item) => void complete(item)} compact />
+            <AgendaList items={data.agenda} onToggleComplete={(item) => void toggleComplete(item)} compact />
           </Card>
         </Col>
         <Col xs={24} xl={9}>

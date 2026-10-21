@@ -93,6 +93,11 @@ def complete_agenda(item_id: str, session: Session = Depends(get_session)):
     return set_agenda_status(session, active_item(session, item_id), "completed")
 
 
+@router.post("/agenda/{item_id}/reopen", response_model=AgendaOut)
+def reopen_agenda(item_id: str, session: Session = Depends(get_session)):
+    return set_agenda_status(session, active_item(session, item_id), "pending")
+
+
 @router.post("/agenda/{item_id}/cancel", response_model=AgendaOut)
 def cancel_agenda(item_id: str, session: Session = Depends(get_session)):
     return set_agenda_status(session, active_item(session, item_id), "cancelled")
