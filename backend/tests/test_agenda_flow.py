@@ -62,6 +62,21 @@ def test_quick_note_converts_once_to_agenda(client):
     assert duplicate.status_code == 409
 
 
+def test_quick_note_can_be_edited_and_soft_deleted_from_home(client):
+    note = client.post("/api/v1/quick-notes", json={"content": "写eda作业"})
+    note_id = note.json()["id"]
+
+    updated = client.patch(f"/api/v1/quick-notes/{note_id}", json={"content": "完成 EDA 作业"})
+    assert updated.status_code == 200
+    assert updated.json()["content"] == "完成 EDA 作业"
+    assert client.get("/api/v1/quick-notes").json()[0]["content"] == "完成 EDA 作业"
+
+    deleted = client.delete(f"/api/v1/quick-notes/{note_id}")
+    assert deleted.status_code == 200
+    assert client.get("/api/v1/quick-notes").json() == []
+    assert client.get("/api/v1/home", params={"date": "2026-09-30"}).json()["quick_notes"] == []
+
+
 def test_development_task_and_agenda_stay_in_sync_without_duplicates(client):
     project = client.post("/api/v1/dev/projects", json={
         "name": "PersonalHub", "status": "active",

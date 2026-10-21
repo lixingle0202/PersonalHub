@@ -59,6 +59,49 @@ describe('core pages', () => {
     expect(screen.queryByText('游戏：休闲游戏')).not.toBeInTheDocument()
   })
 
+  it('edits and deletes a quick note from the home overview', async () => {
+    const user = userEvent.setup()
+    let quickNotes = [{ id: 'n1', content: '写eda作业', is_important: false, is_archived: false, converted_type: null, converted_id: null, created_at: '2026-09-30T00:00:00Z' }]
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation((input, init) => {
+      const url = String(input)
+      if (url.endsWith('/quick-notes/n1') && init?.method === 'PATCH') {
+        quickNotes = [{ ...quickNotes[0], ...JSON.parse(String(init.body)) }]
+        return json(quickNotes[0])
+      }
+      if (url.endsWith('/quick-notes/n1') && init?.method === 'DELETE') {
+        const deleted = quickNotes[0]
+        quickNotes = []
+        return json(deleted)
+      }
+      return json({
+        date: '2026-09-30',
+        stats: { total: 0, completed: 0, completion_rate: 0, must: 0, overdue: 0, due_soon: 0 },
+        agenda: [], quick_notes: quickNotes,
+        summaries: {
+          media: { title: '暂无内容', count: 0 }, development: { title: '暂无项目', count: 0 },
+          consulting: { title: '暂无咨询', count: 0 }, learning: { title: '暂无学习目标', count: 0 },
+          diet: { title: '暂无饮食安排', count: 0 },
+        },
+      })
+    })
+    render(<MemoryRouter><HomePage /></MemoryRouter>)
+
+    await user.click(await screen.findByRole('button', { name: '修改备忘：写eda作业' }))
+    const input = screen.getByLabelText('编辑备忘内容')
+    await user.clear(input)
+    await user.type(input, '完成 EDA 作业')
+    await user.click(screen.getByRole('button', { name: '保存备忘修改' }))
+    expect(await screen.findByText('完成 EDA 作业')).toBeInTheDocument()
+    expect(fetchMock).toHaveBeenCalledWith('/api/v1/quick-notes/n1', expect.objectContaining({
+      method: 'PATCH', body: JSON.stringify({ content: '完成 EDA 作业' }),
+    }))
+
+    await user.click(screen.getByRole('button', { name: '删除备忘：完成 EDA 作业' }))
+    await user.click(await screen.findByRole('button', { name: '确认删除备忘：完成 EDA 作业' }))
+    await waitFor(() => expect(screen.queryByText('完成 EDA 作业')).not.toBeInTheDocument())
+    expect(fetchMock).toHaveBeenCalledWith('/api/v1/quick-notes/n1', expect.objectContaining({ method: 'DELETE' }))
+  }, 30000)
+
   it('completes an item from today page through the protected API', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation((input, init) => {
       const url = String(input)

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ArrowRightOutlined, CalendarOutlined, CheckOutlined, CoffeeOutlined, EditOutlined, FlagOutlined, ReadOutlined } from '@ant-design/icons'
+import { ArrowRightOutlined, CalendarOutlined, CheckOutlined, CoffeeOutlined, DeleteOutlined, EditOutlined, FlagOutlined, ReadOutlined } from '@ant-design/icons'
 import { Alert, Button, Card, Col, Input, Progress, Row, Space, Statistic, Typography, message } from 'antd'
 import dayjs from 'dayjs'
 import { useNavigate } from 'react-router-dom'
@@ -18,6 +18,10 @@ export function HomePage() {
   const [data, setData] = useState<HomeData | null>(null)
   const [error, setError] = useState('')
   const [note, setNote] = useState('')
+  const [editingNote, setEditingNote] = useState<{ id: string; content: string } | null>(null)
+  const [savingNoteId, setSavingNoteId] = useState<string | null>(null)
+  const [deletingNoteId, setDeletingNoteId] = useState<string | null>(null)
+  const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null)
   const navigate = useNavigate()
 
   const load = useCallback(async () => {
@@ -50,6 +54,39 @@ export function HomePage() {
       body: JSON.stringify({ target_type: 'agenda', plan_date: today, bucket: 'scheduled' }),
     })
     await load()
+  }
+
+  async function updateNote() {
+    if (!editingNote?.content.trim()) return
+    setSavingNoteId(editingNote.id)
+    try {
+      await apiRequest(`/quick-notes/${editingNote.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ content: editingNote.content.trim() }),
+      })
+      setEditingNote(null)
+      message.success('备忘已修改')
+      await load()
+    } catch (reason) {
+      message.error(reason instanceof Error ? reason.message : '修改失败，请重试')
+    } finally {
+      setSavingNoteId(null)
+    }
+  }
+
+  async function deleteNote(id: string) {
+    setDeletingNoteId(id)
+    try {
+      await apiRequest(`/quick-notes/${id}`, { method: 'DELETE' })
+      if (editingNote?.id === id) setEditingNote(null)
+      setConfirmingDeleteId(null)
+      message.success('备忘已删除，可在回收站恢复')
+      await load()
+    } catch (reason) {
+      message.error(reason instanceof Error ? reason.message : '删除失败，请重试')
+    } finally {
+      setDeletingNoteId(null)
+    }
   }
 
   if (error) return <ErrorPanel message={error} onRetry={() => void load()} />
@@ -102,8 +139,31 @@ export function HomePage() {
             <div className="note-list">
               {data.quick_notes.map((item) => (
                 <div className="note-row" key={item.id}>
-                  <Typography.Text>{item.content}</Typography.Text>
-                  <Button size="small" onClick={() => void convertNote(item.id)}>加入今天</Button>
+                  {editingNote?.id === item.id ? <>
+                    <Input
+                      aria-label="编辑备忘内容"
+                      value={editingNote.content}
+                      onChange={(event) => setEditingNote({ ...editingNote, content: event.target.value })}
+                      onPressEnter={() => void updateNote()}
+                      autoFocus
+                    />
+                    <Space size={4} className="note-actions">
+                      <Button size="small" type="primary" aria-label="保存备忘修改" loading={savingNoteId === item.id} disabled={!editingNote.content.trim()} onClick={() => void updateNote()}>保存</Button>
+                      <Button size="small" aria-label="取消修改" disabled={savingNoteId === item.id} onClick={() => setEditingNote(null)}>取消</Button>
+                    </Space>
+                  </> : <>
+                    <Typography.Text>{item.content}</Typography.Text>
+                    <Space size={4} wrap className="note-actions">
+                      {confirmingDeleteId === item.id ? <>
+                        <Button size="small" danger aria-label={`确认删除备忘：${item.content}`} loading={deletingNoteId === item.id} onClick={() => void deleteNote(item.id)}>确认删除</Button>
+                        <Button size="small" aria-label="取消删除" disabled={deletingNoteId === item.id} onClick={() => setConfirmingDeleteId(null)}>取消</Button>
+                      </> : <>
+                        <Button size="small" aria-label={`修改备忘：${item.content}`} icon={<EditOutlined aria-hidden="true" />} onClick={() => { setConfirmingDeleteId(null); setEditingNote({ id: item.id, content: item.content }) }}>修改</Button>
+                        <Button size="small" danger aria-label={`删除备忘：${item.content}`} icon={<DeleteOutlined aria-hidden="true" />} onClick={() => setConfirmingDeleteId(item.id)}>删除</Button>
+                        <Button size="small" onClick={() => void convertNote(item.id)}>加入今天</Button>
+                      </>}
+                    </Space>
+                  </>}
                 </div>
               ))}
               {!data.quick_notes.length ? <div className="notes-empty"><EditOutlined aria-hidden="true" /><span>一个想法，一件小事<br />都可以从这里开始</span></div> : null}
