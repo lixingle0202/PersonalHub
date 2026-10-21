@@ -236,6 +236,29 @@ describe('diet monthly calendar and manual changes', () => {
     expect(await screen.findByText('少油炒熟')).toBeInTheDocument()
   }, 70000)
 
+  it('sorts common dishes by Chinese pinyin in the meal selector', async () => {
+    mockApi([], false, [
+      { id: 'dish-n', name: '农家小炒肉', instructions: '', nutrition_notes: '', notes: '', ingredients: [] },
+      { id: 'dish-k', name: '可乐鸡全翅', instructions: '', nutrition_notes: '', notes: '', ingredients: [] },
+      { id: 'dish-t', name: '土豆炖牛腩', instructions: '', nutrition_notes: '', notes: '', ingredients: [] },
+      { id: 'dish-p', name: '平菇炒肉', instructions: '', nutrition_notes: '', notes: '', ingredients: [] },
+      { id: 'dish-q', name: '清炒小南瓜丝', instructions: '', nutrition_notes: '', notes: '', ingredients: [] },
+    ])
+    render(<DietPage />)
+    fireEvent.click(await screen.findByRole('button', { name: '安排一餐' }))
+    const dialog = within(screen.getByRole('dialog', { name: '安排一餐' }))
+    fireEvent.click(dialog.getByRole('button', { name: '选择菜品' }))
+    const options = within(dialog.getByRole('group', { name: '常用菜品' }))
+
+    expect(options.getAllByRole('checkbox').map((checkbox) => checkbox.parentElement?.textContent)).toEqual([
+      '可乐鸡全翅',
+      '农家小炒肉',
+      '平菇炒肉',
+      '清炒小南瓜丝',
+      '土豆炖牛腩',
+    ])
+  }, 70000)
+
   it('keeps several selected dishes when reopening a meal and updates the calendar name', async () => {
     const fetchMock = mockApi([], false, [
       { id: 'dish-1', name: '西红柿炒鸡蛋', instructions: '', nutrition_notes: '', notes: '', ingredients: [] },

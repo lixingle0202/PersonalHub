@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Alert, Button, Card, Checkbox, Col, DatePicker, Form, Input, InputNumber, Modal, Row, Space, Tabs, Typography, message } from 'antd'
 import dayjs, { type Dayjs } from 'dayjs'
 import { apiRequest } from '../api/client'
@@ -14,17 +14,23 @@ type DietProfile = { height_cm: number | null; weight_kg: number | null }
 type Shopping = { id: string; name: string; start_date: string; end_date: string; items: Array<{ id: string; ingredient_name: string; quantity_text: string; is_completed: boolean }> }
 type Health = { log_date: string; water_ml: number; weight_kg: number | null; feeling: string }
 
+const dishNameCollator = new Intl.Collator('zh-CN-u-co-pinyin', { sensitivity: 'base', numeric: true })
+
 function DishMultiSelect({ dishes, value = [], onChange }: {
   dishes: Dish[]; value?: string[]; onChange?: (ids: string[]) => void
 }) {
   const [open, setOpen] = useState(false)
-  const names = dishes.filter((dish) => value.includes(dish.id)).map((dish) => dish.name)
+  const sortedDishes = useMemo(
+    () => [...dishes].sort((left, right) => dishNameCollator.compare(left.name, right.name)),
+    [dishes],
+  )
+  const names = sortedDishes.filter((dish) => value.includes(dish.id)).map((dish) => dish.name)
   return <div className="dish-multi-select">
     <button type="button" className="native-form-select dish-multi-trigger" aria-label="选择菜品" aria-expanded={open} onClick={() => setOpen(!open)}>
       <span>{names.length ? names.join('、') : '不选择常用菜品'}</span><span aria-hidden="true">{open ? '⌃' : '⌄'}</span>
     </button>
     {open ? <div className="dish-multi-options" role="group" aria-label="常用菜品">
-      {dishes.length ? dishes.map((dish) => <label key={dish.id}><input type="checkbox" checked={value.includes(dish.id)} onChange={(event) => onChange?.(event.target.checked ? [...value, dish.id] : value.filter((id) => id !== dish.id))} />{dish.name}</label>) : <span>暂无常用菜品，可先在“常用菜品”中添加</span>}
+      {sortedDishes.length ? sortedDishes.map((dish) => <label key={dish.id}><input type="checkbox" checked={value.includes(dish.id)} onChange={(event) => onChange?.(event.target.checked ? [...value, dish.id] : value.filter((id) => id !== dish.id))} />{dish.name}</label>) : <span>暂无常用菜品，可先在“常用菜品”中添加</span>}
     </div> : null}
   </div>
 }
