@@ -1,7 +1,7 @@
 import { createElement, useMemo, useSyncExternalStore, type ReactNode } from 'react'
 import { ConfigProvider, theme, type ThemeConfig } from 'antd'
 import zhCN from 'antd/locale/zh_CN'
-import { apiRequest } from '../api/client'
+import { readSettings } from '../api/settings'
 
 export type AppearanceSettings = {
   theme_mode: 'light' | 'dark'
@@ -171,7 +171,7 @@ export function applyAppearance(settings: AppearanceSettings) {
 }
 
 export async function loadAppearance() {
-  const settings = await apiRequest<AppearanceSettings>('/settings')
+  const settings = await readSettings()
   applyAppearance(settings)
   return settings
 }

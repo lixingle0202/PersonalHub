@@ -82,6 +82,8 @@ describe('system-wide features', () => {
     fireEvent.click(screen.getByRole('switch', { name: '深色模式' }))
     expect(document.body).toHaveClass('dark-mode')
     expect(document.documentElement.style.getPropertyValue('--primary-color')).toBe('#22aa77')
+    await waitFor(() => expect(savedPayload).toMatchObject({ theme_mode: 'dark', theme_color: '#22aa77' }))
+    expect(screen.getByLabelText('昵称')).toHaveValue('新名字')
     fireEvent.click(screen.getByRole('button', { name: '保存设置' }))
 
     await waitFor(() => expect(savedPayload).toMatchObject({ nickname: '新名字', theme_mode: 'dark', theme_color: '#22aa77' }))
@@ -94,8 +96,9 @@ describe('system-wide features', () => {
     expect(screen.getByLabelText('主题颜色')).toHaveValue('#22aa77')
   })
 
-  it('reports a failed preference save and discards its preview on leaving', async () => {
-    const settings = {
+  it('keeps the selected appearance after an automatic save fails and allows retrying', async () => {
+    let failSave = true
+    let settings = {
       nickname: '', theme_mode: 'light', theme_color: '#1677ff', week_starts_on: 1,
       default_work_start: '09:00', default_work_end: '18:00', default_study_minutes: 60,
       custom_categories: {},
@@ -103,7 +106,11 @@ describe('system-wide features', () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation((input, init) => {
       const url = String(input)
       if (url.endsWith('/bootstrap')) return json({ app_name: 'Personal Hub', version: '0.1.0', local_token: 'new-token', database_path: 'D:/data/personal_hub.db' })
-      if (url.endsWith('/settings') && init?.method === 'PATCH') return json({ detail: '暂时无法保存设置' }, 503)
+      if (url.endsWith('/settings') && init?.method === 'PATCH') {
+        if (failSave) return json({ detail: '暂时无法保存设置' }, 503)
+        settings = { ...settings, ...JSON.parse(String(init.body)) }
+        return json(settings)
+      }
       if (url.endsWith('/settings')) return json(settings)
       if (url.endsWith('/backups') || url.endsWith('/trash')) return json([])
       return json({}, 404)
@@ -113,10 +120,15 @@ describe('system-wide features', () => {
     fireEvent.click(await screen.findByText('个性化设置'))
     fireEvent.click(await screen.findByRole('switch', { name: '深色模式' }))
     expect(document.body).toHaveClass('dark-mode')
-    fireEvent.click(screen.getByRole('button', { name: '保存设置' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('暂时无法保存设置')
+    expect(screen.getByRole('alert')).toHaveTextContent('点击“保存设置”重试')
+    expect(screen.getByRole('switch', { name: '深色模式' })).toBeChecked()
+    failSave = false
+    fireEvent.click(screen.getByRole('button', { name: '保存设置' }))
+    await waitFor(() => expect(settings.theme_mode).toBe('dark'))
+    await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument())
     view.unmount()
-    expect(document.body).not.toHaveClass('dark-mode')
+    expect(document.body).toHaveClass('dark-mode')
   })
 
   it('shows verified backups and creates a manual backup', async () => {

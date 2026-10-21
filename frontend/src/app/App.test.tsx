@@ -1,11 +1,19 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { theme } from 'antd'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { App } from './App'
+import { AppearanceProvider, applyAppearance, loadAppearance } from './theme'
+import type { AppSettings } from '../api/settings'
 
 function json(body: unknown) {
   return Promise.resolve(new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+}
+
+function ThemeProbe() {
+  const { token } = theme.useToken()
+  return <output data-testid="page-background">{token.colorBgContainer}</output>
 }
 
 const emptyHome = {
@@ -17,8 +25,80 @@ const emptyHome = {
 describe('application shell', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
+    applyAppearance({ theme_mode: 'light', theme_color: '#5b6cff' })
     vi.spyOn(globalThis, 'fetch').mockImplementation((input) => String(input).includes('/home') ? json(emptyHome) : json([]))
   })
+
+  it('keeps automatically saved dark mode across all pages and startup, and can switch back to light', async () => {
+    const user = userEvent.setup()
+    let settings: AppSettings = {
+      nickname: '学生', theme_mode: 'light', theme_color: '#5b6cff', week_starts_on: 1,
+      default_work_start: '09:00', default_work_end: '18:00', default_study_minutes: 60, custom_categories: {},
+    }
+    let finishFirstSave!: () => void
+    let writes = 0
+    vi.spyOn(globalThis, 'fetch').mockImplementation((input, init) => {
+      const url = String(input)
+      if (url.endsWith('/settings')) {
+        if (init?.method === 'PATCH') {
+          const changes = JSON.parse(String(init.body))
+          if (++writes === 1) return new Promise<Response>((resolve) => {
+            finishFirstSave = () => { settings = { ...settings, ...changes }; void json(settings).then(resolve) }
+          })
+          settings = { ...settings, ...changes }
+        }
+        return json(settings)
+      }
+      if (url.endsWith('/bootstrap')) return json({ local_token: 'test-token', database_path: 'D:/test.db' })
+      if (url.includes('/home')) return json(emptyHome)
+      if (url.endsWith('/diet/profile')) return json({ height_cm: null, weight_kg: null })
+      if (url.includes('/diet/health/')) return json({ water_ml: 0, feeling: '', weight_kg: null })
+      return json([])
+    })
+    const view = render(<AppearanceProvider><MemoryRouter initialEntries={['/settings']}><App /><ThemeProbe /></MemoryRouter></AppearanceProvider>)
+    fireEvent.click(await screen.findByText('个性化设置'))
+    fireEvent.click(await screen.findByRole('switch', { name: '深色模式' }))
+    await waitFor(() => expect(finishFirstSave).toBeTypeOf('function'))
+
+    // Leave before the request completes; unmounting settings must not undo the choice.
+    await user.click(screen.getByRole('link', { name: '首页总览' }))
+    expect(await screen.findByText('今天，专注最重要的事', {}, { timeout: 10000 })).toBeInTheDocument()
+    expect(document.body).toHaveClass('dark-mode')
+    expect(screen.getByTestId('page-background')).toHaveTextContent('#232b3c')
+    await act(async () => finishFirstSave())
+    await waitFor(() => expect(settings.theme_mode).toBe('dark'))
+
+    for (const [page, content] of [
+      ['今日计划', '新增计划'], ['学习计划', '新建学习目标'], ['饮食计划', '个人身体资料与热量估算'], ['数据与设置', '个性化设置'],
+    ]) {
+      await user.click(screen.getByRole('link', { name: page }))
+      expect(await (page === '今日计划' || page === '学习计划'
+        ? screen.findByRole('button', { name: content }, { timeout: 10000 })
+        : screen.findByText(content, {}, { timeout: 10000 }))).toBeInTheDocument()
+      expect(screen.getByRole('link', { name: page })).toHaveAttribute('aria-current', 'page')
+      expect(document.body).toHaveClass('dark-mode')
+      expect(screen.getByTestId('page-background')).toHaveTextContent('#232b3c')
+    }
+    fireEvent.click(screen.getByText('个性化设置'))
+    expect(await screen.findByRole('switch', { name: '深色模式' })).toBeChecked()
+    view.unmount()
+
+    // Simulate a new application startup by resetting memory, then reading persisted settings.
+    applyAppearance({ theme_mode: 'light', theme_color: '#5b6cff' })
+    await loadAppearance()
+    render(<AppearanceProvider><MemoryRouter initialEntries={['/settings']}><App /><ThemeProbe /></MemoryRouter></AppearanceProvider>)
+    fireEvent.click(await screen.findByText('个性化设置'))
+    expect(await screen.findByRole('switch', { name: '深色模式' })).toBeChecked()
+    expect(document.body).toHaveClass('dark-mode')
+    expect(screen.getByTestId('page-background')).toHaveTextContent('#232b3c')
+
+    fireEvent.click(screen.getByRole('switch', { name: '深色模式' }))
+    await waitFor(() => expect(settings.theme_mode).toBe('light'))
+    await user.click(screen.getByRole('link', { name: '首页总览' }))
+    expect(await screen.findByText('今天，专注最重要的事')).toBeInTheDocument()
+    expect(document.body).not.toHaveClass('dark-mode')
+    expect(screen.getByTestId('page-background')).toHaveTextContent('#ffffff')
+  }, 60000)
 
   it('shows only the five retained primary navigation items', async () => {
     render(<MemoryRouter><App /></MemoryRouter>)
