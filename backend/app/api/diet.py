@@ -36,6 +36,7 @@ class DishIn(BaseModel):
     notes: str = ""
     ingredients: list[IngredientIn] = []
     estimated_kcal: int | None = Field(default=None, ge=0, le=10000)
+    recipe_servings: float = Field(default=1, ge=0.1, le=100, allow_inf_nan=False)
 
 
 class MealIn(BaseModel):
@@ -46,6 +47,7 @@ class MealIn(BaseModel):
     custom_name: str = ""
     actual_food: str = ""
     estimated_kcal: int | None = Field(default=None, ge=0, le=10000)
+    servings: float = Field(default=1, ge=0.1, le=20, allow_inf_nan=False)
 
 
 class DietProfileIn(BaseModel):
@@ -91,13 +93,14 @@ def meal_out(session: Session, meal: MealPlan) -> dict:
     data = model_dict(meal)
     dishes = meal_dishes(session, meal)
     agenda = session.get(AgendaItem, meal.agenda_id) if meal.agenda_id else None
-    kcal, source = estimate_meal(session, meal.meal_type, dishes, meal.estimated_kcal)
+    estimate = estimate_meal(session, dishes, meal.estimated_kcal, custom_name=meal.custom_name, servings=meal.servings)
     data.update(
         dish_ids=meal_dish_ids(session, meal),
         dish_name=meal_display_name(session, meal),
         status=agenda.status if agenda else None,
-        display_kcal=kcal,
-        calorie_source=source,
+        display_kcal=estimate.kcal,
+        calorie_source=estimate.source,
+        calorie_explanation=estimate.explanation,
     )
     return data
 
@@ -153,7 +156,7 @@ def get_dish(dish_id: str, session: Session = Depends(get_session)):
 @router.patch("/dishes/{dish_id}")
 def update_dish(dish_id: str, payload: DishIn, session: Session = Depends(get_session)):
     dish = active_record(session, Dish, dish_id, "菜品")
-    apply_changes(dish, payload.model_dump(exclude={"ingredients"}), {"name", "instructions", "nutrition_notes", "notes", "estimated_kcal"})
+    apply_changes(dish, payload.model_dump(exclude={"ingredients"}), {"name", "instructions", "nutrition_notes", "notes", "estimated_kcal", "recipe_servings"})
     for item in session.scalars(select(DishIngredient).where(DishIngredient.dish_id == dish.id)).all():
         session.delete(item)
     for ingredient in payload.ingredients:
@@ -276,10 +279,10 @@ def generate_shopping_list(payload: ShoppingGenerate, session: Session = Depends
         MealPlan.meal_date >= payload.start_date, MealPlan.meal_date <= payload.end_date,
         MealPlan.deleted_at.is_(None),
     )).all()
-    dish_counts: dict[str, int] = defaultdict(int)
+    dish_counts: dict[str, float] = defaultdict(float)
     for meal in meals:
-        for dish_id in meal_dish_ids(session, meal):
-            dish_counts[dish_id] += 1
+        for dish in meal_dishes(session, meal):
+            dish_counts[dish.id] += meal.servings / dish.recipe_servings
     dish_ids = set(dish_counts)
     totals: dict[tuple[str, str], float | None] = defaultdict(float)
     for ingredient in session.scalars(select(DishIngredient).where(DishIngredient.dish_id.in_(dish_ids))).all() if dish_ids else []:

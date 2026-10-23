@@ -46,7 +46,7 @@ def test_migration_is_idempotent(tmp_path):
     try:
         assert "agenda_items" in inspect(database.engine).get_table_names()
         with database.engine.connect() as connection:
-            assert connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one() == "0010"
+            assert connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one() == "0011"
     finally:
         database.dispose()
 
@@ -65,7 +65,7 @@ def test_migration_adds_manual_progress_to_an_existing_database(tmp_path):
         columns = {column["name"] for column in inspect(database.engine).get_columns("learning_goals")}
         assert "progress_override" in columns
         with database.engine.connect() as connection:
-            assert connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one() == "0010"
+            assert connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one() == "0011"
     finally:
         database.dispose()
 
@@ -104,7 +104,7 @@ def test_migration_recovers_an_unversioned_database_without_losing_learning_goal
         columns = {column["name"] for column in inspect(database.engine).get_columns("learning_goals")}
         assert "progress_override" in columns
         with database.engine.connect() as connection:
-            assert connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one() == "0010"
+            assert connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one() == "0011"
             assert connection.exec_driver_sql(
                 "SELECT name FROM learning_goals WHERE id = 'legacy-goal'"
             ).scalar_one() == "安卓"
@@ -154,7 +154,7 @@ def test_migration_retires_existing_game_plans_without_touching_other_agenda(tmp
             assert session.get(AgendaItem, "source-game-agenda").deleted_at is not None
             assert session.get(AgendaItem, "learning-agenda").deleted_at is None
         with database.engine.connect() as connection:
-            assert connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one() == "0010"
+            assert connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one() == "0011"
     finally:
         database.dispose()
 
@@ -162,14 +162,17 @@ def test_migration_retires_existing_game_plans_without_touching_other_agenda(tmp
 def test_migration_keeps_existing_single_dish_meals(tmp_path):
     path = tmp_path / "single-dish.db"
     command.upgrade(migration_config(path), "0009")
-    database = Database(path)
-    try:
-        with database.session() as session:
-            session.add(Dish(id="existing-dish", name="米饭"))
-            session.add(MealPlan(id="existing-meal", meal_date=date(2026, 10, 9),
-                                 meal_type="lunch", dish_id="existing-dish"))
-    finally:
-        database.dispose()
+    # Insert through the legacy schema, before portion columns exist.
+    with sqlite3.connect(path) as connection:
+        for table, column in (("dishes", "recipe_servings"), ("meal_plans", "servings")):
+            if column in {row[1] for row in connection.execute(f"PRAGMA table_info({table})")}:
+                connection.execute(f"ALTER TABLE {table} DROP COLUMN {column}")
+        connection.execute("""INSERT INTO dishes
+            (id, name, instructions, nutrition_notes, notes, created_at, updated_at)
+            VALUES ('existing-dish', '米饭', '', '', '', '2026-10-09', '2026-10-09')""")
+        connection.execute("""INSERT INTO meal_plans
+            (id, meal_date, meal_type, dish_id, custom_name, actual_food, created_at, updated_at)
+            VALUES ('existing-meal', '2026-10-09', 'lunch', 'existing-dish', '', '', '2026-10-09', '2026-10-09')""")
 
     migrate_database(path)
     database = Database(path)
@@ -179,6 +182,8 @@ def test_migration_keeps_existing_single_dish_meals(tmp_path):
             assert selected is not None
             assert selected.position == 0
             assert session.get(MealPlan, "existing-meal").dish_id == "existing-dish"
+            assert session.get(MealPlan, "existing-meal").servings == 1
+            assert session.get(Dish, "existing-dish").recipe_servings == 1
     finally:
         database.dispose()
 

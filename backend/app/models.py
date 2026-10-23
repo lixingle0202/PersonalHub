@@ -314,6 +314,7 @@ class Dish(LifecycleMixin, Base):
     nutrition_notes: Mapped[str] = mapped_column(Text, default="")
     notes: Mapped[str] = mapped_column(Text, default="")
     estimated_kcal: Mapped[int | None] = mapped_column(Integer)
+    recipe_servings: Mapped[float] = mapped_column(Float, default=1, server_default="1")
 
 
 class DishIngredient(TimestampMixin, Base):
@@ -334,6 +335,7 @@ class MealPlan(LifecycleMixin, Base):
     custom_name: Mapped[str] = mapped_column(String(200), default="")
     actual_food: Mapped[str] = mapped_column(Text, default="")
     estimated_kcal: Mapped[int | None] = mapped_column(Integer)
+    servings: Mapped[float] = mapped_column(Float, default=1, server_default="1")
     agenda_id: Mapped[str | None] = mapped_column(ForeignKey("agenda_items.id", ondelete="SET NULL"), unique=True)
 
 

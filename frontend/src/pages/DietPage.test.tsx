@@ -13,7 +13,9 @@ const meal = (id: string, overrides: Partial<Meal> = {}): Meal => ({
 
 // Ant Design uses a shared title ID in test mode; locate each dialog by its visible title.
 function dialogWithTitle(title: string) {
-  return screen.getByText(title).closest('[role="dialog"]') as HTMLElement
+  const heading = screen.getAllByText(title).find((element) => element.closest('[role="dialog"]'))
+  if (!heading) throw new Error(`Dialog not found: ${title}`)
+  return heading.closest('[role="dialog"]') as HTMLElement
 }
 
 function mockApi(initial: Meal[] = [], deleteFails: boolean | (() => boolean) = false, initialDishes: Array<{ id: string; name: string; instructions: string; nutrition_notes: string; notes: string; ingredients: Array<{ name: string; quantity: number | null; unit: string }> }> = []) {
@@ -127,6 +129,32 @@ describe('diet monthly calendar and manual changes', () => {
     fireEvent.click(screen.getByRole('button', { name: '保存身体资料' }))
     await waitFor(() => expect(fetchMock.mock.calls.some(([input, init]) => String(input).endsWith('/diet/profile') && init?.method === 'PUT' && JSON.parse(String(init.body)).height_cm === 175)).toBe(true))
   })
+
+  it('shows unknown calories and the explanation rather than a meal-type default', async () => {
+    mockApi([meal('unknown', { display_kcal: null, calorie_source: '待补充', calorie_explanation: '无法完整估算：新菜名，请补充食材用量。' })])
+    render(<DietPage />)
+    expect(await screen.findByText('热量待补充 · 点击完善食材或热量')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '修改 2026-10-07 午餐' }))
+    expect(await screen.findByText('无法完整估算：新菜名，请补充食材用量。')).toBeInTheDocument()
+    expect(screen.queryByText(/餐次粗估/)).not.toBeInTheDocument()
+  })
+
+  it('creates and edits the consumed portions without losing them when reopening a meal', async () => {
+    const fetchMock = mockApi()
+    render(<DietPage />)
+    fireEvent.click(await screen.findByRole('button', { name: '安排一餐' }))
+    const create = within(dialogWithTitle('安排一餐'))
+    fireEvent.change(create.getByLabelText('或填写其他餐食'), { target: { value: '米饭200克+鸡蛋1个' } })
+    fireEvent.change(create.getByLabelText('本餐用餐份数'), { target: { value: '1.5' } })
+    fireEvent.click(create.getByRole('button', { name: '创建' }))
+    await waitFor(() => expect(fetchMock.mock.calls.some(([input, init]) => String(input).endsWith('/diet/meals') && init?.method === 'POST' && JSON.parse(String(init.body)).servings === 1.5)).toBe(true))
+    fireEvent.click(await screen.findByRole('button', { name: '修改 2026-10-07 晚餐' }))
+    const edit = within(dialogWithTitle('修改饮食安排'))
+    expect(edit.getByLabelText('本餐用餐份数')).toHaveValue('1.5')
+    fireEvent.change(edit.getByLabelText('本餐用餐份数'), { target: { value: '0.5' } })
+    fireEvent.click(edit.getByRole('button', { name: '保存修改' }))
+    await waitFor(() => expect(fetchMock.mock.calls.some(([input, init]) => String(input).endsWith('/diet/meals/created') && init?.method === 'PATCH' && JSON.parse(String(init.body)).servings === 0.5)).toBe(true))
+  }, 60000)
 
   it('generates this month’s list and lets a person add and edit an item', async () => {
     const fetchMock = mockApi()

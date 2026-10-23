@@ -28,7 +28,8 @@ def test_preset_import_repeats_cycle_without_overwriting_existing_meal(client):
     meals = client.get('/api/v1/diet/meals', params={'start_date': '2026-10-09', 'end_date': '2026-10-12'}).json()
     assert len(meals) == 12
     assert any(meal['id'] == existing['id'] and meal['dish_name'] == '自己的早餐' for meal in meals)
-    assert all(meal['display_kcal'] > 0 for meal in meals)
+    assert all(meal['display_kcal'] > 0 for meal in meals if meal['id'] != existing['id'])
+    assert next(meal for meal in meals if meal['id'] == existing['id'])['display_kcal'] is None
     assert client.post(path, json={'start_date': '2026-10-09', 'days': 4}).json()['imported'] == 0
 
 

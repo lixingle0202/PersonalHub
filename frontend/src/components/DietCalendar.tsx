@@ -8,7 +8,8 @@ export type MealType = typeof mealTypes[number][0]
 export type Meal = {
   id: string; meal_date: string; meal_type: MealType; dish_id: string | null; dish_ids?: string[]
   custom_name: string; dish_name: string; actual_food: string; status: string | null
-  estimated_kcal?: number | null; display_kcal?: number; calorie_source?: string
+  estimated_kcal?: number | null; display_kcal?: number | null; calorie_source?: string
+  servings?: number; calorie_explanation?: string
 }
 
 export function calendarRange(month: Dayjs) {
@@ -57,6 +58,8 @@ export function DietCalendar({ month, meals, loading, onMonthChange, onEdit }: {
               <strong>{meal.actual_food ? '实际' : '计划'} · {mealTypes.find(([type]) => type === meal.meal_type)?.[1]}</strong>
               <span>{meal.dish_name}</span>
               {meal.display_kcal != null ? <span>约 {meal.display_kcal} kcal · {meal.calorie_source}</span> : null}
+              {meal.display_kcal == null && meal.calorie_source === '待补充' ? <span>热量待补充 · 点击完善食材或热量</span> : null}
+              {meal.servings != null && meal.servings !== 1 ? <span>本餐 {meal.servings} 份</span> : null}
               {meal.actual_food ? <span className="calendar-actual-food">实际：{meal.actual_food}</span> : null}
             </button>)}</div>
             {entries.length > 2 ? <button type="button" className="calendar-more" aria-expanded={expanded} onClick={() => setExpandedDates((values) => expanded ? values.filter((value) => value !== date) : [...values, date])}>{expanded ? '收起' : `另有 ${entries.length - 2} 餐`}</button> : null}

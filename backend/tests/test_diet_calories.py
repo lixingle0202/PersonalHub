@@ -35,7 +35,8 @@ def test_profile_is_persisted_and_unknown_food_is_labelled_coarse(client):
     assert client.put('/api/v1/diet/profile', json={'height_cm': 175, 'weight_kg': 68}).status_code == 200
     assert client.get('/api/v1/diet/profile').json() == {'height_cm': 175, 'weight_kg': 68}
     meal = client.post('/api/v1/diet/meals', json={'meal_date': '2026-10-09', 'meal_type': 'dinner', 'custom_name': '新菜名'}).json()
-    assert (meal['display_kcal'], meal['calorie_source']) == (600, '餐次粗估')
+    assert (meal['display_kcal'], meal['calorie_source']) == (None, '待补充')
+    assert '新菜名' in meal['calorie_explanation']
     assert client.put('/api/v1/diet/profile', json={'height_cm': 0, 'weight_kg': 68}).status_code == 422
 
 
@@ -102,3 +103,85 @@ def test_generated_monthly_shopping_can_be_extended_edited_and_deleted(client):
     assert [item['ingredient_name'] for item in client.get(base + '/shopping-lists').json()[0]['items']] == ['大米']
     empty = client.post(base + '/shopping-lists', json={**period, 'name': '手动采购'})
     assert empty.status_code == 201 and empty.json()['items'] == []
+
+
+@pytest.mark.parametrize('use_common_dish', [False, True])
+def test_same_red_bean_rice_balls_have_identical_calories_for_every_meal_type(client, use_common_dish):
+    selection = {'custom_name': '红豆小丸子'}
+    if use_common_dish:
+        dish = client.post('/api/v1/diet/dishes', json={'name': '红豆小丸子'}).json()
+        selection = {'dish_id': dish['id']}
+    meals = []
+    for kind in ['breakfast', 'lunch', 'dinner', 'snack']:
+        response = client.post('/api/v1/diet/meals', json={
+            'meal_date': '2026-10-23', 'meal_type': kind, **selection,
+        })
+        assert response.status_code == 201
+        meals.append(response.json())
+    # Reference recipe: 200 g red bean sweet soup (66/100 g) + 50 g plain balls (258/100 g).
+    assert [meal['display_kcal'] for meal in meals] == [261] * 4
+    assert all(meal['calorie_source'] == '参考配方' for meal in meals)
+    assert all('200克' in meal['calorie_explanation'] and '包装重量' in meal['calorie_explanation'] for meal in meals)
+    stored = client.get('/api/v1/diet/meals', params={'start_date': '2026-10-23', 'end_date': '2026-10-23'}).json()
+    assert [meal['display_kcal'] for meal in stored] == [261] * 4
+
+
+def test_explicit_food_weights_and_portions_are_preserved_and_manual_total_wins(client):
+    base = {'meal_date': '2026-10-23', 'meal_type': 'lunch', 'custom_name': '米饭200克+鸡蛋1个'}
+    meal = client.post('/api/v1/diet/meals', json={**base, 'servings': 2}).json()
+    assert meal['display_kcal'] == (260 + 70) * 2
+    assert meal['servings'] == 2
+    half = client.patch(f"/api/v1/diet/meals/{meal['id']}", json={**base, 'servings': 0.5}).json()
+    assert half['display_kcal'] == 165 and half['servings'] == 0.5
+    manual = client.patch(f"/api/v1/diet/meals/{meal['id']}", json={**base, 'servings': 2, 'estimated_kcal': 320}).json()
+    assert (manual['display_kcal'], manual['calorie_source']) == (320, '手动填写')
+    zero = client.patch(f"/api/v1/diet/meals/{meal['id']}", json={**base, 'servings': 2, 'estimated_kcal': 0}).json()
+    assert zero['display_kcal'] == 0
+
+
+def test_recipe_servings_and_consumed_portions_scale_calories_and_shopping(client):
+    dish = client.post('/api/v1/diet/dishes', json={
+        'name': '两人份番茄炒蛋', 'recipe_servings': 2,
+        'ingredients': [{'name': '鸡蛋', 'quantity': 2, 'unit': '个'},
+                        {'name': '番茄', 'quantity': 2, 'unit': '个'},
+                        {'name': '食用油', 'quantity': 10, 'unit': '克'},
+                        {'name': '盐', 'quantity': None, 'unit': '少许'}],
+    }).json()
+    meal = client.post('/api/v1/diet/meals', json={
+        'meal_date': '2026-10-23', 'meal_type': 'dinner', 'dish_id': dish['id'], 'servings': 0.5,
+    }).json()
+    assert meal['display_kcal'] == round((140 + 54 + 88.4) / 2 * 0.5)
+    assert '÷ 2份' in meal['calorie_explanation']
+    shopping = client.post('/api/v1/diet/shopping-lists/generate', json={
+        'name': '按实际份数采购', 'start_date': '2026-10-23', 'end_date': '2026-10-23',
+    }).json()
+    amounts = {item['ingredient_name']: item['quantity_text'] for item in shopping['items']}
+    assert amounts['鸡蛋'] == '0.5个' and amounts['食用油'] == '2.5克'
+
+
+def test_incomplete_or_misidentified_foods_do_not_get_a_fabricated_total(client):
+    known = client.post('/api/v1/diet/dishes', json={'name': '米饭', 'estimated_kcal': 260}).json()
+    unknown = client.post('/api/v1/diet/dishes', json={
+        'name': '鸡蛋糕', 'ingredients': [{'name': '鸡蛋糕', 'quantity': 100, 'unit': '克'}],
+    }).json()
+    meal = client.post('/api/v1/diet/meals', json={
+        'meal_date': '2026-10-23', 'meal_type': 'dinner', 'dish_ids': [known['id'], unknown['id']],
+    }).json()
+    assert meal['display_kcal'] is None and meal['calorie_source'] == '待补充'
+    assert '鸡蛋糕' in meal['calorie_explanation']
+
+
+@pytest.mark.parametrize('weight', ['米饭0.2kg', '米饭4两', '米饭0.4斤', '米饭200g'])
+def test_common_weight_units_give_the_same_energy(client, weight):
+    meal = client.post('/api/v1/diet/meals', json={
+        'meal_date': '2026-10-23', 'meal_type': 'breakfast', 'custom_name': weight,
+    }).json()
+    assert meal['display_kcal'] == 260
+
+
+@pytest.mark.parametrize('servings', [0, -1, 21])
+def test_invalid_meal_portions_are_rejected(client, servings):
+    response = client.post('/api/v1/diet/meals', json={
+        'meal_date': '2026-10-23', 'meal_type': 'lunch', 'custom_name': '米饭', 'servings': servings,
+    })
+    assert response.status_code == 422
