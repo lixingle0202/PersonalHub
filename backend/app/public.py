@@ -37,6 +37,7 @@ from .services.ollama import OllamaSettings
 COOKIE = "personalhub_public_session"
 SESSION_SECONDS = 7 * 24 * 60 * 60
 DAILY_GENERATIONS = 12
+SHARED_MODEL_CONCURRENCY = 3
 MODEL_URL = "http://127.0.0.1:11434"
 
 
@@ -174,7 +175,8 @@ class PublicHub:
         self.secure_cookie = secure_cookie
         self.user_apps: dict[str, FastAPI] = {}
         self.user_apps_lock = RLock()
-        self.model_gate = asyncio.Lock()
+        self.model_gate = asyncio.BoundedSemaphore(SHARED_MODEL_CONCURRENCY)
+        self.generating_users: set[str] = set()
         self.attempts: dict[str, list[float]] = defaultdict(list)
         self.attempts_lock = RLock()
         self.auth = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
@@ -301,12 +303,18 @@ class PublicHub:
         if path == "/api/v1/ai/ollama/models":
             return await JSONResponse({"detail": "共享模型由服务端管理"}, status_code=403)(scope, receive, send)
         if path in {"/api/v1/ai/learning/generate", "/api/v1/ai/diet/generate"} and request.method == "POST":
+            if user.id in self.generating_users:
+                return await JSONResponse(
+                    {"detail": "你已有一个生成请求正在处理，请等待它完成后再试", "code": "user_model_busy"},
+                    status_code=429, headers={"Cache-Control": "no-store"},
+                )(scope, receive, send)
             if self.model_gate.locked():
                 return await JSONResponse(
                     {"detail": "共享模型正在处理其他请求，稍后将自动重试", "code": "model_busy"},
                     status_code=429, headers={"Retry-After": "3", "Cache-Control": "no-store"},
                 )(scope, receive, send)
             await self.model_gate.acquire()
+            self.generating_users.add(user.id)
             reserved = False
             status = 500
             try:
@@ -324,6 +332,7 @@ class PublicHub:
             finally:
                 if reserved and status >= 400:
                     self.store.refund_generation(user.id)
+                self.generating_users.discard(user.id)
                 self.model_gate.release()
             return
         await app(scope, receive, send)

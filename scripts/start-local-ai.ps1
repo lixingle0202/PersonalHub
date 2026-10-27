@@ -1,7 +1,8 @@
 param(
     [string]$InstallRoot = '',
     [ValidateRange(1024, 65535)][int]$Port = 11434,
-    [string]$AllowedOrigin = ''
+    [string]$AllowedOrigin = '',
+    [ValidateRange(1, 3)][int]$ParallelRequests = 3
 )
 
 $ErrorActionPreference = 'Stop'
@@ -57,6 +58,9 @@ if (Test-OllamaReady) {
     if ($AllowedOrigin -and $Existing.allowed_origin -ne $AllowedOrigin) {
         throw 'Ollama is running with a different allowed origin. Use Configure-HostLocalModel.ps1 to update it.'
     }
+    if ($Existing.parallel_requests -ne $ParallelRequests -or $Existing.context_length -ne 8192) {
+        throw 'Ollama is running with different inference limits. Use Configure-HostLocalModel.ps1 to restart the verified project service.'
+    }
     $Existing | ConvertTo-Json -Compress
     exit 0
 }
@@ -65,9 +69,9 @@ $Variables = @{
     OLLAMA_HOST = "127.0.0.1:$Port"
     OLLAMA_MODELS = $ModelDirectory
     OLLAMA_NO_CLOUD = '1'
-    OLLAMA_CONTEXT_LENGTH = '4096'
+    OLLAMA_CONTEXT_LENGTH = '8192'
     OLLAMA_MAX_LOADED_MODELS = '1'
-    OLLAMA_NUM_PARALLEL = '1'
+    OLLAMA_NUM_PARALLEL = [string]$ParallelRequests
     TEMP = $TempDirectory
     TMP = $TempDirectory
 }
@@ -90,7 +94,7 @@ try {
         Start-Sleep -Milliseconds 200
     }
     if (-not $Ready) { throw "Ollama did not become ready. See $ErrorLog" }
-    $State = @{ pid = $Service.Id; url = $BaseUrl; models_directory = $ModelDirectory; executable = $OllamaExe; no_cloud = $true; allowed_origin = $AllowedOrigin; error_log = $ErrorLog }
+    $State = @{ pid = $Service.Id; url = $BaseUrl; models_directory = $ModelDirectory; executable = $OllamaExe; no_cloud = $true; allowed_origin = $AllowedOrigin; error_log = $ErrorLog; parallel_requests = $ParallelRequests; context_length = 8192 }
     $State | ConvertTo-Json | Set-Content -LiteralPath $StatePath -Encoding UTF8
     $State | ConvertTo-Json -Compress
 } finally {

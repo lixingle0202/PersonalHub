@@ -31,7 +31,7 @@ if ($process.Path -ne $expectedExe -or $state.models_directory -ne $expectedMode
     throw 'Port 11434 does not belong to this project Ollama service; it was left unchanged.'
 }
 
-if ($state.allowed_origin -ne $Origin) {
+if ($state.allowed_origin -ne $Origin -or $state.parallel_requests -ne 3 -or $state.context_length -ne 8192) {
     Stop-Process -Id $state.pid -ErrorAction Stop
     $stopped = $false
     for ($attempt = 0; $attempt -lt 40; $attempt++) {

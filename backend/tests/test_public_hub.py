@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 
 from app.config import Settings
 from app.main import create_app
-from app.public import DAILY_GENERATIONS, create_public_app
+from app.public import DAILY_GENERATIONS, SHARED_MODEL_CONCURRENCY, create_public_app
 from app.services import ollama
 
 
@@ -165,17 +165,19 @@ def test_busy_shared_model_is_retryable_and_does_not_use_daily_quota(tmp_path):
     public = create_public_app(root)
     with TestClient(public, base_url=HOST) as alice:
         token = register(alice, 'alice')
-        asyncio.run(public.model_gate.acquire())
+        for _ in range(SHARED_MODEL_CONCURRENCY):
+            asyncio.run(public.model_gate.acquire())
         try:
-            response = alice.post('/api/v1/ai/learning/generate', json=REQUIREMENTS,
-                                  headers={'x-local-token': token})
-            assert response.status_code == 429
-            assert response.json()['code'] == 'model_busy'
-            assert response.headers['Retry-After'] == '3'
+            for endpoint in ['/api/v1/ai/learning/generate', '/api/v1/ai/diet/generate']:
+                response = alice.post(endpoint, json=REQUIREMENTS, headers={'x-local-token': token})
+                assert response.status_code == 429
+                assert response.json()['code'] == 'model_busy'
+                assert response.headers['Retry-After'] == '3'
             with sqlite3.connect(root / 'accounts.sqlite3') as database:
                 assert database.execute('SELECT count(*) FROM model_usage').fetchone()[0] == 0
         finally:
-            public.model_gate.release()
+            for _ in range(SHARED_MODEL_CONCURRENCY):
+                public.model_gate.release()
 
 
 def test_visitor_model_uses_browser_result_without_host_inference_and_keeps_drafts_private(tmp_path, monkeypatch):
