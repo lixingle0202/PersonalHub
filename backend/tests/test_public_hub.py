@@ -19,8 +19,8 @@ PASSWORD = "long-private-password"
 PLAN = {
     "name": "两天学习计划", "goal": "学会界面和状态", "sections": ["界面", "状态"],
     "tasks": [
-        {"day_number": 1, "section_index": 0, "title": "画出界面", "minutes": 30, "notes": "练习"},
-        {"day_number": 2, "section_index": 1, "title": "保存状态", "minutes": 30, "notes": "练习"},
+        {"day_number": 1, "section_index": 0, "title": "画出界面", "minutes": 45, "notes": "学习布局15分钟；练习按钮点击25分钟；产出：可运行的按钮界面；验收5分钟：点击按钮后文字改变。"},
+        {"day_number": 2, "section_index": 1, "title": "保存状态", "minutes": 45, "notes": "学习状态保存15分钟；练习待办列表25分钟；产出：能保留输入的待办页；验收5分钟：重建页面后内容不丢失。"},
     ],
 }
 REQUIREMENTS = {"topic": "Android", "objective": "完成练习", "start_date": "2026-12-31",

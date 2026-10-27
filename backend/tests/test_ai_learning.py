@@ -21,8 +21,8 @@ REQUIREMENTS = {'topic': 'Android', 'objective': '完成一个待办应用', 'st
 MODEL_PLAN = {
     'name': 'Android 两天入门', 'goal': '理解界面与状态，完成练习', 'sections': ['界面', '状态'],
     'tasks': [
-        {'day_number': 1, 'section_index': 0, 'title': '创建界面', 'minutes': 45, 'notes': '完成一个按钮界面'},
-        {'day_number': 2, 'section_index': 1, 'title': '保存状态', 'minutes': 30, 'notes': '练习状态更新'},
+        {'day_number': 1, 'section_index': 0, 'title': '创建界面', 'minutes': 45, 'notes': '学习布局15分钟；练习按钮点击25分钟；产出：可运行的按钮界面；验收5分钟：点击按钮后文字改变。'},
+        {'day_number': 2, 'section_index': 1, 'title': '保存状态', 'minutes': 45, 'notes': '学习状态保存15分钟；练习待办列表25分钟；产出：能保留输入的待办页；验收5分钟：重建页面后内容不丢失。'},
     ],
 }
 
@@ -93,9 +93,13 @@ def test_generation_uses_structured_output_and_does_not_create_live_plans(client
         slots = body['format']['properties']['tasks']
         assert slots['minItems'] == slots['maxItems'] == 2
         assert [slot['properties']['day_number']['enum'] for slot in slots['prefixItems']] == [[1], [2]]
-        assert [slot['properties']['section_index']['enum'] for slot in slots['prefixItems']] == [[0], [1]]
+        assert [slot['properties']['section_index']['enum'] for slot in slots['prefixItems']] == [[0, 1], [0, 1]]
         assert body['format']['properties']['sections']['minItems'] == body['format']['properties']['sections']['maxItems'] == 2
-        assert all(slot['properties']['minutes']['enum'] == list(range(1, 46)) for slot in slots['prefixItems'])
+        assert all(slot['properties']['minutes']['enum'] == [45] for slot in slots['prefixItems'])
+        assert slots['items']['properties']['minutes']['enum'] == [45]
+        assert {'steps', 'deliverable', 'verification'} <= set(slots['items']['required'])
+        properties = list(slots['items']['properties'])
+        assert properties.index('deliverable') < properties.index('steps')
         assert json.loads(body['messages'][1]['content'])['topic'] == 'Android'
         assert '私人笔记' not in json.dumps(body, ensure_ascii=False)
         return httpx.Response(200, json={'message': {'content': json.dumps(MODEL_PLAN)}})
@@ -109,24 +113,203 @@ def test_generation_uses_structured_output_and_does_not_create_live_plans(client
 
 @pytest.mark.parametrize('days,minutes', [(1, 5), (7, 45), (30, 480)])
 def test_small_model_generation_constrains_every_requested_day_and_its_time_budget(monkeypatch, days, minutes):
+    calls = []
     def handler(request):
         body = json.loads(request.content)
+        requirements = json.loads(body['messages'][1]['content'])
+        batch_days = requirements['days']
+        calls.append(requirements)
+        sections = [f'阶段 {day}' for day in range(1, min(batch_days, 5) + 1)]
         slots = body['format']['properties']['tasks']
-        assert slots['minItems'] == slots['maxItems'] == days
-        assert len(slots['prefixItems']) == days
-        assert [slot['properties']['day_number']['enum'][0] for slot in slots['prefixItems']] == list(range(1, days + 1))
-        assert [slot['properties']['section_index']['enum'][0] for slot in slots['prefixItems']] == list(range(days))
-        assert body['format']['properties']['sections']['minItems'] == body['format']['properties']['sections']['maxItems'] == days
-        assert all(slot['properties']['minutes']['enum'] == list(range(1, minutes + 1)) for slot in slots['prefixItems'])
-        assert len(body['messages'][0]['content']) < 1000  # Do not duplicate a 30-day schema into the prompt.
-        result = {'name': '轻量模型计划', 'goal': '完成练习', 'sections': [f'阶段 {day}' for day in range(1, days + 1)],
-                  'tasks': [{'day_number': day, 'section_index': day - 1, 'title': f'练习 {day}', 'minutes': minutes, 'notes': '动手练习'} for day in range(1, days + 1)]}
+        assert batch_days <= 7
+        assert slots['minItems'] == slots['maxItems'] == batch_days
+        assert len(slots['prefixItems']) == batch_days
+        assert [slot['properties']['day_number']['enum'][0] for slot in slots['prefixItems']] == list(range(1, batch_days + 1))
+        assert all(slot['properties']['section_index']['enum'] == list(range(len(sections))) for slot in slots['prefixItems'])
+        assert body['format']['properties']['sections']['maxItems'] == min(5, batch_days)
+        assert body['format']['properties']['goal']['enum'] == [requirements['objective']]
+        if batch_days == 1:
+            assert body['format']['properties']['sections']['items']['enum'] == [requirements['objective'][:200]]
+        assert all(slot['properties']['minutes']['enum'] == [minutes] for slot in slots['prefixItems'])
+        assert len(body['messages'][0]['content']) < 1500  # Do not duplicate a 30-day schema into the prompt.
+        result = {'name': '轻量模型计划', 'goal': '完成练习', 'sections': sections,
+                  'tasks': [{'day_number': day, 'section_index': (day - 1) % len(sections),
+                             'title': f"{requirements['start_date']}练习 {day}", 'minutes': minutes,
+                             'notes': f'学习第{day}项状态知识并进行动手练习；产出：可运行的第{day}个页面；验收：独立复现页面行为并记录错误。'} for day in range(1, batch_days + 1)]}
         return httpx.Response(200, json={'message': {'content': json.dumps(result)}})
     model_transport(monkeypatch, handler)
     request = ollama.LearningGenerateRequest(**{**REQUIREMENTS, 'days': days, 'daily_minutes': minutes})
     result = ollama.generate_learning_plan(ollama.OllamaSettings(**CONFIG), request)
     assert len(result.tasks) == days
     assert all(task.minutes == minutes for task in result.tasks)
+    assert len(calls) == (days + 6) // 7
+    assert len({task.plan_date for task in result.tasks}) == days
+
+
+@pytest.mark.parametrize('minutes,preference', [(45, '只使用csv模块，不使用pandas'), (60, '使用pandas处理缺失值并分组统计')])
+def test_same_topic_uses_the_actual_requirements_and_full_daily_budget(monkeypatch, minutes, preference):
+    def handler(request):
+        body = json.loads(request.content)
+        requirements = json.loads(body['messages'][1]['content'])
+        assert requirements['preferences'] == preference
+        assert preference in body['messages'][2]['content']
+        assert f'每天{minutes}分钟' in body['messages'][2]['content']
+        assert requirements['daily_minutes'] == minutes
+        assert body['format']['properties']['tasks']['prefixItems'][0]['properties']['minutes']['enum'] == [minutes]
+        assert '"minutes":30' not in body['messages'][0]['content']
+        result = deepcopy(MODEL_PLAN)
+        for task in result['tasks']:
+            task['minutes'] = minutes
+            task['notes'] = f"{preference}；学习具体API并完成第{task['day_number']}项练习；产出：运行代码和结果记录；验收：对照预期结果检查边界情况。"
+        return httpx.Response(200, json={'message': {'content': json.dumps(result)}})
+    model_transport(monkeypatch, handler)
+    requirements = ollama.LearningGenerateRequest(**{**REQUIREMENTS, 'daily_minutes': minutes, 'preferences': preference})
+    plan = ollama.generate_learning_plan(ollama.OllamaSettings(**CONFIG), requirements)
+    assert all(task.minutes == minutes and preference in task.notes for task in plan.tasks)
+    assert plan.goal == REQUIREMENTS['objective']
+
+
+def test_vague_or_repeated_output_is_retried_once_with_feedback(monkeypatch):
+    calls = []
+    def handler(request):
+        body = json.loads(request.content)
+        calls.append(body)
+        result = deepcopy(MODEL_PLAN)
+        if len(calls) == 1:
+            result['tasks'][0]['title'] = result['tasks'][1]['title'] = '考试准备'
+        return httpx.Response(200, json={'message': {'content': json.dumps(result)}})
+    model_transport(monkeypatch, handler)
+    plan = ollama.generate_learning_plan(ollama.OllamaSettings(**CONFIG), ollama.LearningGenerateRequest(**REQUIREMENTS))
+    assert len(calls) == 2
+    assert '未通过校验' in calls[1]['messages'][1]['content']
+    assert calls[1]['messages'][-2]['role'] == 'assistant'
+    assert '纠正上一份JSON' in calls[1]['messages'][-1]['content']
+    assert [task.title for task in plan.tasks] == ['创建界面', '保存状态']
+
+
+def test_structured_activities_are_preserved_as_detailed_task_notes():
+    result = deepcopy(MODEL_PLAN)
+    result['tasks'][0]['title'] = '专项练习'
+    for task in result['tasks']:
+        task.update(notes='', steps=[{'minutes': 15, 'action': '阅读布局代码并标记控件'},
+                                     {'minutes': 25, 'action': '实现按钮逻辑并运行页面'},
+                                     {'minutes': 5, 'action': '运行输入为空的边界测试'}],
+                    deliverable='提交可以运行的页面代码', verification='输入为空时提示错误，按钮可正常点击')
+    plan = ollama.learning_preview_from_response(ollama.LearningGenerateRequest(**REQUIREMENTS),
+                                                 {'message': {'content': json.dumps(result)}})
+    assert all('15分钟：阅读布局代码' in task.notes and '产出：提交' in task.notes and '验收：输入为空' in task.notes for task in plan.tasks)
+    assert plan.tasks[0].title == '运行输入为空的边界测试'
+    result['tasks'][0]['steps'][0]['minutes'] = 30
+    normalized = ollama.learning_preview_from_response(ollama.LearningGenerateRequest(**REQUIREMENTS),
+                                                       {'message': {'content': json.dumps(result)}})
+    assert normalized.tasks[0].minutes == 45
+    assert normalized.tasks[0].notes.startswith('22分钟：阅读布局代码')
+    assert '19分钟：实现按钮逻辑' in normalized.tasks[0].notes
+    assert '4分钟：运行输入为空的边界测试' in normalized.tasks[0].notes
+
+
+@pytest.mark.parametrize('bad_content', ['generic', 'wrong_chart'])
+def test_requested_tool_in_goal_heading_does_not_hide_generic_daily_activities(monkeypatch, bad_content):
+    requirements = ollama.LearningGenerateRequest(topic='Python', objective='用matplotlib绘制一张折线图',
+        current_level='会列表', preferences='使用一周学习分钟，标注坐标并保存图片',
+        start_date='2026-10-27', days=1, daily_minutes=60)
+    calls = []
+    def inference(_settings, _path, payload):
+        calls.append(payload)
+        task = {'day_number': 1, 'section_index': 0, 'title': '学习Python基础', 'minutes': 60,
+                'steps': [{'minutes': 20, 'action': '阅读Python基础语法并运行简单例子'},
+                          {'minutes': 40, 'action': '练习列表循环并输出三组数字'}],
+                'deliverable': '提交能运行的练习代码', 'verification': '对照三组数字检查循环输出'}
+        if bad_content == 'wrong_chart':
+            task.update(title='绘制散点图',
+                        steps=[{'minutes': 20, 'action': '阅读matplotlib文档学习散点图'},
+                               {'minutes': 40, 'action': '运行散点图示例代码并检查图片'}])
+        if len(calls) == 2:
+            expected = 'matplotlib' if bad_content == 'generic' else '折线图'
+            assert expected in json.loads(payload['messages'][1]['content'])['planning_context']
+            task.update(title='绘制并保存一周学习分钟折线图',
+                        steps=[{'minutes': 20, 'action': '用matplotlib绘制七天学习分钟折线图并标注横纵坐标'},
+                               {'minutes': 40, 'action': '保存图片并核对七个数据点与原始分钟一致'}],
+                        deliverable='保存标注坐标的学习时长折线图PNG', verification='核对七个数据点、坐标文字和保存的PNG图片')
+        return {'message': {'content': json.dumps({'name': requirements.objective, 'goal': requirements.objective,
+                                                  'sections': ['折线图绘制'], 'tasks': [task]})}}
+    monkeypatch.setattr(ollama, 'ollama_request', inference)
+    result = ollama.generate_learning_plan(ollama.OllamaSettings(**CONFIG), requirements)
+    assert len(calls) == 2
+    assert 'matplotlib' in result.tasks[0].notes and '七个数据点' in result.tasks[0].notes
+
+
+def test_later_batches_cannot_repeat_previous_task_titles(monkeypatch):
+    calls = []
+    def inference(_settings, _path, payload):
+        requirements = json.loads(payload['messages'][1]['content'])
+        calls.append(requirements)
+        tasks = [{'day_number': day, 'section_index': 0, 'title': f'实现界面控件{day}', 'minutes': 45,
+                  'notes': f'学习第{day}个具体控件并运行代码；产出：第{day}个控件页面；验收：核对点击后的文字变化符合预期。'}
+                 for day in range(1, requirements['days'] + 1)]
+        return {'message': {'content': json.dumps({'name': '界面练习', 'goal': '完成练习',
+                                                  'sections': ['界面'], 'tasks': tasks})}}
+    monkeypatch.setattr(ollama, 'ollama_request', inference)
+    with pytest.raises(Exception, match='重复了已安排的任务'):
+        ollama.generate_learning_plan(ollama.OllamaSettings(**CONFIG),
+            ollama.LearningGenerateRequest(**{**REQUIREMENTS, 'days': 8}))
+    assert len(calls) == 3
+    assert '重复了已安排' in calls[-1]['planning_context']
+
+
+def test_goal_operations_must_be_in_activities_not_only_claimed_in_verification():
+    request = ollama.LearningGenerateRequest(topic='Python', objective='读取CSV并计算每列总和',
+        start_date='2026-10-27', days=1, daily_minutes=45)
+    task = {'day_number': 1, 'section_index': 0, 'title': '准备CSV环境', 'minutes': 45,
+            'steps': [{'minutes': 15, 'action': '复习Python列表和循环'},
+                      {'minutes': 30, 'action': '准备CSV文件并检查Python环境'}],
+            'deliverable': '准备好CSV文件与Python环境', 'verification': '读取CSV并计算每列总和正确'}
+    response = {'message': {'content': json.dumps({'name': request.objective, 'goal': request.objective,
+        'sections': ['CSV处理'], 'tasks': [task]})}}
+    with pytest.raises(Exception, match='具体活动没有安排目标要求的“读取”'):
+        ollama.learning_preview_from_response(request, response)
+
+
+def test_standard_library_preference_rejects_third_party_steps():
+    request = ollama.LearningGenerateRequest(topic='Python', objective='读取CSV并计算每列总和',
+        preferences='只用标准库csv，用两行数据自测', start_date='2026-10-27', days=1, daily_minutes=45)
+    task = {'day_number': 1, 'section_index': 0, 'title': '读取并计算CSV列总和', 'minutes': 45,
+            'steps': [{'minutes': 20, 'action': '使用pandas读取CSV文件并打印两行数据'},
+                      {'minutes': 25, 'action': '计算每列总和并与手工结果对比'}],
+            'deliverable': '提交计算CSV列总和的脚本', 'verification': '两列总和与手工结果一致'}
+    result = {'name': '2026-10-27', 'goal': request.objective, 'sections': ['CSV处理'], 'tasks': [task]}
+    with pytest.raises(Exception, match='用户限制的工具：pandas'):
+        ollama.learning_preview_from_response(request, {'message': {'content': json.dumps(result)}})
+    task['steps'][0]['action'] = '使用csv.reader读取CSV文件并打印两行数据'
+    plan = ollama.learning_preview_from_response(request, {'message': {'content': json.dumps(result)}})
+    assert plan.name == 'Python学习计划'
+
+
+@pytest.mark.parametrize('message', ['invalid-message', {'content': None}, {'content': 42}])
+def test_malformed_model_message_keeps_validation_error_actionable(monkeypatch, message):
+    calls = []
+    def inference(*_args):
+        calls.append(True)
+        return {'message': message}
+    monkeypatch.setattr(ollama, 'ollama_request', inference)
+    with pytest.raises(Exception, match='未通过校验'):
+        ollama.generate_learning_plan(ollama.OllamaSettings(**CONFIG), ollama.LearningGenerateRequest(**REQUIREMENTS))
+    assert len(calls) == 2
+
+
+@pytest.mark.parametrize('change', ['vague', 'under_budget', 'no_deliverable'])
+def test_persistently_poor_plans_create_neither_drafts_nor_formal_goals(client, monkeypatch, change):
+    plan = deepcopy(MODEL_PLAN)
+    if change == 'vague': plan['tasks'][0]['title'] = '考试准备'
+    if change == 'under_budget': plan['tasks'][0]['minutes'] = 30
+    if change == 'no_deliverable': plan['tasks'][0]['notes'] = '阅读课本，学习有关知识，进行相关练习，复习昨天学到的内容，继续学习。'
+    client.put('/api/v1/ai/ollama/settings', json=CONFIG)
+    model_transport(monkeypatch, lambda request: httpx.Response(200, json={'message': {'content': json.dumps(plan)}}))
+    response = client.post('/api/v1/ai/learning/generate', json=REQUIREMENTS)
+    assert response.status_code == 502
+    with client.app.state.database.session() as session:
+        assert session.scalars(select(AILearningDraft)).all() == []
+        assert session.scalars(select(LearningGoal)).all() == []
 
 
 def test_user_edited_draft_is_imported_once_and_visible_in_home_today_and_search(client, monkeypatch):
@@ -139,7 +322,7 @@ def test_user_edited_draft_is_imported_once_and_visible_in_home_today_and_search
     assert imported.status_code == 201
     goal = imported.json()
     assert goal['name'] == '我的 Android 计划'
-    assert goal['estimated_minutes'] == 65
+    assert goal['estimated_minutes'] == 80
     assert [item['name'] for item in goal['sections']] == MODEL_PLAN['sections']
     assert len(goal['tasks']) == 2
     assert goal['tasks'][0]['details'] == MODEL_PLAN['tasks'][0]['notes']

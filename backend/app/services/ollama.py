@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from copy import deepcopy
 from collections import defaultdict
 from datetime import date, timedelta
@@ -55,13 +56,22 @@ class LearningGenerateRequest(BaseModel):
         return value.strip()
 
 
+class StudyStep(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    minutes: int = Field(ge=1, le=480)
+    action: str = Field(min_length=4, max_length=300)
+
+
 class ModelTask(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     day_number: int = Field(ge=1, le=30)
     section_index: int = Field(ge=0)
     title: str = Field(min_length=1, max_length=300)
     minutes: int = Field(ge=1, le=480)
-    notes: str = Field(max_length=2000)
+    notes: str = Field(default="", max_length=2000)
+    steps: list[StudyStep] = Field(default_factory=list, max_length=4)
+    deliverable: str = Field(default="", max_length=300)
+    verification: str = Field(default="", max_length=300)
 
 
 class ModelLearningPlan(BaseModel):
@@ -144,36 +154,71 @@ def list_models(settings: LocalEndpoint) -> list[str]:
     return sorted({model['name'] for model in models if isinstance(model, dict) and isinstance(model.get('name'), str)})
 
 
-def learning_chat_payload(request: LearningGenerateRequest) -> dict:
+def learning_chat_payload(request: LearningGenerateRequest, *, context: str = "") -> dict:
     schema = ModelLearningPlan.model_json_schema()
     # Exact daily slots and enumerated minutes also constrain small local models.
     # Keep the preview validator independent: imported drafts may contain several tasks per day.
     daily_slots = []
+    max_sections = min(5, request.days)
+    shared_slot = deepcopy(schema['$defs']['ModelTask'])
+    shared_slot['properties']['day_number'] = {'type': 'integer', 'enum': list(range(1, request.days + 1))}
+    shared_slot['properties']['section_index'] = {'type': 'integer', 'enum': list(range(max_sections))}
+    shared_slot['properties']['minutes'] = {'type': 'integer', 'enum': [request.daily_minutes]}
+    shared_slot['properties']['steps']['minItems'] = 2
+    shared_slot['properties']['steps']['maxItems'] = 3
+    shared_slot['properties']['deliverable']['minLength'] = 4
+    shared_slot['properties']['verification']['minLength'] = 4
+    shared_slot['properties']['deliverable']['description'] = '具体可提交的代码、解题过程、图表或笔记，说明数量或完成范围'
+    shared_slot['properties']['verification']['description'] = '与当天成果直接对应的检查方法和达标条件，不罗列无关题目、测试或概念数量'
+    shared_slot['properties']['title']['description'] = '动作加具体知识点，不要只写先修知识、专项练习、应用等阶段名称'
+    shared_slot['required'] = list(dict.fromkeys([*shared_slot['required'], 'steps', 'deliverable', 'verification']))
+    # The grammar's property order affects small models: commit to a concrete
+    # outcome before describing its activities, rather than inventing preparation first.
+    field_order = ('day_number', 'section_index', 'minutes', 'deliverable', 'verification', 'steps', 'title', 'notes')
+    shared_slot['properties'] = {key: shared_slot['properties'][key] for key in field_order}
     for day in range(1, request.days + 1):
-        slot = deepcopy(schema['$defs']['ModelTask'])
+        slot = deepcopy(shared_slot)
         slot['properties']['day_number'] = {'type': 'integer', 'enum': [day]}
-        slot['properties']['section_index'] = {'type': 'integer', 'enum': [day - 1]}
-        slot['properties']['minutes'] = {'type': 'integer', 'enum': list(range(1, request.daily_minutes + 1))}
+        slot['properties']['section_index'] = {'type': 'integer', 'enum': list(range(max_sections))}
+        slot['properties']['minutes'] = {'type': 'integer', 'enum': [request.daily_minutes]}
         daily_slots.append(slot)
-    schema['properties']['tasks'] = {'type': 'array', 'prefixItems': daily_slots,
+    # Ollama's grammar consumes the standard items schema; prefixItems alone
+    # is insufficient to constrain values on every supported local model.
+    schema['properties']['tasks'] = {'type': 'array', 'items': shared_slot, 'prefixItems': daily_slots,
                                      'minItems': request.days, 'maxItems': request.days}
-    schema['properties']['sections']['minItems'] = request.days
-    schema['properties']['sections']['maxItems'] = request.days
+    schema['properties']['sections']['minItems'] = min(2, request.days)
+    schema['properties']['sections']['maxItems'] = max_sections
+    schema['properties']['goal']['enum'] = [request.objective]
+    if request.days == 1:
+        # A one-day request must be a complete goal, not day one of an invented syllabus.
+        schema['properties']['sections']['items'] = {'type': 'string', 'enum': [request.objective[:200]]}
     instructions = (
-        "你是中文学习规划助手。根据用户填写的目标、基础和每天可用时间，制定具体可执行的学习计划。"
-        "只返回 JSON，不包含 Markdown。章节名称简短，每项任务明确成果或练习。"
-        f"每天只生成一个综合任务，其他学习活动写入 notes。tasks 恰好包含 {request.days} 项，按天排序，"
-        f"day_number 从 1 到 {request.days} 各出现一次。每项 minutes 必须是 1 至 {request.daily_minutes} 的整数。"
-        f"sections 也恰好包含 {request.days} 个学习阶段，与每天的任务按顺序一一对应。"
-        "第 N 天任务的 section_index 必须是 N-1，阶段名称对应这一天学习的内容，不要生成空名称。"
-        'JSON 结构：{"name":"计划名称","goal":"目标","sections":["章节名称"],'
-        '"tasks":[{"day_number":1,"section_index":0,"title":"具体任务","minutes":30,"notes":"练习步骤和成果"}]}。'
+        "你是中文实践课程设计师，只输出JSON。objective是本次必须完成的实际结果，"
+        "current_level是已具备的基础，preferences是具体限制。优先目标和限制，不套用主题通用大纲。"
+        "每天直接动手练习，不安排安装环境、泛泛复习已会语法或‘考试准备’占位。"
+        "只有一天也要完成目标要求的实际操作；最后一天的成果必须直接达到目标。"
+        "例如目标要求计算就实际计算，要求折线图就画折线图，要求写入并读回就安排写入和读取。"
+        f"tasks恰好{request.days}项，day_number从1到{request.days}各一次并排序，每项minutes={request.daily_minutes}。"
+        "每项steps含2至3个实际练习，填写minutes和action，分钟合计等于当天minutes。"
+        "action写动作、具体对象、数量或算例；title写当天操作，不写准备阶段等空泛标题。"
+        "deliverable写实际产出的代码、图、解题过程或笔记及范围；verification明确如何核对成果的正确性，"
+        "条件必须与成果直接相关，不罗列无关的题目、测试或概念数量，不写‘掌握全部内容’。"
+        f"sections有{min(2, request.days)}至{max_sections}个不同阶段，section_index引用存在的阶段。"
+        "按基础和可用时间安排合理难度与数量，每天内容不同；仅考试目标安排考试训练，不虚构资料或通过保证。"
     )
+    requirements = request.model_dump(mode='json')
+    if context:
+        requirements['planning_context'] = context
+    brief = (f'我正在学习{request.topic}，已经{request.current_level[:250]}，需要{request.objective[:500]}。'
+        f'具体限制：{request.preferences[:500] or "无额外限制"}。'
+        f'请给我{request.days}天、每天{request.daily_minutes}分钟的具体动手练习，每天有可检查的成果。'
+        '在steps中写出完整操作，不写安装环境；按前述JSON格式返回。')
     return {
         "stream": False, "think": False, "format": schema,
-        "options": {"temperature": 0, "num_predict": 8192},
+        "options": {"temperature": 0.2, "num_ctx": 8192, "num_predict": min(8192, 600 + request.days * 650)},
         "messages": [{"role": "system", "content": instructions},
-                     {"role": "user", "content": request.model_dump_json()}],
+                     {"role": "user", "content": json.dumps(requirements, ensure_ascii=False)},
+                     {"role": "user", "content": brief}],
     }
 
 
@@ -182,22 +227,157 @@ def learning_preview_from_response(request: LearningGenerateRequest, data: dict)
         if data.get('done') is False or data.get('done_reason') == 'length':
             raise ValueError("模型输出未完成，请缩短计划天数后重试")
         result = ModelLearningPlan.model_validate_json(data['message']['content'])
+        for task in result.tasks:
+            if task.steps:
+                if sum(step.minutes for step in task.steps) != task.minutes:
+                    # Small models often get the arithmetic wrong. Keep their
+                    # activity proportions, but fit integer minutes to the budget.
+                    remaining = task.minutes - len(task.steps)
+                    if remaining < 0:
+                        raise ValueError('当天分钟不足以安排分项活动')
+                    weights = sum(step.minutes for step in task.steps)
+                    shares = [remaining * step.minutes / weights for step in task.steps]
+                    minutes = [1 + int(share) for share in shares]
+                    order = sorted(range(len(minutes)), key=lambda index: shares[index] % 1, reverse=True)
+                    for index in order[:task.minutes - sum(minutes)]:
+                        minutes[index] += 1
+                    for step, allocated in zip(task.steps, minutes):
+                        step.minutes = allocated
+                if not task.deliverable or not task.verification:
+                    raise ValueError('每天必须有明确产出和验收标准')
+                task.notes = '；'.join(f'{step.minutes}分钟：{step.action}' for step in task.steps)
+                task.notes += f'；产出：{task.deliverable}；验收：{task.verification}'
+                task.title = re.sub(r'^(?:学习)?阶段\s*\d+\s*[:：]\s*', '', task.title)
+                if task.title in {'先修知识', '专项练习', '应用', '复盘', '基础复习', '准备阶段', '复习已会知识'}:
+                    # Use the model's concrete activity, rather than a phase-only heading.
+                    task.title = task.steps[-1].action[:100]
         if {task.day_number for task in result.tasks} != set(range(1, request.days + 1)):
             raise ValueError("模型没有完整覆盖计划天数，请重新生成或缩短天数")
+        validate_generated_quality(request, result)
+        name = f'{request.topic[:196]}学习计划' if re.fullmatch(r'\d{4}-\d{2}-\d{2}', result.name) else result.name
         return LearningPreview(
-            name=result.name, goal=result.goal, sections=result.sections,
+            name=name, goal=request.objective, sections=result.sections,
             start_date=request.start_date, target_date=request.start_date + timedelta(days=request.days - 1),
             daily_minutes=request.daily_minutes,
             tasks=[PreviewTask(plan_date=request.start_date + timedelta(days=task.day_number - 1),
-                               **task.model_dump(exclude={'day_number'})) for task in result.tasks],
+                               section_index=task.section_index, title=task.title, minutes=task.minutes,
+                               notes=task.notes) for task in result.tasks],
         )
     except (ValidationError, KeyError, TypeError, ValueError) as exc:
         detail = exc.errors()[0]['msg'] if isinstance(exc, ValidationError) else str(exc)
         raise HTTPException(502, f"生成的学习计划未通过校验：{detail}。尚未写入学习计划，可重新生成。") from exc
 
 
+def validate_generated_quality(request: LearningGenerateRequest, result: ModelLearningPlan) -> None:
+    """Only generated output is strict; an edited/imported draft may use less time."""
+    generic = {'考试准备', '综合考试准备', '复习总结', '复习', '学习', '练习', '学习任务'}
+    titles = [task.title.strip() for task in result.tasks]
+    if len(set(titles)) != len(titles) or any(title in generic for title in titles):
+        raise ValueError('任务标题重复或过于笼统，请写出每天不同的具体知识点和练习')
+    if len(set(result.sections)) != len(result.sections):
+        raise ValueError('学习阶段重复，请合并相同阶段并细化每日任务')
+    totals = defaultdict(int)
+    for task in result.tasks:
+        totals[task.day_number] += task.minutes
+        if len(task.notes) < 30 or not any(word in task.notes for word in ('产出', '成果')) or not any(word in task.notes for word in ('验收', '自测', '检查')):
+            raise ValueError('每天的任务说明必须包含具体学习步骤、产出和验收标准，不能只写笼统提示')
+        if task.verification and any(phrase in task.verification for phrase in ('所有内容', '全部内容', '所有复习内容', '全部知识')):
+            raise ValueError('验收不能只说包含所有内容，请给出具体题目数量、测试结果或独立复现条件')
+    if any(total != request.daily_minutes for total in totals.values()):
+        raise ValueError(f'每天必须按用户填写的{request.daily_minutes}分钟完整安排，不能统一使用30分钟')
+    if len(result.tasks) > 3 and len({task.notes for task in result.tasks}) < len(result.tasks) * 0.7:
+        raise ValueError('每日说明大量重复，请针对每天的具体内容分别安排')
+    # A correct goal heading alone is insufficient: requested specialist tools
+    # must occur in the actual activities, rather than generic language lessons.
+    topic_terms = {term.casefold() for term in re.findall(r'[A-Za-z][A-Za-z0-9_.+#-]*', request.topic)}
+    required_terms = set()
+    if not any(word in request.objective for word in ('或者', '任选', '或')):
+        for clause in re.split(r'[，,；;。\n]', request.objective):
+            if any(word in clause for word in ('不要', '不使用', '不用', '禁止', '避免', '无需', '不需要')):
+                continue
+            required_terms.update(term for term in re.findall(r'[A-Za-z][A-Za-z0-9_.+#-]*', clause)
+                                  if len(term) >= 3 and term.casefold() not in topic_terms
+                                  and term.casefold() not in {'app', 'web', 'api'})
+            # These explicit chart types are different outputs, even when the
+            # same plotting library is used. Do not accept a scatter plot for a line chart.
+            required_terms.update(term for term in ('折线图', '散点图', '柱状图', '直方图', '饼图') if term in clause)
+    normalize = lambda text: re.sub(r'[-_]', '', text.casefold())
+    activities = normalize(' '.join(' '.join(step.action for step in task.steps)
+                                  if task.steps else re.split(r'产出[：:]|成果[：:]', task.notes)[0]
+                                  for task in result.tasks))
+    missing = sorted(term for term in required_terms if normalize(term) not in activities)
+    if missing:
+        raise ValueError(f'实际学习步骤遗漏目标指定的内容或工具：{"、".join(missing)}；不能只在计划名称中提到目标')
+    operations = {
+        '读取': ('读取', '读出', '读回', 'reader', 'read('),
+        '读回': ('读回', '读取', '读出', 'read('),
+        '写入': ('写入', '写出', 'write('),
+        '计算': ('计算', '求和', '总和', '求解', 'sum(', '统计'),
+        '绘制': ('绘制', '画出', '画图', '绘图', 'plot('),
+    }
+    positive_objective = '；'.join(clause for clause in re.split(r'[，,；;。\n]', request.objective)
+        if not any(word in clause for word in ('不要', '不使用', '不用', '禁止', '避免', '无需', '不需要')))
+    for operation, alternatives in operations.items():
+        if operation in positive_objective and not any(normalize(word) in activities for word in alternatives):
+            raise ValueError(f'具体活动没有安排目标要求的“{operation}”操作；不能只写准备、安装或在验收中宣称完成')
+    positive_activities = re.sub(r'(?:不要|不使用|不用|禁止使用|避免使用)\s*[A-Za-z][A-Za-z0-9_.+-]*', '', activities)
+    forbidden = re.findall(r'(?:不要|不使用|不用|禁止使用|避免使用)\s*([A-Za-z][A-Za-z0-9_.+-]*)', request.preferences)
+    if re.search(r'只.{0,8}标准库', request.preferences):
+        forbidden.extend(['pandas', 'numpy', 'matplotlib', 'scipy', 'seaborn', 'sklearn'])
+    violated = sorted({term for term in forbidden if normalize(term) in positive_activities})
+    if violated:
+        raise ValueError(f'实际步骤使用了用户限制的工具：{"、".join(violated)}，请遵守preferences重新安排')
+
+
 def generate_learning_plan(settings: OllamaSettings, request: LearningGenerateRequest) -> LearningPreview:
     if not settings.model:
         raise HTTPException(422, "请先在数据与设置 → 本地大模型中选择并保存一个 Ollama 模型")
-    data = ollama_request(settings, "/api/chat", {"model": settings.model, **learning_chat_payload(request)})
-    return learning_preview_from_response(request, data)
+    sections: list[str] = []
+    tasks: list[PreviewTask] = []
+    name = ''
+    # Keep the original requirements in every short batch so long plans do not
+    # lose them as the model's context window fills up.
+    for offset in range(0, request.days, 7):
+        batch = request.model_copy(update={
+            'days': min(7, request.days - offset),
+            'start_date': request.start_date + timedelta(days=offset),
+        })
+        context = '' if request.days <= 7 else (
+            f'这是整个{request.days}天计划的第{offset + 1}至{offset + batch.days}天。'
+            f'此前已安排：{"、".join(task.title for task in tasks[-7:]) or "无"}。'
+            '承接已有内容并继续推进，不得重新从入门开始或用考试准备填满后续日期。'
+        )
+        previous_content = ''
+        correction = ''
+        for attempt in range(2):
+            payload = learning_chat_payload(batch, context=context)
+            if previous_content:
+                payload['messages'].extend([
+                    {'role': 'assistant', 'content': previous_content},
+                    {'role': 'user', 'content': f'纠正上一份JSON：{correction}。实际操作必须落实原始目标“{batch.objective}”，请重写完整计划。'},
+                ])
+            data = ollama_request(settings, '/api/chat', {'model': settings.model, **payload})
+            try:
+                preview = learning_preview_from_response(batch, data)
+                if {task.title for task in tasks} & {task.title for task in preview.tasks}:
+                    raise HTTPException(502, '后续日期重复了已安排的任务，请承接前段进度生成新的具体内容')
+                break
+            except HTTPException as error:
+                if attempt:
+                    raise
+                message = data.get('message')
+                previous_content = message.get('content', '') if isinstance(message, dict) else ''
+                if not isinstance(previous_content, str):
+                    previous_content = ''
+                correction = str(error.detail)
+                context += f' 上次输出未通过校验：{error.detail} 请纠正后重新生成完整JSON。'
+        name = name or preview.name
+        indices = {}
+        for index, section in enumerate(preview.sections):
+            if section not in sections:
+                sections.append(section)
+            indices[index] = sections.index(section)
+        tasks.extend(task.model_copy(update={'section_index': indices[task.section_index]}) for task in preview.tasks)
+    return LearningPreview(name=name, goal=request.objective, start_date=request.start_date,
+                           target_date=request.start_date + timedelta(days=request.days - 1),
+                           daily_minutes=request.daily_minutes, sections=sections, tasks=tasks)
