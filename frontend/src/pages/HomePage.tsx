@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { ArrowRightOutlined, CalendarOutlined, CheckOutlined, CoffeeOutlined, DeleteOutlined, EditOutlined, FlagOutlined, ReadOutlined } from '@ant-design/icons'
-import { Alert, Button, Card, Col, Input, Progress, Row, Space, Statistic, Typography, message } from 'antd'
+import { Button, Card, Col, Input, Progress, Row, Space, Statistic, Typography, message } from 'antd'
 import dayjs from 'dayjs'
 import { useNavigate } from 'react-router-dom'
 import { apiRequest } from '../api/client'
@@ -108,9 +108,6 @@ export function HomePage() {
         <Col xs={24} sm={8}><Card className="summary-card"><span className="summary-icon summary-icon-green"><CheckOutlined aria-hidden="true" /></span><Statistic title="已经完成" value={data.stats.completed} suffix={<span className="stat-unit">项</span>} /><span className="summary-caption">每一小步，都算数</span></Card></Col>
         <Col xs={24} sm={8}><Card className="summary-card"><span className="summary-icon summary-icon-amber"><FlagOutlined aria-hidden="true" /></span><Statistic title="必须完成" value={data.stats.must} suffix={<span className="stat-unit">项</span>} /><span className="summary-caption">把精力放在重要的事上</span></Card></Col>
       </Row>
-      {data.stats.overdue || data.stats.due_soon ? (
-        <Alert type="warning" showIcon title={`有 ${data.stats.overdue} 项逾期，${data.stats.due_soon} 项将在三天内到期`} />
-      ) : null}
       <Row gutter={[20, 20]} align="stretch" className="home-detail-grid">
         <Col xs={24} xl={15}>
           <Card title={<span className="card-title-icon"><CalendarOutlined aria-hidden="true" />今日计划</span>} extra={<Button type="link" onClick={() => navigate('/today')}>查看全部 <ArrowRightOutlined aria-hidden="true" /></Button>}>

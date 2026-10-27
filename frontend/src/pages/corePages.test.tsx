@@ -31,7 +31,7 @@ describe('core pages', () => {
     ]
     vi.spyOn(globalThis, 'fetch').mockImplementation(() => json({
       date: '2026-09-30',
-      stats: { total: 2, completed: 0, completion_rate: 0, must: 2, overdue: 0, due_soon: 0 },
+      stats: { total: 2, completed: 0, completion_rate: 0, must: 2, overdue: 2, due_soon: 5 },
       agenda: retainedAgenda,
       quick_notes: [{ id: 'n1', content: '记录灵感', is_important: false, is_archived: false, converted_type: null, converted_id: null, created_at: '2026-09-30T00:00:00Z' }],
       summaries: {
@@ -56,6 +56,7 @@ describe('core pages', () => {
     }
     expect(screen.queryByText('模块摘要')).not.toBeInTheDocument()
     expect(screen.queryByText('逾期事项')).not.toBeInTheDocument()
+    expect(screen.queryByText(/项逾期|三天内到期/)).not.toBeInTheDocument()
     expect(screen.queryByText('游戏娱乐')).not.toBeInTheDocument()
     expect(screen.queryByText('游戏：休闲游戏')).not.toBeInTheDocument()
   })
