@@ -27,6 +27,16 @@ export type QuickNote = {
 
 export type ModuleSummary = { title: string; count: number; detail?: string }
 
+export type ActivityCategory = 'learning' | 'diet' | 'exercise' | 'work' | 'health' | 'life' | 'leisure' | 'other'
+export type DailyActivity = {
+  id: string
+  activity_date: string
+  content: string
+  category: ActivityCategory
+  source_text: string
+  created_at: string
+}
+
 export type HomeData = {
   date: string
   stats: {
@@ -39,6 +49,7 @@ export type HomeData = {
   }
   agenda: AgendaItem[]
   quick_notes: QuickNote[]
+  daily_activities?: DailyActivity[]
   summaries: Record<'media' | 'development' | 'consulting' | 'learning' | 'diet', ModuleSummary>
 }
 

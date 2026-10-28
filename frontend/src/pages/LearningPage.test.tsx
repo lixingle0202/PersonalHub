@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { ConfigProvider } from 'antd'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { setLocalToken } from '../api/client'
@@ -152,7 +153,8 @@ async function openTask(title = '练习基础语法') {
 }
 
 function renderLearning() {
-  render(<MemoryRouter><LearningPage /></MemoryRouter>)
+  // Exercise modal behavior without depending on animation frames in jsdom.
+  render(<ConfigProvider theme={{ token: { motion: false } }}><MemoryRouter><LearningPage /></MemoryRouter></ConfigProvider>)
 }
 
 function changeDate(input: HTMLElement, value: string) {

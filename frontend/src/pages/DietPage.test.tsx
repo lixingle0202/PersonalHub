@@ -134,7 +134,8 @@ describe('diet monthly calendar and manual changes', () => {
     mockApi([meal('unknown', { display_kcal: null, calorie_source: '待补充', calorie_explanation: '无法完整估算：新菜名，请补充食材用量。' })])
     render(<DietPage />)
     expect(await screen.findByText('热量待补充 · 点击完善食材或热量')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: '修改 2026-10-07 午餐' }))
+    // The label identifies the same control without computing every calendar button's accessible name.
+    fireEvent.click(screen.getByLabelText('修改 2026-10-07 午餐'))
     expect(await screen.findByText('无法完整估算：新菜名，请补充食材用量。')).toBeInTheDocument()
     expect(screen.queryByText(/餐次粗估/)).not.toBeInTheDocument()
   })

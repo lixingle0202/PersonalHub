@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from ..models import (
     AgendaItem, Consultation, ConsultationCommunication, ConsultationFollowup,
-    ConsultationStage, DailyHealthLog, DevIssue, DevLog, DevMilestone,
+    ConsultationStage, DailyActivity, DailyHealthLog, DevIssue, DevLog, DevMilestone,
     DevProject, DevRequirement, DevTask, Dish,
     LearningGoal, LearningResource, LearningSection,
     LearningTask, MealPlan, MediaContent, QuickNote, ShoppingItem, ShoppingList,
@@ -28,6 +28,7 @@ class TrashType:
 TRASH_TYPES: dict[str, TrashType] = {
     "agenda": TrashType(AgendaItem, "today", "计划", "title"),
     "quick_note": TrashType(QuickNote, "home", "备忘", "content"),
+    "daily_activity": TrashType(DailyActivity, "home", "日常记录", "content"),
     "media": TrashType(MediaContent, "media", "自媒体内容", "title"),
     "dev_project": TrashType(DevProject, "development", "开发项目", "name"),
     "dev_requirement": TrashType(DevRequirement, "development", "功能需求", "title"),

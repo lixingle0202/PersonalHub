@@ -87,6 +87,19 @@ class DailyReview(TimestampMixin, Base):
     summary: Mapped[str] = mapped_column(Text, default="")
 
 
+class DailyActivity(LifecycleMixin, Base):
+    __tablename__ = 'daily_activities'
+    __table_args__ = (UniqueConstraint('batch_id', 'sort_order', name='uq_daily_activity_batch_order'),)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    activity_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    category: Mapped[str] = mapped_column(String(20), nullable=False, default='other')
+    source_text: Mapped[str] = mapped_column(Text, nullable=False)
+    source_date: Mapped[date] = mapped_column(Date, nullable=False)
+    batch_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
 class MediaContent(LifecycleMixin, Base):
     __tablename__ = "media_contents"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)

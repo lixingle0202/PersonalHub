@@ -8,11 +8,11 @@ from sqlalchemy.orm import Session
 
 from .deps import get_session
 from ..models import (
-    AgendaItem, Consultation, DailyHealthLog, DevIssue, DevMilestone, DevProject,
+    AgendaItem, Consultation, DailyActivity, DailyHealthLog, DevIssue, DevMilestone, DevProject,
     LearningGoal, MealPlan, MediaContent, QuickNote,
 )
 from ..services.diet import meal_display_name
-from ..schemas import AgendaOut, QuickNoteOut
+from ..schemas import AgendaOut, DailyActivityOut, QuickNoteOut
 
 
 router = APIRouter(tags=["home"])
@@ -29,6 +29,9 @@ def home_summary(date: date, session: Session = Depends(get_session)):
     ).order_by(AgendaItem.sort_order, AgendaItem.start_time)).all()
     total = len(agenda)
     completed = sum(item.status == "completed" for item in agenda)
+    daily_activities = session.scalars(select(DailyActivity).where(
+        DailyActivity.activity_date == date, DailyActivity.deleted_at.is_(None),
+    ).order_by(DailyActivity.created_at, DailyActivity.sort_order, DailyActivity.id)).all()
     overdue = session.scalar(select(func.count(AgendaItem.id)).where(
         AgendaItem.plan_date < date,
         AgendaItem.status == "pending",
@@ -104,6 +107,7 @@ def home_summary(date: date, session: Session = Depends(get_session)):
         },
         "agenda": [AgendaOut.model_validate(item) for item in agenda],
         "quick_notes": [QuickNoteOut.model_validate(note) for note in notes],
+        "daily_activities": [DailyActivityOut.model_validate(item) for item in daily_activities],
         "summaries": {
             "media": {
                 "title": f"下一条：{next_media[0].title}" if next_media else "暂无待发布内容",

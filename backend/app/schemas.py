@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import Literal
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -95,6 +96,43 @@ class DailyReviewOut(ORMModel):
     id: str
     review_date: date
     summary: str
+
+
+ActivityCategory = Literal['learning', 'diet', 'exercise', 'work', 'health', 'life', 'leisure', 'other']
+
+
+class DailyNarrationIn(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+    activity_date: date
+    text: str = Field(min_length=1, max_length=5000)
+    request_id: UUID
+
+
+class DailyActivityUpdate(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+    activity_date: date
+    content: str = Field(min_length=1, max_length=5000)
+    category: ActivityCategory
+
+
+class DailyActivityOut(ORMModel):
+    id: str
+    activity_date: date
+    content: str
+    category: ActivityCategory
+    source_text: str
+    created_at: datetime
+
+    @field_validator('created_at')
+    @classmethod
+    def utc_timestamp(cls, value: datetime) -> datetime:
+        return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
+
+
+class DailyNarrationOut(BaseModel):
+    items: list[DailyActivityOut]
+    skipped: list[str]
+    created: bool
 
 
 class QuickNoteCreate(BaseModel):

@@ -165,6 +165,21 @@ body .ant-tag.ant-tag-red:not(.ant-tag-disabled):is(.ant-tag-filled, .ant-tag-ou
 .agenda-main .ant-typography-secondary { font-size: 12px; }
 .agenda-time { color: var(--text-secondary); white-space: nowrap; font-size: 12px; }
 .agenda-actions { flex-shrink: 0; }
+.journal-date-tools { display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.journal-date-tools .native-form-select { width: auto; }
+.journal-compose { display: flex; flex-direction: column; gap: 22px; margin-bottom: 20px; }
+.journal-compose > div:last-child { display: flex; gap: 12px; justify-content: space-between; align-items: center; }
+.daily-activity-list { list-style: decimal; padding-left: 24px; margin-bottom: 0; }
+.daily-activity-list li { padding: 16px 4px; border-bottom: 1px solid var(--surface-line); }
+.daily-activity-list li:last-child { border-bottom: 0; }
+.daily-activity-list li > .ant-space { margin-top: 10px; }
+.daily-activity-content { min-width: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+.daily-activity-content details { margin-top: 8px; color: var(--text-secondary); font-size: 12px; }
+.daily-activity-content summary { cursor: pointer; width: fit-content; }
+.daily-activity-content details p { margin: 8px 0 0; }
+.journal-loading { display: flex; justify-content: center; gap: 12px; padding: 24px; color: var(--text-secondary); }
+.journal-editor { display: grid; gap: 16px; }
+.journal-editor label { display: grid; gap: 8px; }
 .success-icon { color: var(--green); }
 .agenda-group-title { display: flex; align-items: center; gap: 10px; }
 .group-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--primary-readable); box-shadow: 0 0 0 4px var(--primary-soft); }

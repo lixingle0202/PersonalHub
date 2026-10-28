@@ -13,6 +13,7 @@ from .diet_templates import router as diet_templates_router
 from .system import router as system_router
 from .ai import router as ai_router
 from .diet_ai import router as diet_ai_router
+from .daily_activities import router as daily_activities_router
 
 
 api_router = APIRouter(prefix="/api/v1")
@@ -29,3 +30,4 @@ api_router.include_router(diet_templates_router)
 api_router.include_router(system_router)
 api_router.include_router(ai_router)
 api_router.include_router(diet_ai_router)
+api_router.include_router(daily_activities_router)
