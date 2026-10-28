@@ -57,7 +57,8 @@ try {
     $env:PERSONAL_HUB_NO_BROWSER = "1"
     $WorkingDirectory = Split-Path -Parent $Executable
 
-    $First = Start-Process -FilePath $Executable -WorkingDirectory $WorkingDirectory -WindowStyle Hidden -PassThru
+    $First = Start-Process -FilePath $Executable -WorkingDirectory $WorkingDirectory -WindowStyle Hidden -PassThru -RedirectStandardError (Join-Path $TempRoot 'first-stderr.log')
+    $null = $First.Handle
     $Health = Wait-ForHealth -Port $Port -Process $First
     if ($Health.status -ne "ok" -or $Health.host -ne "127.0.0.1") { throw "Unexpected health response." }
 
@@ -81,15 +82,19 @@ try {
     $DisconnectedStatus = 0
     try {
         $EndpointBody = @{ base_url = $OfflineModelAddress } | ConvertTo-Json -Compress
-        Invoke-WebRequest -Uri "http://127.0.0.1:$Port/api/v1/ai/ollama/models" -Method Post -Headers $Headers -ContentType "application/json" -Body $EndpointBody -TimeoutSec 5 -UseBasicParsing | Out-Null
+        $DisconnectedResponse = Invoke-WebRequest -Uri "http://127.0.0.1:$Port/api/v1/ai/ollama/models" -Method Post -Headers $Headers -ContentType "application/json" -Body $EndpointBody -TimeoutSec 5 -UseBasicParsing
+        $DisconnectedStatus = [int]$DisconnectedResponse.StatusCode
     } catch {
         if ($null -eq $_.Exception.Response) { throw }
         $DisconnectedStatus = [int]$_.Exception.Response.StatusCode
     }
-    if ($DisconnectedStatus -ne 503) { throw 'Packaged Ollama client did not handle a disconnected local service.' }
+    if ($DisconnectedStatus -ne 503) { throw "Packaged Ollama client did not handle a disconnected local service (HTTP $DisconnectedStatus)." }
 
-    $Second = Start-Process -FilePath $Executable -WorkingDirectory $WorkingDirectory -WindowStyle Hidden -PassThru
+    $Second = Start-Process -FilePath $Executable -WorkingDirectory $WorkingDirectory -WindowStyle Hidden -PassThru -RedirectStandardError (Join-Path $TempRoot 'second-stderr.log')
+    # Windows PowerShell needs the handle retained before this short launch exits.
+    $null = $Second.Handle
     if (-not $Second.WaitForExit(10000)) { throw "Second packaged instance did not exit." }
+    $Second.WaitForExit()
     if ($Second.ExitCode -ne 0) { throw "Second packaged instance returned $($Second.ExitCode)." }
     $First.Refresh()
     if ($First.HasExited) { throw "Second launch interrupted the running instance." }
@@ -98,7 +103,8 @@ try {
     $First = $null
     Start-Sleep -Milliseconds 400
 
-    $Restarted = Start-Process -FilePath $Executable -WorkingDirectory $WorkingDirectory -WindowStyle Hidden -PassThru
+    $Restarted = Start-Process -FilePath $Executable -WorkingDirectory $WorkingDirectory -WindowStyle Hidden -PassThru -RedirectStandardError (Join-Path $TempRoot 'restarted-stderr.log')
+    $null = $Restarted.Handle
     Wait-ForHealth -Port $Port -Process $Restarted | Out-Null
     $Notes = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/api/v1/quick-notes" -TimeoutSec 2
     if (@($Notes).Count -ne 1 -or @($Notes)[0].content -ne "package-persistence") {
@@ -111,6 +117,13 @@ try {
     }
 
     Write-Host "Package smoke test passed: local-only server, frontend assets, single instance, restart persistence, Ollama client errors and persisted model settings."
+} catch {
+    $Failure = $_
+    foreach ($LogName in @('logs\personalhub.log', 'first-stderr.log', 'second-stderr.log', 'restarted-stderr.log')) {
+        $TestLog = Join-Path $TempRoot $LogName
+        if (Test-Path -LiteralPath $TestLog) { Get-Content -LiteralPath $TestLog -Tail 60 }
+    }
+    throw $Failure
 } finally {
     Stop-TestProcess -Process $Second
     Stop-TestProcess -Process $First

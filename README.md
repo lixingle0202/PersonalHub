@@ -116,7 +116,7 @@ cd frontend
 pnpm test -- --run
 ```
 
-生成 Windows 可执行版：
+生成 Windows 可执行版：在文件管理器中打开项目的 `scripts` 文件夹，双击 `build.cmd`。也可以先在 PowerShell 中切换到项目根目录（包含 `scripts` 文件夹的目录），再执行：
 
 ```powershell
 .\scripts\build.cmd
