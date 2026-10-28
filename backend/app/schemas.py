@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 Priority = Literal["low", "normal", "high", "urgent"]
@@ -25,6 +25,13 @@ class AgendaCreate(BaseModel):
     module: str = "general"
     notes: str = ""
 
+    @field_validator('title')
+    @classmethod
+    def clean_title(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError('计划内容不能为空')
+        return value.strip()
+
 
 class AgendaUpdate(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=300)
@@ -34,6 +41,13 @@ class AgendaUpdate(BaseModel):
     priority: Priority | None = None
     bucket: AgendaBucket | None = None
     notes: str | None = None
+
+    @field_validator('title')
+    @classmethod
+    def clean_title(cls, value: str | None) -> str:
+        if value is None or not value.strip():
+            raise ValueError('计划内容不能为空')
+        return value.strip()
 
 
 class AgendaOut(ORMModel):

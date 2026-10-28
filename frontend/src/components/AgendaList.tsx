@@ -1,4 +1,4 @@
-import { CheckCircleFilled, ClockCircleOutlined } from '@ant-design/icons'
+import { CheckCircleFilled, ClockCircleOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons'
 import { Button, Checkbox, Empty, Space, Tag, Typography } from 'antd'
 import { Link } from 'react-router-dom'
 import type { AgendaItem } from '../types'
@@ -23,12 +23,16 @@ export function AgendaList({
   onToggleComplete,
   onRescheduleTomorrow,
   onReorder,
+  onEdit,
+  onDelete,
   compact = false,
 }: {
   items: AgendaItem[]
   onToggleComplete?: (item: AgendaItem) => void
   onRescheduleTomorrow?: (item: AgendaItem) => void
   onReorder?: (ordered: AgendaItem[]) => void
+  onEdit?: (item: AgendaItem) => void
+  onDelete?: (item: AgendaItem) => void
   compact?: boolean
 }) {
   if (!items.length) return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有计划事项" />
@@ -75,6 +79,12 @@ export function AgendaList({
               {item.notes ? <Typography.Text type="secondary">{item.notes}</Typography.Text> : null}
             </div>
             {item.start_time ? <span className="agenda-time"><ClockCircleOutlined /> {item.start_time}</span> : null}
+            {onEdit || onDelete ? <Space size={4} wrap className="agenda-actions">
+              {!item.source_type ? <>
+                {onEdit ? <Button size="small" icon={<EditOutlined />} aria-label={`编辑计划：${item.title}`} onClick={() => onEdit(item)}>编辑</Button> : null}
+                {onDelete ? <Button size="small" danger icon={<DeleteOutlined />} aria-label={`删除计划：${item.title}`} onClick={() => onDelete(item)}>删除</Button> : null}
+              </> : link ? <Link to={link}>编辑来源计划</Link> : null}
+            </Space> : null}
             {onRescheduleTomorrow && item.status === 'pending' ? (
               <Button type="link" onClick={() => onRescheduleTomorrow(item)}>移到明天</Button>
             ) : null}

@@ -13,11 +13,17 @@ const groups = [
   ['completed', '已完成'],
 ] as const
 
+type PlanValues = { title: string; bucket: string; priority: string; notes?: string; plan_date: string }
+
 export function TodayPage() {
   const [selectedDate, setSelectedDate] = useState<Dayjs>(dayjs())
   const [items, setItems] = useState<AgendaItem[] | null>(null)
   const [error, setError] = useState('')
   const [createOpen, setCreateOpen] = useState(false)
+  const [editingItem, setEditingItem] = useState<AgendaItem | null>(null)
+  const [deletingItem, setDeletingItem] = useState<AgendaItem | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [endOpen, setEndOpen] = useState(false)
   const [summary, setSummary] = useState('')
   const [form] = Form.useForm()
@@ -40,11 +46,44 @@ export function TodayPage() {
     completed: items?.filter((item) => item.status === 'completed') ?? [],
   }), [items])
 
-  async function create(values: { title: string; bucket: string; priority: string; notes?: string }) {
-    await apiRequest('/agenda', { method: 'POST', body: JSON.stringify({ ...values, plan_date: dateText }) })
+  function openEditor(item?: AgendaItem) {
+    setEditingItem(item ?? null)
     form.resetFields()
-    setCreateOpen(false)
-    await load()
+    form.setFieldsValue(item ? { title: item.title, plan_date: item.plan_date, bucket: item.bucket, priority: item.priority, notes: item.notes }
+      : { plan_date: dateText, bucket: 'scheduled', priority: 'normal', notes: '' })
+    setCreateOpen(true)
+  }
+
+  async function savePlan(values: PlanValues) {
+    if (saving) return
+    setSaving(true)
+    try {
+      await apiRequest(editingItem ? `/agenda/${editingItem.id}` : '/agenda', {
+        method: editingItem ? 'PATCH' : 'POST', body: JSON.stringify({ ...values, title: values.title.trim() }),
+      })
+      setCreateOpen(false)
+      message.success(editingItem ? '计划已修改' : '计划已添加')
+      await load()
+    } catch (reason) {
+      message.error(reason instanceof Error ? reason.message : '保存失败，请重试')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function deletePlan() {
+    if (!deletingItem || deleting) return
+    setDeleting(true)
+    try {
+      await apiRequest(`/agenda/${deletingItem.id}`, { method: 'DELETE' })
+      setDeletingItem(null)
+      message.success('计划已删除，可在回收站恢复')
+      await load()
+    } catch (reason) {
+      message.error(reason instanceof Error ? reason.message : '删除失败，请重试')
+    } finally {
+      setDeleting(false)
+    }
   }
 
   async function toggleComplete(item: AgendaItem) {
@@ -94,7 +133,7 @@ export function TodayPage() {
         </Space>
         <Space>
           <Button onClick={() => setEndOpen(true)}>结束今日</Button>
-          <Button type="primary" onClick={() => setCreateOpen(true)}>新增计划</Button>
+          <Button type="primary" onClick={() => openEditor()}>新增计划</Button>
         </Space>
       </div>
       {groups.map(([key, label]) => (
@@ -104,17 +143,24 @@ export function TodayPage() {
             onToggleComplete={(item) => void toggleComplete(item)}
             onRescheduleTomorrow={key === 'completed' ? undefined : (item) => void tomorrow(item)}
             onReorder={key === 'completed' ? undefined : (ordered) => void reorder(ordered)}
+            onEdit={(item) => openEditor(item)}
+            onDelete={setDeletingItem}
           />
         </Card>
       ))}
 
-      <Modal title="新增计划" open={createOpen} onCancel={() => setCreateOpen(false)} onOk={() => form.submit()} okText="保存">
-        <Form form={form} layout="vertical" onFinish={(values) => void create(values)} initialValues={{ bucket: 'scheduled', priority: 'normal' }}>
-          <Form.Item name="title" label="计划内容" rules={[{ required: true, message: '请输入计划内容' }]}><Input /></Form.Item>
+      <Modal forceRender title={editingItem ? '编辑计划' : '新增计划'} open={createOpen} onCancel={() => !saving && setCreateOpen(false)} onOk={() => form.submit()} confirmLoading={saving} okText="保存" cancelText="取消" cancelButtonProps={{ disabled: saving }}>
+        <Form form={form} layout="vertical" onFinish={(values) => void savePlan(values)}>
+          <Form.Item name="title" label="计划内容" rules={[{ required: true, whitespace: true, message: '请输入计划内容' }]}><Input maxLength={300} /></Form.Item>
+          <Form.Item name="plan_date" label="计划日期" rules={[{ required: true, message: '请选择日期' }]}><input type="date" className="native-form-select" /></Form.Item>
           <Form.Item name="bucket" label="分组"><Select options={[{ value: 'must', label: '必须完成' }, { value: 'scheduled', label: '按时间安排' }, { value: 'optional', label: '有空再做' }]} /></Form.Item>
           <Form.Item name="priority" label="优先级"><Select options={[{ value: 'normal', label: '普通' }, { value: 'high', label: '高' }, { value: 'urgent', label: '紧急' }]} /></Form.Item>
           <Form.Item name="notes" label="备注"><Input.TextArea rows={3} /></Form.Item>
         </Form>
+      </Modal>
+
+      <Modal title="删除计划" open={Boolean(deletingItem)} onCancel={() => !deleting && setDeletingItem(null)} onOk={() => void deletePlan()} confirmLoading={deleting} okText="确认删除" cancelText="取消" okButtonProps={{ danger: true }} cancelButtonProps={{ disabled: deleting }}>
+        <Typography.Paragraph>确认删除“{deletingItem?.title}”？删除后可在数据与设置的回收站恢复。</Typography.Paragraph>
       </Modal>
 
       <Modal title="结束今日" open={endOpen} onCancel={() => setEndOpen(false)} onOk={() => void endDay()} okText="确认结束">

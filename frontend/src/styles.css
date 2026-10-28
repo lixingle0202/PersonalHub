@@ -164,6 +164,7 @@ body .ant-tag.ant-tag-red:not(.ant-tag-disabled):is(.ant-tag-filled, .ant-tag-ou
 .agenda-main .ant-typography { font-size: 13px; }
 .agenda-main .ant-typography-secondary { font-size: 12px; }
 .agenda-time { color: var(--text-secondary); white-space: nowrap; font-size: 12px; }
+.agenda-actions { flex-shrink: 0; }
 .success-icon { color: var(--green); }
 .agenda-group-title { display: flex; align-items: center; gap: 10px; }
 .group-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--primary-readable); box-shadow: 0 0 0 4px var(--primary-soft); }
@@ -375,6 +376,7 @@ body.dark-mode .ant-tag.ant-tag-red:not(.ant-tag-disabled):is(.ant-tag-filled, .
   .home-plan-overview { padding: 13px 11px; }
   .agenda-row { flex-wrap: wrap; }
   .agenda-row > .ant-btn, .agenda-time { margin-left: 28px; }
+  .agenda-actions { margin-left: 28px; }
   .agenda-main { flex-basis: calc(100% - 40px); }
   .page-actions > .ant-space { width: 100%; }
   .page-learning .selectable-list, .record-grid, .ai-request-schedule, .ai-sections { grid-template-columns: 1fr; }

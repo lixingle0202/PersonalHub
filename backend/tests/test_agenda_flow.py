@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
 from fastapi.testclient import TestClient
@@ -60,6 +60,38 @@ def test_quick_note_converts_once_to_agenda(client):
         "target_type": "agenda", "plan_date": "2026-09-30",
     })
     assert duplicate.status_code == 409
+
+
+def test_manual_plan_edits_sync_to_home_and_delete_is_restorable(client):
+    item = client.post('/api/v1/agenda', json={
+        'title': '去医院', 'plan_date': '2026-10-27', 'bucket': 'scheduled', 'notes': '带上医保卡',
+    }).json()
+    item_id = item['id']
+    completed = client.post(f'/api/v1/agenda/{item_id}/complete').json()
+    changed = client.patch(f'/api/v1/agenda/{item_id}', json={
+        'title': ' 医院复诊 ', 'notes': '带检查报告', 'bucket': 'must', 'priority': 'high', 'plan_date': '2026-10-28',
+    })
+    assert changed.status_code == 200
+    assert changed.json()['status'] == 'completed'
+    changed_at = datetime.fromisoformat(changed.json()['completed_at']).replace(tzinfo=timezone.utc)
+    completed_at = datetime.fromisoformat(completed['completed_at']).replace(tzinfo=timezone.utc)
+    assert changed_at == completed_at
+    assert client.get('/api/v1/agenda?date=2026-10-27').json() == []
+    home = client.get('/api/v1/home?date=2026-10-28').json()
+    assert [(row['title'], row['notes'], row['priority']) for row in home['agenda']] == [('医院复诊', '带检查报告', 'high')]
+    assert client.delete(f'/api/v1/agenda/{item_id}').status_code == 200
+    assert client.get('/api/v1/agenda?date=2026-10-28').json() == []
+    assert client.get('/api/v1/home?date=2026-10-28').json()['stats']['total'] == 0
+    assert any(row['id'] == item_id and row['type'] == 'agenda' for row in client.get('/api/v1/trash').json())
+    assert client.post(f'/api/v1/trash/agenda/{item_id}/restore').status_code == 200
+    assert client.get('/api/v1/agenda?date=2026-10-28').json()[0]['title'] == '医院复诊'
+
+
+@pytest.mark.parametrize('title', ['', '  ', None])
+def test_manual_plan_edit_rejects_empty_title_without_changing_it(client, title):
+    item = client.post('/api/v1/agenda', json={'title': '去医院', 'plan_date': '2026-10-27'}).json()
+    assert client.patch(f"/api/v1/agenda/{item['id']}", json={'title': title}).status_code == 422
+    assert client.get(f"/api/v1/agenda/{item['id']}").json()['title'] == '去医院'
 
 
 def test_quick_note_can_be_edited_and_soft_deleted_from_home(client):
