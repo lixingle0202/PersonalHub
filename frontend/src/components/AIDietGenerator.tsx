@@ -57,7 +57,7 @@ export function AIDietGenerator({ onGenerated }: { onGenerated: (plan: TemplateD
         const answer = await visitorGenerate(config.base_url, config.model, prepared, abort.signal)
         result = await apiRequest<Result>('/ai/diet/visitor/draft', { method: 'POST', body: JSON.stringify({ requirements: values, ...answer }), signal: abort.signal })
       } else if (hosted) {
-        result = await generateSharedDraft<Result>(values, abort.signal, () => setWaiting(true), '/ai/diet/generate')
+        result = await generateSharedDraft<Result>(values, abort.signal, () => setWaiting(true), '/ai/diet/generate', () => setWaiting(false))
       } else {
         result = await apiRequest<Result>('/ai/diet/generate', { method: 'POST', body: JSON.stringify(values), signal: abort.signal })
       }

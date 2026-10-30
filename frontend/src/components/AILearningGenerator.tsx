@@ -92,7 +92,7 @@ export function AILearningGenerator({ onImported, initialTopic = '', initialObje
         })
       } else {
         generated = hosted
-          ? await generateSharedDraft<Draft>(requirements, abort.signal, () => setWaitingForShared(true))
+          ? await generateSharedDraft<Draft>(requirements, abort.signal, () => setWaitingForShared(true), '/ai/learning/generate', () => setWaitingForShared(false))
           : await apiRequest<Draft>('/ai/learning/generate', {
             method: 'POST', signal: abort.signal, body: JSON.stringify(requirements),
           })
@@ -148,7 +148,7 @@ export function AILearningGenerator({ onImported, initialTopic = '', initialObje
           <Form.Item name="current_level" label="目前基础"><Input placeholder="例如：会 Java，尚未接触 Android" maxLength={1000} /></Form.Item>
           <div className="ai-request-schedule"><Form.Item name="start_date" label="开始日期" rules={[{ required: true }]}><DatePicker /></Form.Item><Form.Item name="days" label="计划天数" rules={[{ required: true }]}><InputNumber min={1} max={30} /></Form.Item><Form.Item name="daily_minutes" label="每天可用分钟" rules={[{ required: true }]}><InputNumber min={5} max={480} /></Form.Item></div>
           <Form.Item name="preferences" label="补充要求"><Input.TextArea rows={2} placeholder="例如：多安排动手练习，每三天复习一次" maxLength={2000} /></Form.Item>
-          {busy === 'generate' ? <Alert type="info" showIcon title={waitingForShared ? '共享模型正在处理其他请求，已自动等待' : provider === 'shared' ? '共享模型正在生成，请稍候' : '本地模型正在生成，首次加载可能需要较长时间'} description={waitingForShared ? '模型空闲后会自动重试；排队期间不消耗每日生成次数。可以取消等待。' : '可以取消等待；取消不会向正式学习计划添加内容。'} className="ai-status" /> : null}
+          {busy === 'generate' ? <Alert type="info" showIcon title={waitingForShared ? '共享模型正在处理其他请求，已自动等待' : provider === 'shared' ? '共享模型正在生成，请稍候' : '本地模型正在生成，首次加载可能需要较长时间'} description={waitingForShared ? '已加入队列，轮到后自动开始；排队期间不消耗每日生成次数。可以取消等待。' : '正在后台生成，页面会自动显示结果。可以取消；取消不会向正式计划添加内容。'} className="ai-status" /> : null}
           <div className="ai-generator-actions"><Typography.Text type="secondary">生成后先预览，再由你确认加入</Typography.Text><Space><Button aria-label="取消等待" onClick={close}>{busy === 'generate' ? '取消等待' : '取消'}</Button><Button type="primary" htmlType="submit" loading={busy === 'generate'} disabled={Boolean(busy) || !config?.model || Boolean(connectionError)}>生成草稿</Button></Space></div>
         </Form>}
       </div>

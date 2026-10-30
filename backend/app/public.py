@@ -25,13 +25,14 @@ import uuid
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from .config import Settings
 from .main import create_app
 from .models import Setting
 from .runtime_paths import frontend_dist_path, resource_root
-from .services.ollama import OllamaSettings
+from .services.ollama import LearningGenerateRequest, OllamaSettings
+from .services.shared_jobs import SharedGenerationJobs
 
 
 COOKIE = "personalhub_public_session"
@@ -177,6 +178,7 @@ class PublicHub:
         self.user_apps_lock = RLock()
         self.model_gate = asyncio.BoundedSemaphore(SHARED_MODEL_CONCURRENCY)
         self.generating_users: set[str] = set()
+        self.generation_jobs = SharedGenerationJobs(self.model_gate, self.generating_users, self.store)
         self.attempts: dict[str, list[float]] = defaultdict(list)
         self.attempts_lock = RLock()
         self.auth = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
@@ -238,9 +240,14 @@ class PublicHub:
                                     allowed_hosts=("*",))
                 app = create_app(settings)
                 with app.state.database.session() as session:
-                    if session.get(Setting, "ai_ollama") is None:
-                        session.add(Setting(key="ai_ollama", value_json=OllamaSettings(
-                            base_url=MODEL_URL, model=self.model).model_dump_json()))
+                    value = OllamaSettings(base_url=MODEL_URL, model=self.model).model_dump_json()
+                    saved = session.get(Setting, "ai_ollama")
+                    if saved is None:
+                        session.add(Setting(key="ai_ollama", value_json=value))
+                    else:
+                        # A shared account must follow the current server policy,
+                        # rather than retaining an uninstalled model from an old run.
+                        saved.value_json = value
                 self.user_apps[user.id] = app
             return app
 
@@ -260,6 +267,7 @@ class PublicHub:
                 if message["type"] == "lifespan.startup":
                     await send({"type": "lifespan.startup.complete"})
                 elif message["type"] == "lifespan.shutdown":
+                    await self.generation_jobs.close()
                     with self.user_apps_lock:
                         for app in self.user_apps.values():
                             app.state.database.dispose()
@@ -302,7 +310,45 @@ class PublicHub:
             return await JSONResponse({"detail": "共享模型由服务端管理"}, status_code=403)(scope, receive, send)
         if path == "/api/v1/ai/ollama/models":
             return await JSONResponse({"detail": "共享模型由服务端管理"}, status_code=403)(scope, receive, send)
+        if path.startswith('/api/v1/ai/shared/jobs/'):
+            try:
+                job_id = path.rsplit('/', 1)[-1]
+                if request.method == 'GET':
+                    job = self.generation_jobs.get(user.id, job_id)
+                elif request.method == 'DELETE':
+                    if not secrets.compare_digest(request.headers.get('x-local-token', ''), app.state.local_token):
+                        raise HTTPException(403, '操作令牌不正确，请刷新后重试')
+                    job = self.generation_jobs.cancel(user.id, job_id)
+                else:
+                    raise HTTPException(405, '不支持的操作')
+                response = JSONResponse(self.generation_jobs.snapshot(job), headers={'Cache-Control': 'no-store'})
+            except HTTPException as exc:
+                response = JSONResponse({'detail': exc.detail}, status_code=exc.status_code, headers={'Cache-Control': 'no-store'})
+            return await response(scope, receive, send)
         if path in {"/api/v1/ai/learning/generate", "/api/v1/ai/diet/generate"} and request.method == "POST":
+            if request.headers.get('prefer') == 'respond-async':
+                try:
+                    if not secrets.compare_digest(request.headers.get('x-local-token', ''), app.state.local_token):
+                        raise HTTPException(403, '操作令牌不正确，请刷新后重试')
+                    raw = await request.body()
+                    if len(raw) > 32_000:
+                        raise HTTPException(413, '生成要求过长，请简化后重试')
+                    from .api.diet_ai import DietGenerateRequest
+                    model = LearningGenerateRequest if '/learning/' in path else DietGenerateRequest
+                    requirements = model.model_validate_json(raw).model_dump(mode='json')
+                    request_key = request.headers.get('x-generation-key') or str(uuid.uuid4())
+                    if len(request_key) > 100:
+                        raise HTTPException(422, '生成请求标识过长')
+                    job = self.generation_jobs.start(user.id, app, path, requirements, request_key)
+                    response = JSONResponse(self.generation_jobs.snapshot(job), status_code=202,
+                                            headers={'Cache-Control': 'no-store', 'Preference-Applied': 'respond-async'})
+                except ValidationError:
+                    response = JSONResponse({'detail': '请检查学习或饮食主题、日期、天数和每日时间'}, status_code=422)
+                except HTTPException as exc:
+                    response = JSONResponse({'detail': exc.detail}, status_code=exc.status_code)
+                return await response(scope, receive, send)
+            if self.generation_jobs.active(user.id):
+                return await JSONResponse({'detail': '已有生成任务正在处理，请等待完成', 'code': 'user_model_busy'}, status_code=429)(scope, receive, send)
             if user.id in self.generating_users:
                 return await JSONResponse(
                     {"detail": "你已有一个生成请求正在处理，请等待它完成后再试", "code": "user_model_busy"},

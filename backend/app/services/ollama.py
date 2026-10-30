@@ -11,6 +11,10 @@ import httpx
 from fastapi import HTTPException
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
+from .learning_subject import subject_guidance, theory_daily_focus, validate_subject_scope
+from .generation_budget import current_budget, remaining_seconds
+from .learning_quality import actionable_verification, validate_task_variety
+
 
 class LocalEndpoint(BaseModel):
     base_url: str = "http://127.0.0.1:11434"
@@ -126,9 +130,40 @@ class LearningPreview(BaseModel):
 
 
 def ollama_request(settings: LocalEndpoint, path: str, payload: dict | None = None) -> dict:
+    timeout = remaining_seconds(300 if payload else 10)
     try:
-        with httpx.Client(timeout=httpx.Timeout(300 if payload else 10, connect=3),
+        with httpx.Client(timeout=httpx.Timeout(timeout, connect=min(3, timeout)),
                           trust_env=False, follow_redirects=False) as client:
+            if payload is not None and path == '/api/chat' and current_budget.get() is not None:
+                # Streaming lets a cancelled shared job close the model connection
+                # between tokens instead of occupying capacity until the full plan ends.
+                with client.stream('POST', f'{settings.base_url}{path}', json={**payload, 'stream': True}) as response:
+                    if response.status_code == 404:
+                        raise HTTPException(422, '共享模型未安装，请管理员检查模型配置')
+                    if response.status_code != 200:
+                        raise HTTPException(502, f'共享模型服务返回错误（{response.status_code}），请稍后重试')
+                    content = []
+                    size = 0
+                    result = {}
+                    for line in response.iter_lines():
+                        remaining_seconds()
+                        if not line.strip():
+                            continue
+                        chunk = json.loads(line)
+                        if not isinstance(chunk, dict) or chunk.get('error'):
+                            raise ValueError('Invalid model stream')
+                        fragment = chunk.get('message', {}).get('content', '')
+                        if not isinstance(fragment, str):
+                            raise ValueError('Invalid model content')
+                        content.append(fragment)
+                        size += len(fragment)
+                        if size > 160_000:
+                            raise HTTPException(502, '模型输出过长，请缩短计划天数后重试')
+                        if chunk.get('done'):
+                            result = chunk
+                    if not result.get('done'):
+                        raise HTTPException(502, '模型连接中断，未收到完整计划，本次未扣除生成次数，请重试')
+                    return {**result, 'message': {'content': ''.join(content)}}
             response = client.get(f"{settings.base_url}{path}") if payload is None else client.post(f"{settings.base_url}{path}", json=payload)
             if response.status_code == 404 and path == "/api/chat":
                 raise HTTPException(422, "模型未安装或模型名称不正确，请在本地大模型设置中刷新模型列表")
@@ -168,8 +203,15 @@ def learning_chat_payload(request: LearningGenerateRequest, *, context: str = ""
     shared_slot['properties']['steps']['maxItems'] = 3
     shared_slot['properties']['deliverable']['minLength'] = 4
     shared_slot['properties']['verification']['minLength'] = 4
-    shared_slot['properties']['deliverable']['description'] = '具体可提交的代码、解题过程、图表或笔记，说明数量或完成范围'
-    shared_slot['properties']['verification']['description'] = '与当天成果直接对应的检查方法和达标条件，不罗列无关题目、测试或概念数量'
+    # Concise fields avoid small models filling their budget with repetitive
+    # assurances instead of writing distinct daily activities.
+    for field in ('deliverable', 'verification'):
+        shared_slot['properties'][field]['maxLength'] = 100
+    shared_slot['properties']['title']['maxLength'] = 80
+    schema['$defs']['StudyStep']['properties']['action']['maxLength'] = 120
+    shared_slot['properties']['deliverable']['description'] = '与本学科和目标对应的具体成果，说明数量或完成范围，不引入无关技能'
+    shared_slot['properties']['verification']['description'] = '与当天成果对应的检查动作和判据，如闭卷复述后对照教材标出遗漏或错义，不只写确保理解'
+    shared_slot['properties']['verification']['pattern'] = '^(对照|独立|闭卷|复算|复现|核对|计算|画出|标注|比较|检查|举例|朗读|录音).+$'
     shared_slot['properties']['title']['description'] = '动作加具体知识点，不要只写先修知识、专项练习、应用等阶段名称'
     shared_slot['required'] = list(dict.fromkeys([*shared_slot['required'], 'steps', 'deliverable', 'verification']))
     # The grammar's property order affects small models: commit to a concrete
@@ -193,26 +235,39 @@ def learning_chat_payload(request: LearningGenerateRequest, *, context: str = ""
         # A one-day request must be a complete goal, not day one of an invented syllabus.
         schema['properties']['sections']['items'] = {'type': 'string', 'enum': [request.objective[:200]]}
     instructions = (
-        "你是中文实践课程设计师，只输出JSON。objective是本次必须完成的实际结果，"
+        "你是中文学习计划设计师，只输出JSON。topic限定学科，objective是本次必须完成的学习结果，"
         "current_level是已具备的基础，preferences是具体限制。优先目标和限制，不套用主题通用大纲。"
-        "每天直接动手练习，不安排安装环境、泛泛复习已会语法或‘考试准备’占位。"
-        "只有一天也要完成目标要求的实际操作；最后一天的成果必须直接达到目标。"
-        "例如目标要求计算就实际计算，要求折线图就画折线图，要求写入并读回就安排写入和读取。"
+        "学习方式必须适合学科：理论课程安排阅读、概念辨析、回忆和答题；编程目标才安排代码练习。"
+        "未明确要求跨学科工具时，毛概的理论或论点用自己的话解释、联系材料分析，不用Python实现或产出代码。"
+        "严格遵守指定章节、资料和排除项；未提供教材内容时沿用用户指定的范围，不编造章节标题、页码或题目来源。"
+        "每天安排具体学习活动，不安排无关的安装环境、泛泛复习已会内容或‘考试准备’占位。"
+        "只有一天也要落实目标要求；最后一天的成果必须直接达到目标。"
+        "目标要求计算就实际计算，要求阅读和复述就安排阅读和复述。"
         f"tasks恰好{request.days}项，day_number从1到{request.days}各一次并排序，每项minutes={request.daily_minutes}。"
-        "每项steps含2至3个实际练习，填写minutes和action，分钟合计等于当天minutes。"
-        "action写动作、具体对象、数量或算例；title写当天操作，不写准备阶段等空泛标题。"
-        "deliverable写实际产出的代码、图、解题过程或笔记及范围；verification明确如何核对成果的正确性，"
-        "条件必须与成果直接相关，不罗列无关的题目、测试或概念数量，不写‘掌握全部内容’。"
+        "每项steps含2至3个学习活动，填写minutes和action，分钟合计等于当天minutes。"
+        "action写动作、具体对象、数量或算例；title写当天操作，每天标题和步骤不同，不写准备阶段等空泛标题。"
+        "不能每天套用阅读教材、选择相关章节、笔记记录的同一段话；直接指出要解决的概念、例题或操作，按理解、练习、应用逐步推进。"
+        "deliverable写与当天学习对象对应的成果及范围；verification明确如何对照教材、答案或目标核对成果，"
+        "两者各用一句话简写，条件必须与成果直接相关，不罗列无关题目或数量，不反复写‘确保理解’。"
+        "验收要以实际动作开头：计算任务复算并核对单位，阅读任务闭卷复述再对照原文，操作任务独立复现并核对结果，不能用确保理解作验收。"
         f"sections有{min(2, request.days)}至{max_sections}个不同阶段，section_index引用存在的阶段。"
         "按基础和可用时间安排合理难度与数量，每天内容不同；仅考试目标安排考试训练，不虚构资料或通过保证。"
+        + subject_guidance(request.topic, request.objective, request.preferences)
     )
     requirements = request.model_dump(mode='json')
+    focuses = theory_daily_focus(request.topic, request.objective, request.preferences, request.days)
+    if focuses:
+        requirements['daily_focus'] = [{'day_number': index, 'focus': focus}
+                                       for index, focus in enumerate(focuses, 1)]
     if context:
         requirements['planning_context'] = context
     brief = (f'我正在学习{request.topic}，已经{request.current_level[:250]}，需要{request.objective[:500]}。'
         f'具体限制：{request.preferences[:500] or "无额外限制"}。'
-        f'请给我{request.days}天、每天{request.daily_minutes}分钟的具体动手练习，每天有可检查的成果。'
-        '在steps中写出完整操作，不写安装环境；按前述JSON格式返回。')
+        f'请给我{request.days}天、每天{request.daily_minutes}分钟的具体学习安排，每天有与目标对应的可检查成果。'
+        '在steps中写出适合该学科的学习活动，遵守指定范围和限制；按前述JSON格式返回。'
+        + subject_guidance(request.topic, request.objective, request.preferences))
+    if focuses:
+        brief += '逐日重点：' + '；'.join(f'第{index}天{focus}' for index, focus in enumerate(focuses, 1)) + '。'
     return {
         "stream": False, "think": False, "format": schema,
         "options": {"temperature": 0.2, "num_ctx": 8192, "num_predict": min(8192, 600 + request.days * 650)},
@@ -245,6 +300,7 @@ def learning_preview_from_response(request: LearningGenerateRequest, data: dict)
                         step.minutes = allocated
                 if not task.deliverable or not task.verification:
                     raise ValueError('每天必须有明确产出和验收标准')
+                task.verification = actionable_verification(task.verification, '；'.join(step.action for step in task.steps))
                 task.notes = '；'.join(f'{step.minutes}分钟：{step.action}' for step in task.steps)
                 task.notes += f'；产出：{task.deliverable}；验收：{task.verification}'
                 task.title = re.sub(r'^(?:学习)?阶段\s*\d+\s*[:：]\s*', '', task.title)
@@ -270,10 +326,18 @@ def learning_preview_from_response(request: LearningGenerateRequest, data: dict)
 
 def validate_generated_quality(request: LearningGenerateRequest, result: ModelLearningPlan) -> None:
     """Only generated output is strict; an edited/imported draft may use less time."""
+    # Check every visible field, including legacy notes and structured outcomes.
+    # Merely putting the right subject in the heading cannot justify foreign tasks.
+    content = '；'.join([result.name, result.goal, *result.sections, *(
+        '；'.join([task.title, task.notes, task.deliverable, task.verification,
+                  *(step.action for step in task.steps)]) for task in result.tasks
+    )])
+    validate_subject_scope(request.topic, request.objective, request.preferences, content)
     generic = {'考试准备', '综合考试准备', '复习总结', '复习', '学习', '练习', '学习任务'}
     titles = [task.title.strip() for task in result.tasks]
     if len(set(titles)) != len(titles) or any(title in generic for title in titles):
-        raise ValueError('任务标题重复或过于笼统，请写出每天不同的具体知识点和练习')
+        raise ValueError('任务标题重复或过于笼统，请写出每天不同的具体知识点和学习活动；'
+                         '同一节可依次安排阅读梳理、闭卷复述、辨析订正，不得复制上一天的标题和步骤')
     if len(set(result.sections)) != len(result.sections):
         raise ValueError('学习阶段重复，请合并相同阶段并细化每日任务')
     totals = defaultdict(int)
@@ -327,6 +391,7 @@ def validate_generated_quality(request: LearningGenerateRequest, result: ModelLe
     violated = sorted({term for term in forbidden if normalize(term) in positive_activities})
     if violated:
         raise ValueError(f'实际步骤使用了用户限制的工具：{"、".join(violated)}，请遵守preferences重新安排')
+    validate_task_variety(result.tasks)
 
 
 def generate_learning_plan(settings: OllamaSettings, request: LearningGenerateRequest) -> LearningPreview:
@@ -354,15 +419,24 @@ def generate_learning_plan(settings: OllamaSettings, request: LearningGenerateRe
             if previous_content:
                 payload['messages'].extend([
                     {'role': 'assistant', 'content': previous_content},
-                    {'role': 'user', 'content': f'纠正上一份JSON：{correction}。实际操作必须落实原始目标“{batch.objective}”，请重写完整计划。'},
+                    {'role': 'user', 'content': f'纠正上一份JSON：{correction}。学习活动必须符合学科“{batch.topic}”并落实原始目标“{batch.objective}”，请重写完整计划。'},
                 ])
             data = ollama_request(settings, '/api/chat', {'model': settings.model, **payload})
             try:
                 preview = learning_preview_from_response(batch, data)
                 if {task.title for task in tasks} & {task.title for task in preview.tasks}:
                     raise HTTPException(502, '后续日期重复了已安排的任务，请承接前段进度生成新的具体内容')
+                try:
+                    validate_task_variety([*tasks, *preview.tasks])
+                except ValueError as exc:
+                    raise HTTPException(502, str(exc)) from exc
                 break
             except HTTPException as error:
+                split_repetitive = offset == 0 and request.days >= 2 and any(
+                    word in str(error.detail) for word in ('重复', '笼统', '含糊'))
+                if split_repetitive and ('1.5b' in settings.model.casefold() or attempt):
+                    from .learning_compact import generate_compact_learning
+                    return generate_compact_learning(settings, request)
                 if attempt:
                     raise
                 message = data.get('message')

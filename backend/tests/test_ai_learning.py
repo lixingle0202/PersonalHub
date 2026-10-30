@@ -18,6 +18,38 @@ from app.services import ollama
 REAL_CLIENT = httpx.Client
 CONFIG = {'base_url': 'http://127.0.0.1:11434', 'model': 'qwen2.5:3b'}
 REQUIREMENTS = {'topic': 'Android', 'objective': '完成一个待办应用', 'start_date': '2026-12-31', 'days': 2, 'daily_minutes': 45}
+BATCH_ACTIVITIES = [
+    '使用LinearLayout纵向排列标题和输入框，调整外边距观察对齐变化',
+    '给Button绑定点击回调，读取输入文字并显示到TextView中',
+    '使用RecyclerView展示任务集合，为每个列表项绑定独立数据',
+    '给EditText添加空白输入校验，比较合法和非法输入的提示行为',
+    '为CheckBox保存勾选状态，切换过滤条件观察已完成条目',
+    '用ViewModel管理任务数据，旋转屏幕后检查输入与列表是否保留',
+    '通过Room定义任务实体和主键，插入记录后查询数据库内容',
+    '编写DAO删除指定任务，并核对其余数据没有受到影响',
+    '使用Flow订阅数据库变化，插入新数据时刷新列表内容',
+    '实现Dialog修改任务标题，提交后同步数据库和列表显示',
+    '通过DatePicker选择截止日期，把结果格式化后写入任务字段',
+    '给Toolbar增加筛选菜单，组合日期和状态条件查询任务',
+    '使用Navigation管理列表和详情页面，传递并接收任务标识',
+    '在详情页面显示备注和截止时间，处理不存在的记录',
+    '给删除动作增加确认对话框，分别验证取消和确认分支',
+    '编写JUnit测试日期排序，覆盖相同日期和缺失日期情况',
+    '使用Espresso填写新增表单，验证提交后能看到列表条目',
+    '为深色主题配置颜色资源，检查文字与背景的对比',
+    '用ConstraintLayout适配横屏，调整详情面板尺寸和控件约束',
+    '使用SharedPreferences保存筛选偏好，重启程序后读取设置',
+    '为导出操作生成CSV文本，检查标题行和包含逗号的数据转义',
+    '实现CSV导入校验，拒绝无效日期并显示所在行号',
+    '给搜索框增加输入防抖，统计快速输入时数据库查询次数',
+    '为重复提交添加按钮禁用状态，模拟慢操作验证只新增一条记录',
+    '使用WorkManager安排到期检查，取消已完成任务对应的提醒',
+    '增加回收站标记，恢复被删除记录并检查原始时间信息',
+    '把数据库访问迁移到后台协程，观察界面滚动是否保持流畅',
+    '检查TalkBack朗读顺序，为图标按钮添加清晰的内容描述',
+    '在两种屏幕尺寸上走通新增、编辑和删除流程，整理问题清单',
+    '生成签名测试包并安装，按验收清单逐项检查主要功能',
+]
 MODEL_PLAN = {
     'name': 'Android 两天入门', 'goal': '理解界面与状态，完成练习', 'sections': ['界面', '状态'],
     'tasks': [
@@ -25,6 +57,116 @@ MODEL_PLAN = {
         {'day_number': 2, 'section_index': 1, 'title': '保存状态', 'minutes': 45, 'notes': '学习状态保存15分钟；练习待办列表25分钟；产出：能保留输入的待办页；验收5分钟：重建页面后内容不丢失。'},
     ],
 }
+
+THEORY_REQUIREMENTS = {
+    'topic': '毛概', 'objective': '理解并复述第一章第一节的主要概念和论点',
+    'current_level': '刚开始学习，会Python', 'preferences': '只学习第一章第一节，对照教材整理笔记',
+    'start_date': '2026-10-28', 'days': 3, 'daily_minutes': 45,
+}
+THEORY_PLAN = {
+    'name': '毛概第一章第一节学习', 'goal': THEORY_REQUIREMENTS['objective'],
+    'sections': ['阅读理解', '回忆与整理'],
+    'tasks': [
+        {'day_number': 1, 'section_index': 0, 'title': '阅读第一章第一节并梳理概念', 'minutes': 45,
+         'steps': [{'minutes': 30, 'action': '阅读教材第一章第一节，摘录本节主要概念及其解释'},
+                   {'minutes': 15, 'action': '用自己的话写出概念解释，并标记不理解之处'}],
+         'deliverable': '第一章第一节概念笔记及疑问清单', 'verification': '对照教材逐项核对概念解释，标记遗漏或误解'},
+        {'day_number': 2, 'section_index': 1, 'title': '闭卷复述第一章第一节的主要论点', 'minutes': 45,
+         'steps': [{'minutes': 25, 'action': '合上教材，围绕第一章第一节主要论点写出解释和论证关系'},
+                   {'minutes': 20, 'action': '对照第一章第一节原文订正复述中的遗漏和错误'}],
+         'deliverable': '第一章第一节主要论点的复述和订正记录', 'verification': '逐条对照教材，确认复述准确并说明订正原因'},
+        {'day_number': 3, 'section_index': 1, 'title': '整理第一章第一节知识框架并自测', 'minutes': 45,
+         'steps': [{'minutes': 25, 'action': '整理第一章第一节概念与论点之间的关系，形成知识框架'},
+                   {'minutes': 20, 'action': '根据笔记自拟两道概念辨析题，独立作答后对照教材订正'}],
+         'deliverable': '第一章第一节知识框架及两道辨析题答案', 'verification': '检查概念关系与教材一致，两道答案均有教材依据'},
+    ],
+}
+
+
+def test_theory_plan_uses_subject_activities_and_retries_unrelated_programming(monkeypatch):
+    calls = []
+    def inference(_settings, _path, payload):
+        calls.append(payload)
+        assert '理论课程安排阅读' in payload['messages'][0]['content']
+        assert '未要求编程' in payload['messages'][0]['content']
+        focuses = json.loads(payload['messages'][1]['content'])['daily_focus']
+        assert [item['day_number'] for item in focuses] == [1, 2, 3]
+        assert len({item['focus'] for item in focuses}) == 3
+        plan = deepcopy(THEORY_PLAN)
+        if len(calls) == 1:
+            plan['tasks'][1].update(title='实现毛概概念',
+                steps=[{'minutes': 30, 'action': '在Python环境中使用代码实现第一章第一节的一个论点'},
+                       {'minutes': 15, 'action': '编写代码注释解释实现逻辑'}],
+                deliverable='毛概第一章代码实现', verification='运行代码检查输出结果')
+        else:
+            assert '任务偏离学习主题' in payload['messages'][-1]['content']
+        return {'message': {'content': json.dumps(plan)}}
+    monkeypatch.setattr(ollama, 'ollama_request', inference)
+    plan = ollama.generate_learning_plan(ollama.OllamaSettings(**CONFIG), ollama.LearningGenerateRequest(**THEORY_REQUIREMENTS))
+    assert len(calls) == 2
+    assert len(plan.tasks) == 3 and all(task.minutes == 45 for task in plan.tasks)
+    assert all('第一章第一节' in task.notes for task in plan.tasks)
+    assert not any('Python' in task.notes or '代码' in task.notes for task in plan.tasks)
+
+
+@pytest.mark.parametrize('field', ['title', 'notes', 'steps', 'deliverable', 'verification', 'sections', 'name', 'goal'])
+def test_unrelated_programming_is_rejected_in_each_generated_field(field):
+    result = deepcopy(THEORY_PLAN)
+    task = result['tasks'][1]
+    if field in {'sections', 'name', 'goal'}:
+        result[field] = ['阅读', 'Python实现'] if field == 'sections' else 'Python实现毛概'
+    elif field == 'steps':
+        task['steps'][0]['action'] = '用代码实现毛概第一章第一节概念'
+    elif field == 'notes':
+        task.pop('steps')
+        task['notes'] = '用Python实现第一章第一节的一个论点；产出：论点代码；验收：运行并检查输出结果。'
+    else:
+        task[field] = '用Python实现第一章第一节论点并运行代码'
+    with pytest.raises(Exception, match='任务偏离学习主题'):
+        ollama.learning_preview_from_response(ollama.LearningGenerateRequest(**THEORY_REQUIREMENTS),
+                                              {'message': {'content': json.dumps(result)}})
+
+
+@pytest.mark.parametrize('endpoint', ['/api/v1/ai/learning/generate', '/api/v1/ai/learning/visitor/draft'])
+def test_unrelated_theory_programming_creates_no_draft_or_live_plan(client, monkeypatch, endpoint):
+    plan = deepcopy(THEORY_PLAN)
+    plan['tasks'][1]['steps'][0]['action'] = '在Python环境中实现毛概的论点'
+    client.put('/api/v1/ai/ollama/settings', json=CONFIG)
+    model_transport(monkeypatch, lambda request: httpx.Response(200, json={'message': {'content': json.dumps(plan)}}))
+    body = THEORY_REQUIREMENTS if endpoint.endswith('/generate') else {'requirements': THEORY_REQUIREMENTS, 'content': json.dumps(plan)}
+    response = client.post(endpoint, json=body)
+    assert response.status_code == 502 and '任务偏离学习主题' in response.json()['detail']
+    with client.app.state.database.session() as session:
+        assert session.scalars(select(AILearningDraft)).all() == []
+        assert session.scalars(select(LearningGoal)).all() == []
+
+
+@pytest.mark.parametrize('topic,objective,preferences,allowed', [
+    ('毛概', '整理第一章笔记', '不用Python，不编程', False),
+    ('毛概', '使用Python统计第一章笔记中的关键词', '', True),
+    ('毛概', '整理第一章笔记', '使用Python整理笔记', True),
+    ('Python', '复习语法概念', '不写代码，只口述解释', False),
+    ('英语', '背诵二十个单词', '', False),
+    ('高等数学', '练习导数计算', '', False),
+    ('Android', '实现一个待办应用', '', True),
+    ('C语言', '练习指针与内存分配', '', True),
+    ('Go', '实现一个简单命令行程序', '', True),
+])
+def test_programming_permission_depends_on_goal_and_preferences(topic, objective, preferences, allowed):
+    from app.services.learning_subject import programming_is_relevant, validate_subject_scope
+    assert programming_is_relevant(topic, objective, preferences) is allowed
+    if allowed:
+        validate_subject_scope(topic, objective, preferences, '用Python统计关键词并核对结果')
+    else:
+        with pytest.raises(ValueError, match='任务偏离学习主题'):
+            validate_subject_scope(topic, objective, preferences, '用Python实现本节概念')
+    validate_subject_scope(topic, objective, preferences, '阅读教材并整理笔记；不用Python；不写代码')
+
+
+def test_caution_in_notes_does_not_hide_an_unrelated_programming_step():
+    from app.services.learning_subject import validate_subject_scope
+    with pytest.raises(ValueError, match='任务偏离学习主题'):
+        validate_subject_scope('毛概', '复述第一章论点', '', '避免遗漏教材论点并用Python实现概念')
 
 
 @pytest.fixture
@@ -135,7 +277,7 @@ def test_small_model_generation_constrains_every_requested_day_and_its_time_budg
         result = {'name': '轻量模型计划', 'goal': '完成练习', 'sections': sections,
                   'tasks': [{'day_number': day, 'section_index': (day - 1) % len(sections),
                              'title': f"{requirements['start_date']}练习 {day}", 'minutes': minutes,
-                             'notes': f'学习第{day}项状态知识并进行动手练习；产出：可运行的第{day}个页面；验收：独立复现页面行为并记录错误。'} for day in range(1, batch_days + 1)]}
+                             'notes': BATCH_ACTIVITIES[(len(calls) - 1) * 7 + day - 1] + '；产出：对应功能和操作记录；验收：独立执行该项操作并核对界面与数据变化。'} for day in range(1, batch_days + 1)]}
         return httpx.Response(200, json={'message': {'content': json.dumps(result)}})
     model_transport(monkeypatch, handler)
     request = ollama.LearningGenerateRequest(**{**REQUIREMENTS, 'days': days, 'daily_minutes': minutes})
@@ -160,7 +302,8 @@ def test_same_topic_uses_the_actual_requirements_and_full_daily_budget(monkeypat
         result = deepcopy(MODEL_PLAN)
         for task in result['tasks']:
             task['minutes'] = minutes
-            task['notes'] = f"{preference}；学习具体API并完成第{task['day_number']}项练习；产出：运行代码和结果记录；验收：对照预期结果检查边界情况。"
+            activity = '读取CSV文件，辨认表头并把三行数据映射为字段字典' if task['day_number'] == 1 else '按分组汇总有效数值，把计算结果写入新文件后再次读回核对'
+            task['notes'] = f"{preference}；{activity}；产出：运行代码和结果记录；验收：对照预期结果检查边界情况。"
         return httpx.Response(200, json={'message': {'content': json.dumps(result)}})
     model_transport(monkeypatch, handler)
     requirements = ollama.LearningGenerateRequest(**{**REQUIREMENTS, 'daily_minutes': minutes, 'preferences': preference})
@@ -195,9 +338,12 @@ def test_structured_activities_are_preserved_as_detailed_task_notes():
                                      {'minutes': 25, 'action': '实现按钮逻辑并运行页面'},
                                      {'minutes': 5, 'action': '运行输入为空的边界测试'}],
                     deliverable='提交可以运行的页面代码', verification='输入为空时提示错误，按钮可正常点击')
+    result['tasks'][1]['steps'] = [{'minutes': 20, 'action': '使用ViewModel保存任务集合和当前筛选条件'},
+                                 {'minutes': 25, 'action': '旋转屏幕并核对待办数据与筛选状态是否保留'}]
     plan = ollama.learning_preview_from_response(ollama.LearningGenerateRequest(**REQUIREMENTS),
                                                  {'message': {'content': json.dumps(result)}})
-    assert all('15分钟：阅读布局代码' in task.notes and '产出：提交' in task.notes and '验收：输入为空' in task.notes for task in plan.tasks)
+    assert '15分钟：阅读布局代码' in plan.tasks[0].notes and '产出：提交' in plan.tasks[0].notes
+    assert 'ViewModel' in plan.tasks[1].notes and '旋转屏幕' in plan.tasks[1].notes
     assert plan.tasks[0].title == '运行输入为空的边界测试'
     result['tasks'][0]['steps'][0]['minutes'] = 30
     normalized = ollama.learning_preview_from_response(ollama.LearningGenerateRequest(**REQUIREMENTS),
