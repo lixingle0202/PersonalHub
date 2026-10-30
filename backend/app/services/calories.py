@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..models import Dish, DishIngredient
+from .food_reference import EXTRA_ALIASES, EXTRA_KCAL_100G, RECIPE_ALIASES, REFERENCE_RECIPES
 
 
 # Rounded ingredient reference values (kcal/100 g), retained from the USDA-based
@@ -25,6 +26,7 @@ KCAL_100G = {
     # https://mohw.gov.tw/dl-15745-93035175-b28d-40f9-b5eb-adb7a43c4c99.html
     "无馅小汤圆": 258,
 }
+KCAL_100G.update(EXTRA_KCAL_100G)
 ALIASES = {
     "纯牛奶": "牛奶", "鲜牛奶": "牛奶", "水煮蛋": "鸡蛋", "煮鸡蛋": "鸡蛋",
     "白米饭": "米饭", "白饭": "米饭", "食盐": "盐", "清水": "水",
@@ -32,6 +34,7 @@ ALIASES = {
     "红豆汤": "红豆糖水", "红豆沙": "红豆糖水", "无馅汤圆": "无馅小汤圆",
     "红白小汤圆": "无馅小汤圆", "白砂糖": "白糖",
 }
+ALIASES.update(EXTRA_ALIASES)
 TYPICAL_GRAMS = {"鸡蛋": 50, "番茄": 150, "西红柿": 150, "香蕉": 120,
                  "苹果": 180, "土豆": 150, "胡萝卜": 100, "黄瓜": 180}
 # These are assumptions, not measured portions for an individual meal.
@@ -56,9 +59,13 @@ def normalized_name(name: str) -> str:
     return re.sub(r"\s+", "", name).strip()
 
 
+def ingredient_name(name: str) -> str:
+    name = re.sub(r'[（(](?:切片|切丝|切块|切末|去皮|洗净|生重)[)）]$', '', normalized_name(name))
+    return ALIASES.get(name, name)
+
+
 def ingredient_energy(name: str, quantity: float | None, unit: str) -> float | None:
-    name = normalized_name(name)
-    key = ALIASES.get(name, name)
+    key = ingredient_name(name)
     if key not in KCAL_100G:
         return None
     if KCAL_100G[key] == 0:
@@ -81,6 +88,24 @@ def ingredient_kcal(item: DishIngredient) -> float | None:
     return ingredient_energy(item.name, item.quantity, item.unit)
 
 
+def recipe_for(name: str):
+    name = normalized_name(name)
+    return REFERENCE_RECIPES.get(RECIPE_ALIASES.get(name, name))
+
+
+def recipe_reference(name: str, count: float) -> tuple[float, str, str] | None:
+    recipe = recipe_for(name)
+    if not recipe:
+        return None
+    values = [(food, quantity, unit, ingredient_energy(food, quantity, unit)) for food, quantity, unit in recipe]
+    total = sum(energy for _, _, _, energy in values if energy is not None)
+    lines = ' + '.join(f'{food}{quantity:g}{unit}≈{energy:.0f} kcal' for food, quantity, unit, energy in values)
+    return total * count, '参考配方', (
+        f'{name}按{count:g}份参考配方：每份{lines}；每份合计约{total:.0f} kcal。'
+        '这是示例用量，食材按烹饪前可食重量计算，油按全部食用估算；不代表餐馆实测值，可修改常用菜品配方'
+    )
+
+
 def reference_food(name: str) -> tuple[float, str, str] | None:
     """Match a whole food, optionally with a weight/count, never a substring."""
     name = normalized_name(name)
@@ -89,6 +114,10 @@ def reference_food(name: str) -> tuple[float, str, str] | None:
     name = match[1] if match else name
     if quantity is not None and quantity <= 0:
         return None
+    if recipe_for(name):
+        if quantity is not None and unit not in {'份', '碗'}:
+            return None
+        return recipe_reference(name, quantity if quantity is not None else 1)
     if name in RED_BEAN_BALLS:
         if quantity is not None and unit not in {"份", "碗"}:
             return None
@@ -128,14 +157,35 @@ def estimate_meal(session: Session, dishes: Sequence[Dish], override: int | None
             continue
         items = session.scalars(select(DishIngredient).where(DishIngredient.dish_id == dish.id)).all()
         if items:
-            values = [ingredient_kcal(item) for item in items]
+            defaults = {ingredient_name(food): (amount * dish.recipe_servings, unit)
+                        for food, amount, unit in (recipe_for(dish.name) or [])}
+            values = []
+            item_details = []
+            assumed = False
+            for item in items:
+                quantity, unit = item.quantity, item.unit
+                default = defaults.get(ingredient_name(item.name))
+                used_default = quantity is None and default is not None
+                if used_default:
+                    quantity, unit = default
+                    assumed = True
+                energy = ingredient_energy(item.name, quantity, unit)
+                values.append(energy)
+                if energy is not None:
+                    amount = f'{quantity:g}{unit}' if quantity is not None else unit
+                    item_details.append(f'{item.name}{amount}≈{energy:.0f} kcal' + ('（参考用量）' if used_default else ''))
             if any(value is None for value in values):
                 missing.extend(f"{dish.name}的{item.name}（需补充可识别食材、数量和单位）" for item, value in zip(items, values) if value is None)
                 continue
             recipe_total = sum(value for value in values if value is not None)
             total += recipe_total / dish.recipe_servings
-            sources.add("食材粗估")
-            details.append(f"{dish.name}：配方合计{recipe_total:.0f} kcal ÷ {dish.recipe_servings:g}份")
+            sources.add('参考配方' if assumed else '食材粗估')
+            details.append(f"{dish.name}：" + ' + '.join(item_details)
+                           + f"；配方合计{recipe_total:.0f} kcal ÷ {dish.recipe_servings:g}份")
+            if assumed:
+                details.append('缺少数量的食材暂按参考用量计算，请按实际食用量修改')
+            if not any(ingredient_name(item.name) == '食用油' for item in items):
+                details.append('当前配方未填写食用油，额外用油未计入；炒菜请补充实际油量')
         else:
             reference = reference_food(dish.name)
             if reference is None:

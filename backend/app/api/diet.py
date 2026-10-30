@@ -39,15 +39,18 @@ class DishIn(BaseModel):
     recipe_servings: float = Field(default=1, ge=0.1, le=100, allow_inf_nan=False)
 
 
-class MealIn(BaseModel):
-    meal_date: date
-    meal_type: Literal["breakfast", "lunch", "dinner", "snack"]
+class MealEstimateIn(BaseModel):
     dish_id: str | None = None
     dish_ids: list[str] | None = Field(default=None, max_length=20)
     custom_name: str = ""
-    actual_food: str = ""
     estimated_kcal: int | None = Field(default=None, ge=0, le=10000)
     servings: float = Field(default=1, ge=0.1, le=20, allow_inf_nan=False)
+
+
+class MealIn(MealEstimateIn):
+    meal_date: date
+    meal_type: Literal["breakfast", "lunch", "dinner", "snack"]
+    actual_food: str = ""
 
 
 class DietProfileIn(BaseModel):
@@ -105,13 +108,22 @@ def meal_out(session: Session, meal: MealPlan) -> dict:
     return data
 
 
-def selected_dish_ids(payload: MealIn) -> list[str]:
+def selected_dish_ids(payload: MealEstimateIn) -> list[str]:
     ids = payload.dish_ids if payload.dish_ids is not None else ([payload.dish_id] if payload.dish_id else [])
     if len(ids) != len(set(ids)) or any(not dish_id for dish_id in ids):
         raise HTTPException(422, "请勿重复选择菜品")
     if not ids and not payload.custom_name.strip():
         raise HTTPException(422, "请选择菜品或填写餐食名称")
     return ids
+
+
+@router.post("/calories/estimate")
+def preview_calories(payload: MealEstimateIn, session: Session = Depends(get_session)):
+    dishes = [active_record(session, Dish, dish_id, "菜品") for dish_id in selected_dish_ids(payload)]
+    estimate = estimate_meal(session, dishes, payload.estimated_kcal,
+                             custom_name=payload.custom_name, servings=payload.servings)
+    return {"display_kcal": estimate.kcal, "calorie_source": estimate.source,
+            "calorie_explanation": estimate.explanation}
 
 
 @router.get("/profile")
