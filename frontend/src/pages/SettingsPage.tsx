@@ -7,16 +7,13 @@ import { applyAppearance } from '../app/theme'
 import { ConfirmDangerButton } from '../components/ConfirmDangerButton'
 import { OllamaSettingsPanel } from '../components/OllamaSettingsPanel'
 import { ErrorPanel, LoadingPanel } from '../components/StatePanels'
+import { TrashPanel, type TrashItem } from '../components/TrashPanel'
 
 type PreferenceValues = Omit<AppSettings, 'theme_mode' | 'custom_categories'> & { dark: boolean }
 
 type Backup = {
   name: string; created_at: string; size_bytes: number; sha256: string
   kind: 'manual' | 'pre_restore' | 'automatic'
-}
-
-type TrashItem = {
-  type: string; id: string; module: string; label: string; title: string; deleted_at: string
 }
 
 function readableSize(size: number) {
@@ -129,12 +126,11 @@ export function SettingsPage() {
         <ConfirmDangerButton label="恢复此备份" title="确认恢复数据？" description="当前数据会先自动备份，然后替换为这个版本。" disabled={Boolean(busy)} onConfirm={() => runAction(`restore-${backup.name}`, () => apiRequest(`/backups/${encodeURIComponent(backup.name)}/restore`, { method: 'POST' }), '数据已恢复')} />
       </div>)}</div> : <Empty description="还没有备份" />}
     </Card>
-    <Card title={`回收站（${trash.length}）`}>
-      {trash.length ? <div className="data-list">{trash.map((item) => <div className="data-row" key={`${item.type}-${item.id}`}>
-        <div><Typography.Text strong>{item.title}</Typography.Text><div><Tag>{item.label}</Tag><Typography.Text type="secondary">删除于 {new Date(item.deleted_at).toLocaleString()}</Typography.Text></div></div>
-        <div className="row-actions"><Button disabled={Boolean(busy)} onClick={() => void runAction(`restore-trash-${item.id}`, () => apiRequest(`/trash/${item.type}/${item.id}/restore`, { method: 'POST' }), '项目已恢复')}>恢复</Button><ConfirmDangerButton label="永久删除" title="永久删除这个项目？" description="此操作无法撤销。" disabled={Boolean(busy)} onConfirm={() => runAction(`purge-${item.id}`, () => apiRequest(`/trash/${item.type}/${item.id}`, { method: 'DELETE' }), '项目已永久删除')} /></div>
-      </div>)}</div> : <Empty description="回收站是空的" />}
-    </Card>
+    <TrashPanel items={trash} busy={Boolean(busy)}
+      onRestore={(item) => runAction(`restore-trash-${item.id}`, () => apiRequest(`/trash/${item.type}/${item.id}/restore`, { method: 'POST' }), item.children ? '整组内容已恢复' : '项目已恢复')}
+      onPurge={(item) => runAction(`purge-${item.id}`, () => apiRequest(`/trash/${item.type}/${item.id}`, { method: 'DELETE' }), '项目已永久删除')}
+      onRestoreCategory={(module) => runAction(`restore-category-${module}`, () => apiRequest(`/trash/categories/${module}/restore`, { method: 'POST' }), '该大类的内容已全部恢复')}
+    />
   </div>
 
   const preferencesPanel = <Card><Form<PreferenceValues> key={`${settings.nickname}-${settings.theme_mode}-${settings.theme_color}-${settings.default_study_minutes}`} initialValues={{ ...settings, dark: settings.theme_mode === 'dark' }} layout="vertical" disabled={busy === 'preferences'} onFinish={(values) => void save(values)} onValuesChange={(changed, values) => {

@@ -14,7 +14,7 @@ from ..models import (
     LearningGoal, MediaContent, Setting,
 )
 from ..services.data_safety import create_backup, list_backups, resolve_backup, restore_backup
-from ..services.trash import list_trash, purge_trash, restore_trash
+from ..services.trash import list_trash, purge_trash, restore_category, restore_trash
 
 
 router = APIRouter(tags=["system"])
@@ -151,10 +151,22 @@ def trash(session: Session = Depends(get_session)):
     return list_trash(session)
 
 
+@router.post("/trash/categories/{module}/restore")
+def restore_deleted_category(module: str, session: Session = Depends(get_session)):
+    try:
+        result = restore_category(session, module)
+        session.commit()
+        return result
+    except (KeyError, LookupError) as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+
 @router.post("/trash/{item_type}/{item_id}/restore")
 def restore_deleted(item_type: str, item_id: str, session: Session = Depends(get_session)):
     try:
-        return restore_trash(session, item_type, item_id)
+        result = restore_trash(session, item_type, item_id)
+        session.commit()
+        return result
     except KeyError as exc:
         raise HTTPException(404, str(exc)) from exc
     except LookupError as exc:
@@ -165,6 +177,7 @@ def restore_deleted(item_type: str, item_id: str, session: Session = Depends(get
 def purge_deleted(item_type: str, item_id: str, session: Session = Depends(get_session)):
     try:
         purge_trash(session, item_type, item_id)
+        session.commit()
     except KeyError as exc:
         raise HTTPException(404, str(exc)) from exc
     except LookupError as exc:

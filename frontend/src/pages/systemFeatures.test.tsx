@@ -151,7 +151,8 @@ describe('system-wide features', () => {
 
     render(<MemoryRouter initialEntries={['/settings']}><Routes><Route path="/settings" element={<SettingsPage />} /></Routes></MemoryRouter>)
     expect(await screen.findByText('手动备份')).toBeInTheDocument()
-    expect(screen.getByText('已删除事项')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '查看今日计划回收站' }))
+    expect(await screen.findByText('已删除事项')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '恢复此备份' })).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: '立即备份' }))
@@ -175,9 +176,9 @@ describe('system-wide features', () => {
     })
 
     render(<MemoryRouter initialEntries={['/settings']}><Routes><Route path="/settings" element={<SettingsPage />} /></Routes></MemoryRouter>)
+    fireEvent.click(await screen.findByRole('button', { name: '查看今日计划回收站' }))
     expect(await screen.findByText('已删除事项')).toBeInTheDocument()
-
-    const restore = screen.getByRole('button', { name: /^恢\s*复$/ })
+    const restore = await screen.findByRole('button', { name: /^恢\s*复$/ })
     expect(restore).toBeEnabled()
     fireEvent.click(restore)
     await waitFor(() => expect(fetchMock.mock.calls.some(([input, init]) => String(input).endsWith('/trash/agenda/a1/restore') && init?.method === 'POST')).toBe(true))

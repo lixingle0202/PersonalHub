@@ -277,6 +277,10 @@ body .ant-tag.ant-tag-red:not(.ant-tag-disabled):is(.ant-tag-filled, .ant-tag-ou
 .data-row:last-child { border-bottom: 0; }
 .data-row > div:first-child { min-width: 0; display: flex; flex-direction: column; gap: 8px; overflow-wrap: anywhere; }
 .row-actions { display: flex; gap: 8px; flex-shrink: 0; }
+.trash-plan-detail { display: flex; flex-direction: column; gap: 16px; }
+.trash-plan-detail > .ant-btn { align-self: flex-start; }
+.trash-plan-detail .data-row { align-items: flex-start; }
+.trash-item-details { white-space: pre-wrap; margin-bottom: 0 !important; }
 .ai-generator { display: flex; flex-direction: column; gap: 18px; }
 .ai-connection, .ai-generator-actions { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
 .ai-request-schedule { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
