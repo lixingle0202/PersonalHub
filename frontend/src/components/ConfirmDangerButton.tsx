@@ -6,12 +6,14 @@ export function ConfirmDangerButton({
   description,
   onConfirm,
   disabled,
+  ariaLabel,
 }: {
   label: string
   title: string
   description: string
   onConfirm: () => void | Promise<void>
   disabled?: boolean
+  ariaLabel?: string
 }) {
   return (
     <Popconfirm
@@ -23,7 +25,7 @@ export function ConfirmDangerButton({
       onConfirm={onConfirm}
       disabled={disabled}
     >
-      <Button aria-label={label} danger disabled={disabled}>{label}</Button>
+      <Button aria-label={ariaLabel ?? label} danger disabled={disabled}>{label}</Button>
     </Popconfirm>
   )
 }

@@ -297,7 +297,9 @@ def generate_shopping_list(payload: ShoppingGenerate, session: Session = Depends
         quantity_text = "按需" if quantity is None else f"{quantity:g}{unit}"
         session.add(ShoppingItem(shopping_list_id=shopping.id, ingredient_name=name, quantity_text=quantity_text))
     session.flush()
-    return shopping_out(session, shopping)
+    result = shopping_out(session, shopping)
+    session.commit()
+    return result
 
 
 def shopping_out(session: Session, shopping: ShoppingList) -> dict:
@@ -322,7 +324,23 @@ def create_shopping_list(payload: ShoppingGenerate, session: Session = Depends(g
     shopping = ShoppingList(**payload.model_dump())
     session.add(shopping)
     session.flush()
-    return shopping_out(session, shopping)
+    result = shopping_out(session, shopping)
+    session.commit()
+    return result
+
+
+@router.delete("/shopping-lists/{list_id}")
+def delete_shopping_list(list_id: str, session: Session = Depends(get_session)):
+    shopping = active_record(session, ShoppingList, list_id, "购物清单")
+    soft_delete(shopping)
+    for item in session.scalars(select(ShoppingItem).where(
+        ShoppingItem.shopping_list_id == list_id, ShoppingItem.deleted_at.is_(None)
+    )).all():
+        item.deleted_at = shopping.deleted_at
+    session.flush()
+    result = model_dict(shopping)
+    session.commit()
+    return result
 
 
 @router.post("/shopping-lists/{list_id}/items", status_code=status.HTTP_201_CREATED)
@@ -331,7 +349,9 @@ def add_shopping_item(list_id: str, payload: ShoppingItemIn, session: Session = 
     item = ShoppingItem(shopping_list_id=list_id, is_manual=True, **payload.model_dump())
     session.add(item)
     session.flush()
-    return model_dict(item)
+    result = model_dict(item)
+    session.commit()
+    return result
 
 
 @router.patch("/shopping-items/{item_id}")
@@ -340,7 +360,9 @@ def update_shopping_item(item_id: str, payload: ShoppingItemPatch, session: Sess
     active_record(session, ShoppingList, item.shopping_list_id, "购物清单")
     apply_changes(item, payload.model_dump(exclude_unset=True), set(ShoppingItemPatch.model_fields))
     session.flush()
-    return model_dict(item)
+    result = model_dict(item)
+    session.commit()
+    return result
 
 
 @router.delete("/shopping-items/{item_id}")
@@ -349,4 +371,6 @@ def delete_shopping_item(item_id: str, session: Session = Depends(get_session)):
     active_record(session, ShoppingList, item.shopping_list_id, "购物清单")
     soft_delete(item)
     session.flush()
-    return model_dict(item)
+    result = model_dict(item)
+    session.commit()
+    return result

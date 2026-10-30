@@ -281,6 +281,9 @@ body .ant-tag.ant-tag-red:not(.ant-tag-disabled):is(.ant-tag-filled, .ant-tag-ou
 .trash-plan-detail > .ant-btn { align-self: flex-start; }
 .trash-plan-detail .data-row { align-items: flex-start; }
 .trash-item-details { white-space: pre-wrap; margin-bottom: 0 !important; }
+.shopping-list-card .ant-card-head-wrapper { align-items: flex-start; flex-wrap: wrap; gap: 12px; }
+.shopping-list-card .ant-card-head-title { white-space: normal; }
+.shopping-list-card .ant-card-extra { margin-inline-start: 0; }
 .ai-generator { display: flex; flex-direction: column; gap: 18px; }
 .ai-connection, .ai-generator-actions { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
 .ai-request-schedule { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }

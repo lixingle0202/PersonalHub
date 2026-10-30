@@ -36,6 +36,10 @@ function mockApi(initial: Meal[] = [], deleteFails: boolean | (() => boolean) = 
     } else if (url.pathname.endsWith('/diet/shopping-lists') && init?.method === 'POST') {
       shopping = [{ id: 'list-1', ...JSON.parse(String(init.body)), items: [] }, ...shopping]
       body = shopping[0]
+    } else if (url.pathname.includes('/diet/shopping-lists/') && init?.method === 'DELETE') {
+      if (typeof deleteFails === 'function' ? deleteFails() : deleteFails) return new Response(JSON.stringify({ detail: '删除失败，请重试' }), { status: 500 })
+      shopping = shopping.filter((list) => !url.pathname.endsWith(`/${list.id}`))
+      body = {}
     } else if (url.pathname.endsWith('/diet/shopping-lists')) {
       body = shopping
     } else if (url.pathname.includes('/diet/shopping-lists/') && url.pathname.endsWith('/items') && init?.method === 'POST') {
@@ -178,6 +182,45 @@ describe('diet monthly calendar and manual changes', () => {
     expect(await screen.findByText('酸奶')).toBeInTheDocument()
     expect(screen.queryByText('牛奶')).not.toBeInTheDocument()
   }, 180000)
+
+  it('deletes a generated shopping list after confirmation, keeps it on cancel or failure, and allows retrying', async () => {
+    let fail = false
+    const fetchMock = mockApi([], () => fail)
+    render(<DietPage />)
+    fireEvent.click(await screen.findByRole('tab', { name: '购物清单' }))
+    fireEvent.click(screen.getByRole('button', { name: '按当前月份饮食生成' }))
+    fireEvent.click(within(screen.getByRole('dialog', { name: '生成购物清单' })).getByRole('button', { name: '创建' }))
+    expect(await screen.findByText('大米')).toBeInTheDocument()
+    const deletes = () => fetchMock.mock.calls.filter(([url, init]) => String(url).endsWith('/diet/shopping-lists/list-1') && init?.method === 'DELETE')
+    fireEvent.click(screen.getByRole('button', { name: '删除购物清单 本月采购' }))
+    fireEvent.click(await screen.findByRole('button', { name: /取\s*消/ }))
+    expect(deletes()).toHaveLength(0)
+    expect(screen.getByText('大米')).toBeInTheDocument()
+    fail = true
+    fireEvent.click(screen.getByRole('button', { name: '删除购物清单 本月采购' }))
+    fireEvent.click(await screen.findByRole('button', { name: /确\s*认/ }))
+    expect(await screen.findByText('删除失败，请重试')).toBeInTheDocument()
+    expect(screen.getByText('大米')).toBeInTheDocument()
+    fail = false
+    fireEvent.click(screen.getByRole('button', { name: '删除购物清单 本月采购' }))
+    const confirm = await screen.findByRole('button', { name: /确\s*认/ })
+    fireEvent.click(confirm)
+    fireEvent.click(confirm)
+    await waitFor(() => expect(screen.queryByText('大米')).not.toBeInTheDocument(), { timeout: 10000 })
+    expect(deletes()).toHaveLength(2)
+  }, 180000)
+
+  it('also deletes an empty manually created shopping list', async () => {
+    mockApi()
+    render(<DietPage />)
+    fireEvent.click(await screen.findByRole('tab', { name: '购物清单' }))
+    fireEvent.click(screen.getByRole('button', { name: '新建空清单' }))
+    fireEvent.click(within(screen.getByRole('dialog', { name: '新建空清单' })).getByRole('button', { name: '创建' }))
+    expect(await screen.findByText('清单暂无物品，可手动添加。')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '删除购物清单 手动采购' }))
+    fireEvent.click(await screen.findByRole('button', { name: /确\s*认/ }))
+    await waitFor(() => expect(screen.queryByText('清单暂无物品，可手动添加。')).not.toBeInTheDocument(), { timeout: 10000 })
+  }, 120000)
 
   it('changes the requested date range when navigating months and returning to today', async () => {
     const fetchMock = mockApi()

@@ -51,6 +51,8 @@ export function DietPage() {
   const [saving, setSaving] = useState(false)
   const [profileSaving, setProfileSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [shoppingDeleting, setShoppingDeleting] = useState(false)
+  const shoppingDeleteInFlight = useRef(false)
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [deleteError, setDeleteError] = useState('')
   const [loadingCalendar, setLoadingCalendar] = useState(false)
@@ -186,9 +188,21 @@ export function DietPage() {
     await apiRequest(`/diet/shopping-items/${id}`, { method: 'PATCH', body: JSON.stringify({ is_completed: checked }) }); await load()
   }
   async function deleteShoppingItem(id: string) {
+    await removeShopping(`/diet/shopping-items/${id}`, '购物物品已删除，可在回收站恢复')
+  }
+  async function deleteShoppingList(id: string) {
+    await removeShopping(`/diet/shopping-lists/${id}`, '购物清单已删除，可在回收站恢复')
+  }
+  async function removeShopping(path: string, success: string) {
+    if (shoppingDeleteInFlight.current) return
+    shoppingDeleteInFlight.current = true
+    setShoppingDeleting(true)
     try {
-      await apiRequest(`/diet/shopping-items/${id}`, { method: 'DELETE' }); await load()
-    } catch (reason) { message.error(reason instanceof Error ? reason.message : '删除购物项目失败') }
+      await apiRequest(path, { method: 'DELETE' })
+      await load()
+      message.success(success)
+    } catch (reason) { message.error(reason instanceof Error ? reason.message : '删除失败，请重试') }
+    finally { shoppingDeleteInFlight.current = false; setShoppingDeleting(false) }
   }
   async function resetAllPlans() {
     setResetting(true)
@@ -211,7 +225,19 @@ export function DietPage() {
       { key: 'calendar', label: '饮食日历', children: <><div className="page-actions diet-calendar-intro"><div><Typography.Title level={4}>饮食日历</Typography.Title><Typography.Text type="secondary">按天查看餐食及估算热量，点击卡片可修改或删除</Typography.Text></div><Space><ConfirmDangerButton label="清零全部饮食计划" title="确认清零全部饮食计划？" description="所有日期的早、午、晚餐和加餐安排都会取消并从页面隐藏，可在回收站中恢复。" disabled={resetting} onConfirm={resetAllPlans} /><Button type="primary" onClick={() => openMealEditor(dayjs(), 'dinner')}>安排一餐</Button></Space></div><DietCalendar month={month} meals={meals} loading={loadingCalendar} onMonthChange={setMonth} onEdit={(date, type, meal) => openMealEditor(date, type, meal)} /></> },
       { key: 'dishes', label: '常用菜品', children: <><div className="tab-actions"><Button type="primary" onClick={() => openSimpleModal('dish')}>新增菜品</Button></div><Row gutter={[12, 12]}>{dishes.map((dish) => <Col span={8} key={dish.id}><Card title={dish.name} extra={<Button aria-label={`修改菜品 ${dish.name}`} onClick={() => openDishEditor(dish)}>修改</Button>}><p>{dish.instructions || '暂无做法'}</p><Typography.Text type="secondary">{dish.ingredients.map((item) => item.name).join('、') || '暂无食材'}</Typography.Text></Card></Col>)}</Row></> },
       { key: 'templates', label: '饮食模板', children: <DietTemplates onImported={async (startDate) => { if (!startDate.isSame(month, 'month')) setMonth(startDate.startOf('month')); else await load() }} /> },
-      { key: 'shopping', label: '购物清单', children: <><div className="tab-actions"><Space><Button type="primary" onClick={() => openSimpleModal('shopping')}>按当前月份饮食生成</Button><Button onClick={() => openSimpleModal('shoppingList')}>新建空清单</Button></Space></div>{shopping.map((list) => <Card title={`${list.name} · ${list.start_date}—${list.end_date}`} extra={<Button onClick={() => openShoppingItem(list.id)}>手动添加物品</Button>} key={list.id}>{list.items.length ? list.items.map((item) => <div className="shopping-row" key={item.id}><Checkbox checked={item.is_completed} onChange={(event) => void toggleShopping(item.id, event.target.checked)}>{item.ingredient_name}</Checkbox><span>{item.quantity_text}</span><Button aria-label={`修改购物项目 ${item.ingredient_name}`} onClick={() => openShoppingItem(list.id, item)}>修改</Button><ConfirmDangerButton label={`删除购物项目 ${item.ingredient_name}`} title="删除购物项目？" description="此物品会从这份清单移除。" onConfirm={() => deleteShoppingItem(item.id)} /></div>) : <Typography.Text type="secondary">清单暂无物品，可手动添加。</Typography.Text>}</Card>)}</> },
+      { key: 'shopping', label: '购物清单', children: <>
+        <div className="tab-actions"><Space><Button type="primary" onClick={() => openSimpleModal('shopping')}>按当前月份饮食生成</Button><Button onClick={() => openSimpleModal('shoppingList')}>新建空清单</Button></Space></div>
+        {shopping.map((list) => <Card className="shopping-list-card" title={`${list.name} · ${list.start_date}—${list.end_date}`} extra={<Space wrap>
+          <Button disabled={shoppingDeleting} onClick={() => openShoppingItem(list.id)}>手动添加物品</Button>
+          <ConfirmDangerButton label="删除清单" ariaLabel={`删除购物清单 ${list.name}`} title="删除这份购物清单？" description="清单和里面的全部物品会移入回收站，可整份或逐项恢复。" disabled={shoppingDeleting} onConfirm={() => deleteShoppingList(list.id)} />
+        </Space>} key={list.id}>
+          {list.items.length ? list.items.map((item) => <div className="shopping-row" key={item.id}>
+            <Checkbox disabled={shoppingDeleting} checked={item.is_completed} onChange={(event) => void toggleShopping(item.id, event.target.checked)}>{item.ingredient_name}</Checkbox><span>{item.quantity_text}</span>
+            <Button disabled={shoppingDeleting} aria-label={`修改购物项目 ${item.ingredient_name}`} onClick={() => openShoppingItem(list.id, item)}>修改</Button>
+            <ConfirmDangerButton label={`删除购物项目 ${item.ingredient_name}`} title="删除购物项目？" description="此物品会从这份清单移除，可在回收站恢复。" disabled={shoppingDeleting} onConfirm={() => deleteShoppingItem(item.id)} />
+          </div>) : <Typography.Text type="secondary">清单暂无物品，可手动添加。</Typography.Text>}
+        </Card>)}
+      </> },
       { key: 'daily', label: '每日记录', children: <Card title="今天"><Form layout="vertical" initialValues={health} onFinish={(values) => void saveHealth(values)}><Row gutter={12}><Col span={8}><Form.Item name="water_ml" label="饮水量（ml）"><InputNumber min={0} /></Form.Item></Col><Col span={8}><Form.Item name="weight_kg" label="体重（kg）"><InputNumber min={1} step={0.1} /></Form.Item></Col></Row><Form.Item name="feeling" label="今日感受"><Input.TextArea /></Form.Item><Button type="primary" htmlType="submit">保存记录</Button></Form></Card> },
     ]} />
     <Modal forceRender title={modal === 'dish' ? editingDish ? '修改菜品' : '新增菜品' : modal === 'meal' ? editingMeal ? '修改饮食安排' : '安排一餐' : modal === 'shoppingItem' ? shoppingTarget?.itemId ? '修改购物项目' : '手动添加物品' : modal === 'shoppingList' ? '新建空清单' : '生成购物清单'} open={Boolean(modal)} closable={{ disabled: saving || deleting }} keyboard={!saving && !deleting} mask={{ closable: !saving && !deleting }} onCancel={() => { if (!saving && !deleting) closeModal() }} footer={<div className="diet-editor-footer"><div>{editingMeal ? <Button aria-label="删除这餐" danger disabled={saving || deleting} onClick={() => { setDeleteError(''); setDeleteConfirmOpen(true) }}>删除这餐</Button> : null}</div><Space><Button aria-label="取消" disabled={saving || deleting} onClick={closeModal}>取消</Button><Button aria-label={editingMeal || editingDish || shoppingTarget?.itemId ? '保存修改' : '创建'} type="primary" loading={saving} disabled={deleting} onClick={() => form.submit()}>{editingMeal || editingDish || shoppingTarget?.itemId ? '保存修改' : '创建'}</Button></Space></div>}>
