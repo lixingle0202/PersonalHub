@@ -33,6 +33,20 @@ async function api(endpoint, method = 'GET', data) {
   return response.json()
 }
 async function check(name, fn) { await fn(); checks.push(name); console.log('PASS: ' + name) }
+async function foodSuggestions() {
+  const popup = page.locator('.meal-food-suggestions:visible')
+  await popup.waitFor()
+  await popup.evaluate(async (element) => {
+    await Promise.all(element.getAnimations().map((animation) => animation.finished.catch(() => {})))
+  })
+  const style = await popup.evaluate((element) => {
+    const computed = getComputedStyle(element)
+    return { opacity: computed.opacity, background: computed.backgroundColor }
+  })
+  assert.equal(style.opacity, '1')
+  assert.match(style.background, /^rgb\(/, 'Food suggestions must have an opaque background')
+  return popup
+}
 async function save(dialog, name, method, ending) {
   const result = page.waitForResponse((response) => response.request().method() === method && response.url().endsWith(ending))
   await dialog.getByRole('button', { name, exact: true }).click()
@@ -108,6 +122,39 @@ try {
     await dialog.getByRole('link', { name: '食物数据来源：食品药物管理署' }).waitFor()
     meal = await save(dialog, '保存修改', 'PATCH', '/diet/meals/' + meal.id)
   })
+  await check('Partial names show ranked suggestions and selecting preserves foods and grams in every row', async () => {
+    await page.getByRole('button', { name: '安排一餐', exact: true }).click()
+    let dialog = page.getByRole('dialog', { name: '安排一餐' })
+    await dialog.getByLabel('餐次', { exact: true }).selectOption('snack')
+    const first = dialog.getByLabel('或填写其他餐食', { exact: true })
+    await first.fill('土豆')
+    await page.getByText('土豆炖牛肉 · 1份参考约394 kcal', { exact: true }).waitFor()
+    const suggestions = await foodSuggestions()
+    assert.ok(await suggestions.locator('.ant-select-item-option').count() >= 8)
+    assert.ok(!(await suggestions.innerText()).includes('花生'))
+    await page.screenshot({ path: path.join(artifacts, 'potato-food-suggestions.png'), animations: 'disabled' })
+    await first.fill('米饭200g + 金钱100g')
+    await page.getByText('小炒金钱蛋 · 1份参考约331 kcal', { exact: true }).click()
+    assert.equal(await first.inputValue(), '米饭200g + 小炒金钱蛋100g')
+    await dialog.getByRole('button', { name: '＋ 添加一道菜或主食', exact: true }).click()
+    await dialog.getByLabel('第2项餐食', { exact: true }).fill('咖喱')
+    const curry = await api('/diet/food-references?q=' + encodeURIComponent('咖喱鸡'))
+    await page.getByText(curry.items[0].label, { exact: true }).click()
+    assert.equal(await dialog.getByLabel('第2项餐食', { exact: true }).inputValue(), '咖喱鸡')
+    const customName = '米饭200g + 小炒金钱蛋100g\n咖喱鸡'
+    const expected = await api('/diet/calories/estimate', 'POST', { custom_name: customName })
+    await dialog.getByText(`本餐约 ${expected.display_kcal} kcal · 多菜品估算`, { exact: true }).waitFor()
+    const created = await save(dialog, '创建', 'POST', '/diet/meals')
+    assert.equal(created.custom_name, customName)
+    assert.equal(created.display_kcal, expected.display_kcal)
+    assert.equal(created.calorie_items.length, 3)
+    await page.reload()
+    await page.getByLabel(`修改 ${today} 加餐`, { exact: true }).click()
+    dialog = page.getByRole('dialog', { name: '修改饮食安排' })
+    assert.equal(await dialog.getByLabel('或填写其他餐食', { exact: true }).inputValue(), '米饭200g + 小炒金钱蛋100g')
+    assert.equal(await dialog.getByLabel('第2项餐食', { exact: true }).inputValue(), '咖喱鸡')
+    await dialog.getByRole('button', { name: '取消', exact: true }).click()
+  })
   await check('Linked diet and learning tasks can move between necessity groups', async () => {
     const goal = await api('/learning/goals', 'POST', { name: '英语练习', goal: '完成口语练习' })
     const task = await api(`/learning/goals/${goal.id}/tasks`, 'POST', { title: '口语对话', plan_date: today })
@@ -141,6 +188,12 @@ try {
     await page.getByLabel(`修改 ${today} 午餐`, { exact: true }).click()
     const dialog = page.getByRole('dialog', { name: '修改饮食安排' })
     await dialog.getByRole('button', { name: '＋ 添加一道菜或主食', exact: true }).click()
+    await dialog.getByLabel('第2项餐食', { exact: true }).fill('土豆')
+    await page.getByText('土豆炖牛肉 · 1份参考约394 kcal', { exact: true }).waitFor()
+    const suggestions = await foodSuggestions()
+    const menuBounds = await suggestions.boundingBox()
+    assert.ok(menuBounds.x >= 0 && menuBounds.x + menuBounds.width <= 390)
+    await page.screenshot({ path: path.join(artifacts, 'phone-food-suggestions.png'), animations: 'disabled' })
     await dialog.getByLabel('第2项餐食', { exact: true }).fill('蛋炒饭200g')
     await dialog.getByRole('list', { name: '本餐热量明细' }).scrollIntoViewIfNeeded()
     const saveButton = await dialog.getByRole('button', { name: '保存修改', exact: true }).boundingBox()

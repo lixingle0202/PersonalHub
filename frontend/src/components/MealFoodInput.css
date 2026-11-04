@@ -3,6 +3,7 @@
 .meal-food-row { display: flex; gap: 8px; align-items: start; }
 .meal-food-row > .ant-select { flex: 1; min-width: 0; }
 .meal-food-row > button { flex-shrink: 0; }
+.meal-food-suggestions .ant-select-item-option-content { white-space: normal; overflow-wrap: anywhere; }
 .calorie-food-list { list-style: none; margin: 0 0 12px; padding: 0; }
 .calorie-food-list li + li { margin-top: 12px; }
 .calorie-food-list details { margin-top: 4px; }
