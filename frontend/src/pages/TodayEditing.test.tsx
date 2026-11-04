@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import dayjs from 'dayjs'
 import { MemoryRouter } from 'react-router-dom'
@@ -16,6 +16,60 @@ const response = (body: unknown, status = 200) => Promise.resolve(new Response(J
 }))
 
 beforeEach(() => { vi.restoreAllMocks(); setLocalToken('test-token') })
+
+it.each(['learning', 'diet'])('changes the necessity of a linked %s plan and preserves its source after reopening', async (module) => {
+  let current: AgendaItem = { ...item, id: 'linked', title: module === 'learning' ? '练习口语' : '午餐：蛋炒饭',
+    module, source_type: module === 'learning' ? 'learning_task' : 'meal_plan', source_id: 'source-id' }
+  const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation((_, init) => {
+    if (init?.method === 'PATCH') { current = { ...current, ...JSON.parse(String(init.body)) }; return response(current) }
+    return response([current])
+  })
+  const view = render(<MemoryRouter><TodayPage /></MemoryRouter>)
+  fireEvent.click(await screen.findByRole('button', { name: `调整必要程度：${current.title}` }))
+  const editor = within(screen.getByRole('dialog', { name: '调整必要程度' }))
+  fireEvent.change(editor.getByLabelText('必要程度'), { target: { value: 'must' } })
+  fireEvent.change(editor.getByLabelText('优先级'), { target: { value: 'high' } })
+  fireEvent.click(editor.getByRole('button', { name: '保存分类' }))
+  expect(await screen.findByText('必须完成 · 1')).toBeInTheDocument()
+  expect(screen.getByText('按时间安排 · 0')).toBeInTheDocument()
+  expect(current.source_id).toBe('source-id')
+  expect(fetchMock.mock.calls.find(([, init]) => init?.method === 'PATCH')?.[1]?.body).toBe(JSON.stringify({ bucket: 'must', priority: 'high' }))
+  view.unmount()
+  render(<MemoryRouter><TodayPage /></MemoryRouter>)
+  expect(await screen.findByText('必须完成 · 1')).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: `调整必要程度：${current.title}` }))
+  const reopened = within(screen.getByRole('dialog', { name: '调整必要程度' }))
+  expect(reopened.getByLabelText('必要程度')).toHaveValue('must')
+  fireEvent.change(reopened.getByLabelText('必要程度'), { target: { value: 'optional' } })
+  fireEvent.click(reopened.getByRole('button', { name: '保存分类' }))
+  expect(await screen.findByText('有空再做 · 1')).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: '编辑来源计划' })).toHaveAttribute('href', `/${module}?item=source-id`)
+}, 60000)
+
+it('keeps a linked plan classification unchanged on cancel or failed save, then retries', async () => {
+  let current: AgendaItem = { ...item, id: 'linked', module: 'learning', source_type: 'learning_task', source_id: 'task' }
+  let attempts = 0
+  vi.spyOn(globalThis, 'fetch').mockImplementation((_, init) => {
+    if (init?.method === 'PATCH') {
+      if (++attempts === 1) return response({ detail: '分类暂时无法保存' }, 503)
+      current = { ...current, ...JSON.parse(String(init.body)) }; return response(current)
+    }
+    return response([current])
+  })
+  render(<MemoryRouter><TodayPage /></MemoryRouter>)
+  fireEvent.click(await screen.findByRole('button', { name: '调整必要程度：去医院' }))
+  fireEvent.change(screen.getByLabelText('必要程度'), { target: { value: 'optional' } })
+  fireEvent.click(within(screen.getByRole('dialog', { name: '调整必要程度' })).getByRole('button', { name: /取\s*消/ }))
+  expect(attempts).toBe(0)
+  fireEvent.click(screen.getByRole('button', { name: '调整必要程度：去医院' }))
+  fireEvent.change(screen.getByLabelText('必要程度'), { target: { value: 'must' } })
+  fireEvent.click(screen.getByRole('button', { name: '保存分类' }))
+  expect(await screen.findByText('分类暂时无法保存')).toBeInTheDocument()
+  expect(current.bucket).toBe('scheduled')
+  fireEvent.click(screen.getByRole('button', { name: '保存分类' }))
+  expect(await screen.findByText('必须完成 · 1')).toBeInTheDocument()
+  expect(attempts).toBe(2)
+}, 60000)
 
 it('creates a manual plan, edits it after completing it, and confirms deletion', async () => {
   const user = userEvent.setup()

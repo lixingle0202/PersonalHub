@@ -24,6 +24,9 @@ export function TodayPage() {
   const [deletingItem, setDeletingItem] = useState<AgendaItem | null>(null)
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [classifyingItem, setClassifyingItem] = useState<AgendaItem | null>(null)
+  const [classificationSaving, setClassificationSaving] = useState(false)
+  const [classificationForm] = Form.useForm()
   const [endOpen, setEndOpen] = useState(false)
   const [summary, setSummary] = useState('')
   const [form] = Form.useForm()
@@ -86,6 +89,24 @@ export function TodayPage() {
     }
   }
 
+  function openClassification(item: AgendaItem) {
+    classificationForm.setFieldsValue({ bucket: item.bucket, priority: item.priority })
+    setClassifyingItem(item)
+  }
+
+  async function saveClassification(values: { bucket: string; priority: string }) {
+    if (!classifyingItem || classificationSaving) return
+    setClassificationSaving(true)
+    try {
+      await apiRequest(`/agenda/${classifyingItem.id}`, { method: 'PATCH', body: JSON.stringify(values) })
+      setClassifyingItem(null)
+      message.success('必要程度已更新')
+      await load()
+    } catch (reason) {
+      message.error(reason instanceof Error ? reason.message : '分类保存失败，请重试')
+    } finally { setClassificationSaving(false) }
+  }
+
   async function toggleComplete(item: AgendaItem) {
     const action = item.status === 'completed' ? 'reopen' : 'complete'
     await apiRequest(`/agenda/${item.id}/${action}`, { method: 'POST' })
@@ -145,9 +166,25 @@ export function TodayPage() {
             onReorder={key === 'completed' ? undefined : (ordered) => void reorder(ordered)}
             onEdit={(item) => openEditor(item)}
             onDelete={setDeletingItem}
+            onClassify={openClassification}
           />
         </Card>
       ))}
+
+      <Modal forceRender title="调整必要程度" open={Boolean(classifyingItem)}
+        onCancel={() => !classificationSaving && setClassifyingItem(null)} onOk={() => classificationForm.submit()}
+        confirmLoading={classificationSaving} okText="保存分类" cancelText="取消"
+        cancelButtonProps={{ disabled: classificationSaving }} closable={!classificationSaving}>
+        <Typography.Paragraph>{classifyingItem?.title}</Typography.Paragraph>
+        <Form form={classificationForm} layout="vertical" onFinish={(values) => void saveClassification(values)}>
+          <Form.Item name="bucket" label="必要程度" rules={[{ required: true }]}>
+            <select className="native-form-select"><option value="must">必须完成</option><option value="scheduled">按时间安排</option><option value="optional">有空再做</option></select>
+          </Form.Item>
+          <Form.Item name="priority" label="优先级" rules={[{ required: true }]}>
+            <select className="native-form-select"><option value="low">低</option><option value="normal">普通</option><option value="high">高</option><option value="urgent">紧急</option></select>
+          </Form.Item>
+        </Form>
+      </Modal>
 
       <Modal forceRender title={editingItem ? '编辑计划' : '新增计划'} open={createOpen} onCancel={() => !saving && setCreateOpen(false)} onOk={() => form.submit()} confirmLoading={saving} okText="保存" cancelText="取消" cancelButtonProps={{ disabled: saving }}>
         <Form form={form} layout="vertical" onFinish={(values) => void savePlan(values)}>

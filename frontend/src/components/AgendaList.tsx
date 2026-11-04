@@ -25,6 +25,7 @@ export function AgendaList({
   onReorder,
   onEdit,
   onDelete,
+  onClassify,
   compact = false,
 }: {
   items: AgendaItem[]
@@ -33,6 +34,7 @@ export function AgendaList({
   onReorder?: (ordered: AgendaItem[]) => void
   onEdit?: (item: AgendaItem) => void
   onDelete?: (item: AgendaItem) => void
+  onClassify?: (item: AgendaItem) => void
   compact?: boolean
 }) {
   if (!items.length) return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有计划事项" />
@@ -79,7 +81,8 @@ export function AgendaList({
               {item.notes ? <Typography.Text type="secondary">{item.notes}</Typography.Text> : null}
             </div>
             {item.start_time ? <span className="agenda-time"><ClockCircleOutlined /> {item.start_time}</span> : null}
-            {onEdit || onDelete ? <Space size={4} wrap className="agenda-actions">
+            {onEdit || onDelete || onClassify ? <Space size={4} wrap className="agenda-actions">
+              {onClassify && item.source_type ? <Button size="small" aria-label={`调整必要程度：${item.title}`} onClick={() => onClassify(item)}>调整分类</Button> : null}
               {!item.source_type ? <>
                 {onEdit ? <Button size="small" icon={<EditOutlined />} aria-label={`编辑计划：${item.title}`} onClick={() => onEdit(item)}>编辑</Button> : null}
                 {onDelete ? <Button size="small" danger icon={<DeleteOutlined />} aria-label={`删除计划：${item.title}`} onClick={() => onDelete(item)}>删除</Button> : null}
