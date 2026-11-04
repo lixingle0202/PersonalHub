@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from ..models import Dish, DishIngredient
 from .food_reference import EXTRA_ALIASES, EXTRA_KCAL_100G, RECIPE_ALIASES, REFERENCE_RECIPES
-from .food_catalog import FOODS, SOURCE_URL, lookup_food, search_foods
+from .food_catalog import FOODS, SOURCE_URL, food_search_rank, lookup_food, search_foods
 
 
 # Rounded ingredient reference values (kcal/100 g), retained from the USDA-based
@@ -210,10 +210,21 @@ def reference_food(name: str) -> tuple[float, str, str] | None:
 
 
 def food_suggestions(query: str, limit: int = 20) -> dict:
-    names = dict.fromkeys([*REFERENCE_RECIPES, *RECIPE_ALIASES, *DEFAULT_PORTIONS])
-    matches = [name for name in names if not query or normalized_name(query) in name]
+    names = dict.fromkeys([*REFERENCE_RECIPES, *DEFAULT_PORTIONS])
+    aliases: dict[str, list[str]] = {}
+    for alias, name in RECIPE_ALIASES.items():
+        aliases.setdefault(name, []).append(alias)
+    for alias, name in ALIASES.items():
+        if name in DEFAULT_PORTIONS:
+            aliases.setdefault(name, []).append(alias)
+    matches = []
+    for name in names:
+        rank = food_search_rank(query, (name, *aliases.get(name, [])))
+        if rank is not None:
+            matches.append((rank, name))
+    matches.sort(key=lambda match: match[0])
     results = []
-    for name in matches[:limit]:
+    for _, name in matches[:limit]:
         energy, source, _ = reference_food(name)
         results.append({'name': name, 'source': source, 'label': f'{name} · 1份参考约{energy:.0f} kcal'})
     for food in search_foods(query, limit):

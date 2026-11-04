@@ -42,6 +42,7 @@ COMMON_NAMES = {
     '葱': '青葱平均值', '小葱': '青葱平均值',
     '韭菜': '韮菜', '韭黄': '韮黄',
     '鸡翅': '二节翅平均值',
+    '土豆': '马铃薯',
 }
 
 
@@ -51,9 +52,28 @@ def lookup_food(name: str) -> CatalogFood | None:
     return BY_NAME.get(food_key(target or name)) or BY_ALIAS.get(key)
 
 
-def search_foods(query: str, limit: int = 20) -> list[CatalogFood]:
+def food_search_rank(query: str, names) -> int | None:
     key = food_key(query)
+    if not key:
+        return 0
+    words = [food_key(word) for word in query.split()]
+    best = None
+    for name in names:
+        candidate = food_key(name)
+        rank = (0 if key == candidate else 1 if candidate.startswith(key)
+                else 2 if key in candidate else 3 if all(word in candidate for word in words) else None)
+        if rank is not None:
+            best = rank if best is None else min(best, rank)
+    return best
+
+
+def search_foods(query: str, limit: int = 20) -> list[CatalogFood]:
+    found = []
     exact = lookup_food(query)
-    found = ([exact] if exact else []) + [food for food in FOODS
-        if food is not exact and (not key or any(key in food_key(name) for name in (food.name, *food.aliases)))]
-    return found[:limit]
+    for food in FOODS:
+        aliases = [alias for alias in food.aliases if BY_ALIAS.get(food_key(alias)) is food]
+        rank = 0 if food is exact else food_search_rank(query, (food.name, *aliases))
+        if rank is not None:
+            found.append((rank, food))
+    found.sort(key=lambda match: match[0])
+    return [food for _, food in found[:limit]]
