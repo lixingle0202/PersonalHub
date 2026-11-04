@@ -1,0 +1,9 @@
+.meal-food-input { display: grid; gap: 10px; }
+.meal-food-input > button { justify-self: start; }
+.meal-food-row { display: flex; gap: 8px; align-items: start; }
+.meal-food-row > .ant-select { flex: 1; min-width: 0; }
+.meal-food-row > button { flex-shrink: 0; }
+.calorie-food-list { list-style: none; margin: 0 0 12px; padding: 0; }
+.calorie-food-list li + li { margin-top: 12px; }
+.calorie-food-list details { margin-top: 4px; }
+.calorie-food-list summary { cursor: pointer; color: var(--text-secondary); }

@@ -2,7 +2,11 @@ import { useEffect, useState } from 'react'
 import { Alert, Button, Form, Typography } from 'antd'
 import { apiRequest } from '../api/client'
 
-type Estimate = { display_kcal: number | null; calorie_source: string; calorie_explanation: string }
+type Estimate = {
+  display_kcal: number | null; calorie_source: string; calorie_explanation: string
+  calorie_items?: Array<{ name: string; kcal: number | null; source: string; explanation: string }>
+  calorie_known_kcal?: number
+}
 
 export function CaloriePreview() {
   const form = Form.useFormInstance()
@@ -37,6 +41,17 @@ export function CaloriePreview() {
   if (loading || !estimate) return <Typography.Paragraph role="status" type="secondary">正在估算这餐热量…</Typography.Paragraph>
   return <Alert className="calorie-preview" type={estimate.display_kcal == null ? 'warning' : 'info'} showIcon
     title={estimate.display_kcal == null ? '热量待补充' : `本餐约 ${estimate.display_kcal} kcal · ${estimate.calorie_source}`}
-    description={<><Typography.Paragraph>{estimate.calorie_explanation}</Typography.Paragraph><Typography.Text type="secondary">可在“常用菜品”中修改实际食材、用油量和配方份数；已有餐食会随配方重新计算。参考配方是示例，不能代替实际称量。</Typography.Text></>}
+    description={<>
+      {estimate.calorie_items?.length ? <>
+        <ul className="calorie-food-list" aria-label="本餐热量明细">{estimate.calorie_items.map((item, index) => <li key={index}>
+          <Typography.Text strong>{item.name} · {item.kcal == null ? '待补充' : `约 ${item.kcal} kcal`}</Typography.Text>
+          <details><summary>{item.source} · 查看计算依据</summary><Typography.Paragraph>{item.explanation}</Typography.Paragraph></details>
+        </li>)}</ul>
+        {estimate.display_kcal == null ? <Typography.Paragraph>
+          已识别部分约 {estimate.calorie_known_kcal ?? 0} kcal，仍有食物待补充，尚未计为整餐总热量。
+        </Typography.Paragraph> : <Typography.Paragraph>以上各项已按本餐 {servings ?? 1} 份计算，整餐合计约 {estimate.display_kcal} kcal。</Typography.Paragraph>}
+      </> : <Typography.Paragraph>{estimate.calorie_explanation}</Typography.Paragraph>}
+      <Typography.Text type="secondary">可在“常用菜品”中修改实际食材、用油量和配方份数；已有餐食会随配方重新计算。参考配方是示例，不能代替实际称量。</Typography.Text>
+    </>}
   />
 }

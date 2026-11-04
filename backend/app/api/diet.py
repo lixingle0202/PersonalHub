@@ -5,7 +5,7 @@ from datetime import date
 from typing import Literal
 import json
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from .deps import get_session
 from .utils import active_record, apply_changes, model_dict, soft_delete
 from ..services.diet import delete_meal_plan, meal_dish_ids, meal_dishes, meal_display_name, replace_meal_dishes
-from ..services.calories import estimate_meal
+from ..services.calories import estimate_meal, food_suggestions
 from ..models import (
     AgendaItem, DailyHealthLog, Dish, DishIngredient, MealPlan, ShoppingItem,
     ShoppingList, Setting, new_id,
@@ -104,6 +104,8 @@ def meal_out(session: Session, meal: MealPlan) -> dict:
         display_kcal=estimate.kcal,
         calorie_source=estimate.source,
         calorie_explanation=estimate.explanation,
+        calorie_items=estimate.item_details(),
+        calorie_known_kcal=estimate.known_kcal,
     )
     return data
 
@@ -123,7 +125,13 @@ def preview_calories(payload: MealEstimateIn, session: Session = Depends(get_ses
     estimate = estimate_meal(session, dishes, payload.estimated_kcal,
                              custom_name=payload.custom_name, servings=payload.servings)
     return {"display_kcal": estimate.kcal, "calorie_source": estimate.source,
-            "calorie_explanation": estimate.explanation}
+            "calorie_explanation": estimate.explanation,
+            "calorie_items": estimate.item_details(), "calorie_known_kcal": estimate.known_kcal}
+
+
+@router.get('/food-references')
+def food_references(q: str = Query(default='', max_length=100), limit: int = Query(default=20, ge=1, le=50)):
+    return food_suggestions(q.strip(), limit)
 
 
 @router.get("/profile")

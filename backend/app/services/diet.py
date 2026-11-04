@@ -19,7 +19,8 @@ def meal_dishes(session: Session, meal: MealPlan) -> list[Dish]:
 
 def meal_display_name(session: Session, meal: MealPlan) -> str:
     names = [dish.name for dish in meal_dishes(session, meal)]
-    return "、".join(names) if names else meal.custom_name
+    names.extend(part.strip() for part in meal.custom_name.splitlines() if part.strip())
+    return "、".join(names)
 
 
 def replace_meal_dishes(session: Session, meal: MealPlan, dish_ids: list[str]) -> None:

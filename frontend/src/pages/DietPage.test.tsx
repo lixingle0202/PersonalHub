@@ -23,13 +23,19 @@ function mockApi(initial: Meal[] = [], deleteFails: boolean | (() => boolean) = 
   let dishes = [...initialDishes]
   let shopping: Array<{ id: string; name: string; start_date: string; end_date: string; items: Array<{ id: string; ingredient_name: string; quantity_text: string; is_completed: boolean }> }> = []
   let profile = { height_cm: null as number | null, weight_kg: null as number | null }
-  const dishName = (values: Partial<Meal>) => values.dish_ids?.length
-    ? values.dish_ids.map((id) => dishes.find((dish) => dish.id === id)?.name).filter(Boolean).join('、')
-    : values.custom_name ?? ''
+  const dishName = (values: Partial<Meal>) => [
+    ...(values.dish_ids ?? []).map((id) => dishes.find((dish) => dish.id === id)?.name).filter(Boolean),
+    ...String(values.custom_name ?? '').split('\n').filter(Boolean),
+  ].join('、')
   return vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
     const url = new URL(String(input), 'http://localhost')
     let body: unknown = []
-    if (url.pathname.endsWith('/diet/shopping-lists/generate') && init?.method === 'POST') {
+    if (url.pathname.endsWith('/diet/calories/estimate') && init?.method === 'POST') {
+      const values = JSON.parse(String(init.body))
+      const stored = meals.find((entry) => entry.custom_name === values.custom_name)
+      body = { display_kcal: stored?.display_kcal ?? null, calorie_source: stored?.calorie_source ?? '待补充',
+        calorie_explanation: stored?.calorie_explanation ?? '请补充实际食材用量或这餐热量' }
+    } else if (url.pathname.endsWith('/diet/shopping-lists/generate') && init?.method === 'POST') {
       const values = JSON.parse(String(init.body))
       shopping = [{ id: 'list-1', ...values, items: [{ id: 'item-1', ingredient_name: '大米', quantity_text: '200克', is_completed: false }] }, ...shopping]
       body = shopping[0]

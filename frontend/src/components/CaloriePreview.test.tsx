@@ -20,6 +20,37 @@ function Harness({ name = '农家小炒肉' }: { name?: string }) {
 describe('meal calorie preview', () => {
   beforeEach(() => { vi.restoreAllMocks(); setLocalToken('test-token') })
 
+  it('shows each food with its calories and the combined meal total', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+      display_kcal: 525, calorie_source: '多菜品估算', calorie_explanation: '总量', calorie_known_kcal: 525,
+      calorie_items: [
+        { name: '米饭200g', kcal: 260, source: '食物参考', explanation: '米饭200克' },
+        { name: '西红柿炒鸡蛋', kcal: 264.7, source: '参考配方', explanation: '包含食用油8克' },
+      ],
+    })))
+    render(<Harness name="米饭200g 西红柿炒鸡蛋" />)
+    expect(await screen.findByText('本餐约 525 kcal · 多菜品估算', {}, { timeout: 10000 })).toBeInTheDocument()
+    expect(screen.getByRole('list', { name: '本餐热量明细' })).toBeInTheDocument()
+    expect(screen.getByText('米饭200g · 约 260 kcal')).toBeInTheDocument()
+    expect(screen.getByText('西红柿炒鸡蛋 · 约 264.7 kcal')).toBeInTheDocument()
+    expect(screen.getByText(/整餐合计约 525 kcal/)).toBeInTheDocument()
+  }, 30000)
+
+  it('labels the known subtotal without presenting it as a complete meal total', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+      display_kcal: null, calorie_source: '待补充', calorie_explanation: '未知菜品', calorie_known_kcal: 260,
+      calorie_items: [
+        { name: '米饭200g', kcal: 260, source: '食物参考', explanation: '米饭200克' },
+        { name: '未知菜品', kcal: null, source: '待补充', explanation: '需补充用量或每份热量' },
+      ],
+    })))
+    render(<Harness name="米饭200g 未知菜品" />)
+    expect(await screen.findByText('热量待补充', {}, { timeout: 10000 })).toBeInTheDocument()
+    expect(screen.getByText(/已识别部分约 260 kcal/)).toBeInTheDocument()
+    expect(screen.getByText('未知菜品 · 待补充')).toBeInTheDocument()
+    expect(screen.queryByText(/整餐合计约/)).not.toBeInTheDocument()
+  }, 30000)
+
   it('shows ingredient assumptions before saving and recalculates when portions change', async () => {
     const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => {
       const body = JSON.parse(String(init?.body))
