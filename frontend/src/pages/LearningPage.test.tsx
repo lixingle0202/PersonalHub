@@ -157,6 +157,15 @@ function renderLearning() {
   render(<ConfigProvider theme={{ token: { motion: false } }}><MemoryRouter><LearningPage /></MemoryRouter></ConfigProvider>)
 }
 
+it('keeps the short introduction and omits the requested editing hint', async () => {
+  setLocalToken('test-token')
+  mockLearning({ goals: [] })
+  render(<MemoryRouter><LearningPage /></MemoryRouter>)
+  expect(await screen.findByText('从长期目标拆到章节和任务')).toBeInTheDocument()
+  expect(screen.queryByText(/点击目标或任务可修改/)).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: '新建学习目标' })).toBeInTheDocument()
+})
+
 function changeDate(input: HTMLElement, value: string) {
   fireEvent.change(input, { target: { value } })
   fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' })

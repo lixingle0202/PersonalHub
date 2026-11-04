@@ -34,6 +34,7 @@ it('records a spoken description as separate home rows, then restores them after
   })
   const view = render(<MemoryRouter><HomePage /></MemoryRouter>)
   await user.type(await screen.findByLabelText('描述这一天做过的事情'), text)
+  expect(screen.queryByText(/说说这一天实际做了什么/)).not.toBeInTheDocument()
   await user.click(screen.getByRole('button', { name: '整理并记录' }))
   expect(await screen.findByRole('button', { name: '修改日常记录：学了英语' })).toBeInTheDocument()
   expect(screen.getByRole('button', { name: '修改日常记录：跑步20分钟' })).toBeInTheDocument()

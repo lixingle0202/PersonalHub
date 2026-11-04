@@ -116,7 +116,6 @@ export function DailyActivityCard({ initialDate, initialItems = EMPTY }: { initi
       </Space>
       <Typography.Text type="secondary">{date === today ? '今天' : date} · {items.length} 条记录</Typography.Text>
     </div>
-    <Typography.Paragraph type="secondary">说说这一天实际做了什么，自动分条保存。学习、吃饭、运动、工作和生活小事都可以记录，整理后还能逐条修改。</Typography.Paragraph>
     <div className="journal-compose">
       <Input.TextArea aria-label="描述这一天做过的事情" rows={3} maxLength={5000} showCount value={text} disabled={saving} onChange={(event) => setDrafts((current) => ({ ...current, [date]: event.target.value }))} placeholder="例如：上午学了英语一小时，中午吃了牛肉面，下午跑步30分钟，晚上去超市买了牛奶。" />
       <div><Typography.Text type="secondary">记录到 {date}</Typography.Text><Button type="primary" loading={saving} disabled={!text.trim() || busy || loading || Boolean(loadError)} onClick={() => void record()}>整理并记录</Button></div>
