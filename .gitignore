@@ -25,3 +25,27 @@ playwright-report/
 .env
 .env.*
 !.env.cloud.example
+
+# Local data, disposable files, and release downloads belong outside Git.
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
+*.bak
+*.tmp
+*.zip
+*.7z
+*.exe
+.mypy_cache/
+.ruff_cache/
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+desktop.ini
+/PersonalHub-开题报告_修改前备份.md
+/PersonalHub-开题报告.md
