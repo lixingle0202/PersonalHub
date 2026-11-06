@@ -231,6 +231,7 @@ def test_generation_uses_structured_output_and_does_not_create_live_plans(client
         assert request.url.path == '/api/chat'
         assert body['model'] == CONFIG['model']
         assert body['stream'] is False and body['think'] is False
+        assert body['keep_alive'] == '30m'
         assert body['format']['type'] == 'object'
         slots = body['format']['properties']['tasks']
         assert slots['minItems'] == slots['maxItems'] == 2
@@ -240,6 +241,7 @@ def test_generation_uses_structured_output_and_does_not_create_live_plans(client
         assert all(slot['properties']['minutes']['enum'] == [45] for slot in slots['prefixItems'])
         assert slots['items']['properties']['minutes']['enum'] == [45]
         assert {'steps', 'deliverable', 'verification'} <= set(slots['items']['required'])
+        assert slots['items']['properties']['notes']['enum'] == ['']
         properties = list(slots['items']['properties'])
         assert properties.index('deliverable') < properties.index('steps')
         assert json.loads(body['messages'][1]['content'])['topic'] == 'Android'
@@ -294,8 +296,9 @@ def test_same_topic_uses_the_actual_requirements_and_full_daily_budget(monkeypat
         body = json.loads(request.content)
         requirements = json.loads(body['messages'][1]['content'])
         assert requirements['preferences'] == preference
-        assert preference in body['messages'][2]['content']
-        assert f'每天{minutes}分钟' in body['messages'][2]['content']
+        # Requirements appear once; avoid repeating them in a third prompt.
+        assert len(body['messages']) == 2
+        assert f'minutes={minutes}' in body['messages'][0]['content']
         assert requirements['daily_minutes'] == minutes
         assert body['format']['properties']['tasks']['prefixItems'][0]['properties']['minutes']['enum'] == [minutes]
         assert '"minutes":30' not in body['messages'][0]['content']

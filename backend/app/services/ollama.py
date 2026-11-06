@@ -11,6 +11,8 @@ import httpx
 from fastapi import HTTPException
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
+from .cloud_model import BailianSettings, bailian_request
+
 from .learning_subject import subject_guidance, theory_daily_focus, validate_subject_scope
 from .generation_budget import current_budget, remaining_seconds
 from .learning_quality import actionable_verification, validate_task_variety
@@ -131,6 +133,13 @@ class LearningPreview(BaseModel):
 
 def ollama_request(settings: LocalEndpoint, path: str, payload: dict | None = None) -> dict:
     timeout = remaining_seconds(300 if payload else 10)
+    if isinstance(settings, BailianSettings):
+        result = bailian_request(settings, path, payload)
+        remaining_seconds()
+        return result
+    if payload is not None and path == '/api/chat':
+        # Reuse the loaded weights between plans instead of paying cold-start cost.
+        payload = {'keep_alive': '30m', **payload}
     try:
         with httpx.Client(timeout=httpx.Timeout(timeout, connect=min(3, timeout)),
                           trust_env=False, follow_redirects=False) as client:
@@ -206,9 +215,12 @@ def learning_chat_payload(request: LearningGenerateRequest, *, context: str = ""
     # Concise fields avoid small models filling their budget with repetitive
     # assurances instead of writing distinct daily activities.
     for field in ('deliverable', 'verification'):
-        shared_slot['properties'][field]['maxLength'] = 100
-    shared_slot['properties']['title']['maxLength'] = 80
-    schema['$defs']['StudyStep']['properties']['action']['maxLength'] = 120
+        shared_slot['properties'][field]['maxLength'] = 60
+    shared_slot['properties']['title']['maxLength'] = 50
+    schema['$defs']['StudyStep']['properties']['action']['maxLength'] = 70
+    # The preview constructs notes from steps/outcomes. Generating them again
+    # wastes tokens and often repeats the full day's instructions verbatim.
+    shared_slot['properties']['notes'] = {'type': 'string', 'enum': ['']}
     shared_slot['properties']['deliverable']['description'] = '与本学科和目标对应的具体成果，说明数量或完成范围，不引入无关技能'
     shared_slot['properties']['verification']['description'] = '与当天成果对应的检查动作和判据，如闭卷复述后对照教材标出遗漏或错义，不只写确保理解'
     shared_slot['properties']['verification']['pattern'] = '^(对照|独立|闭卷|复算|复现|核对|计算|画出|标注|比较|检查|举例|朗读|录音).+$'
@@ -245,6 +257,7 @@ def learning_chat_payload(request: LearningGenerateRequest, *, context: str = ""
         "目标要求计算就实际计算，要求阅读和复述就安排阅读和复述。"
         f"tasks恰好{request.days}项，day_number从1到{request.days}各一次并排序，每项minutes={request.daily_minutes}。"
         "每项steps含2至3个学习活动，填写minutes和action，分钟合计等于当天minutes。"
+        "每个action用15至40字写清操作；产出和验收各用15至35字。notes留空，系统自动组合说明，避免重复输出。"
         "action写动作、具体对象、数量或算例；title写当天操作，每天标题和步骤不同，不写准备阶段等空泛标题。"
         "不能每天套用阅读教材、选择相关章节、笔记记录的同一段话；直接指出要解决的概念、例题或操作，按理解、练习、应用逐步推进。"
         "deliverable写与当天学习对象对应的成果及范围；verification明确如何对照教材、答案或目标核对成果，"
@@ -261,19 +274,11 @@ def learning_chat_payload(request: LearningGenerateRequest, *, context: str = ""
                                        for index, focus in enumerate(focuses, 1)]
     if context:
         requirements['planning_context'] = context
-    brief = (f'我正在学习{request.topic}，已经{request.current_level[:250]}，需要{request.objective[:500]}。'
-        f'具体限制：{request.preferences[:500] or "无额外限制"}。'
-        f'请给我{request.days}天、每天{request.daily_minutes}分钟的具体学习安排，每天有与目标对应的可检查成果。'
-        '在steps中写出适合该学科的学习活动，遵守指定范围和限制；按前述JSON格式返回。'
-        + subject_guidance(request.topic, request.objective, request.preferences))
-    if focuses:
-        brief += '逐日重点：' + '；'.join(f'第{index}天{focus}' for index, focus in enumerate(focuses, 1)) + '。'
     return {
         "stream": False, "think": False, "format": schema,
         "options": {"temperature": 0.2, "num_ctx": 8192, "num_predict": min(8192, 600 + request.days * 650)},
         "messages": [{"role": "system", "content": instructions},
-                     {"role": "user", "content": json.dumps(requirements, ensure_ascii=False)},
-                     {"role": "user", "content": brief}],
+                     {"role": "user", "content": json.dumps(requirements, ensure_ascii=False)}],
     }
 
 

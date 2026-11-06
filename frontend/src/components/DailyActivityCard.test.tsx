@@ -19,6 +19,38 @@ const response = (body: unknown, status = 200) => Promise.resolve(new Response(J
 }))
 beforeEach(() => { vi.restoreAllMocks(); setLocalToken('test-token') })
 
+it('keeps records from repeated entries together by category, including after reopening', async () => {
+  const rows: DailyActivity[] = [
+    { ...activity('matlab', '上午学习MATLAB'), category: 'learning' },
+    activity('running', '下午跑步半小时'),
+    { ...activity('dinner', '晚上去吃饭'), category: 'diet' },
+  ]
+  let calls = 0
+  vi.spyOn(globalThis, 'fetch').mockImplementation(() => {
+    const added = calls++ === 0
+      ? { ...activity('android', '上午学习安卓课'), category: 'learning' as const }
+      : activity('badminton', '晚上打羽毛球')
+    rows.push(added)
+    return response({ items: [added], skipped: [], created: true }, 201)
+  })
+  const view = render(<DailyActivityCard initialDate={today} initialItems={[...rows]} />)
+  for (const text of ['上午学习安卓课', '晚上打羽毛球']) {
+    fireEvent.change(screen.getByLabelText('描述这一天做过的事情'), { target: { value: text } })
+    fireEvent.click(screen.getByRole('button', { name: '整理并记录' }))
+    expect(await screen.findByRole('button', { name: `修改日常记录：${text}` })).toBeInTheDocument()
+  }
+  const study = within(screen.getByRole('region', { name: '学习记录' }))
+  expect(study.getAllByRole('listitem')).toHaveLength(2)
+  expect(study.getAllByRole('listitem')[0]).toHaveTextContent('上午学习MATLAB')
+  expect(study.getAllByRole('listitem')[1]).toHaveTextContent('上午学习安卓课')
+  expect(study.queryByText('下午跑步半小时')).not.toBeInTheDocument()
+  expect(within(screen.getByRole('region', { name: '运动记录' })).getAllByRole('listitem')).toHaveLength(2)
+  expect(within(screen.getByRole('region', { name: '饮食记录' })).getAllByRole('listitem')).toHaveLength(1)
+  view.unmount()
+  render(<DailyActivityCard initialDate={today} initialItems={rows} />)
+  expect(within(screen.getByRole('region', { name: '学习记录' })).getAllByRole('listitem')).toHaveLength(2)
+})
+
 it('records a spoken description as separate home rows, then restores them after reopening home', async () => {
   const user = userEvent.setup()
   let rows: DailyActivity[] = []
@@ -87,7 +119,7 @@ it('retains a failed description and reuses its request ID on retry without dupl
   await user.click(screen.getByRole('button', { name: '整理并记录' }))
   expect(await screen.findByRole('button', { name: '修改日常记录：散步半小时' })).toBeInTheDocument()
   expect(requests[0].request_id).toBe(requests[1].request_id)
-  expect(within(screen.getByRole('list', { name: '这一天的活动记录' })).getAllByRole('listitem')).toHaveLength(1)
+  expect(within(screen.getByRole('group', { name: '这一天的活动记录' })).getAllByRole('listitem')).toHaveLength(1)
 }, 60000)
 
 it('edits the content and category, then deletes a record through confirmation', async () => {
@@ -105,6 +137,8 @@ it('edits the content and category, then deletes a record through confirmation',
   await user.selectOptions(editor.getByLabelText('修改记录分类'), 'leisure')
   await user.click(editor.getByRole('button', { name: '保存记录' }))
   expect(await screen.findByRole('button', { name: '修改日常记录：和朋友散步' })).toBeInTheDocument()
+  expect(screen.queryByRole('region', { name: '运动记录' })).not.toBeInTheDocument()
+  expect(within(screen.getByRole('region', { name: '休闲记录' })).getByText('和朋友散步')).toBeInTheDocument()
   expect(fetchMock).toHaveBeenCalledWith('/api/v1/daily-activities/one', expect.objectContaining({
     method: 'PATCH', body: JSON.stringify({ content: '和朋友散步', category: 'leisure', activity_date: today }),
   }))

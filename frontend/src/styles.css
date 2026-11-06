@@ -169,7 +169,11 @@ body .ant-tag.ant-tag-red:not(.ant-tag-disabled):is(.ant-tag-filled, .ant-tag-ou
 .journal-date-tools .native-form-select { width: auto; }
 .journal-compose { display: flex; flex-direction: column; gap: 22px; margin-bottom: 20px; }
 .journal-compose > div:last-child { display: flex; gap: 12px; justify-content: space-between; align-items: center; }
-.daily-activity-list { list-style: decimal; padding-left: 24px; margin-bottom: 0; }
+.daily-activity-groups { display: grid; gap: 16px; }
+.daily-activity-group { border: 1px solid var(--surface-line); border-radius: 16px; padding: 16px 20px; }
+.daily-activity-group-heading { display: flex; align-items: center; gap: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--surface-line); }
+.daily-activity-group-heading .ant-typography { margin: 0; }
+.daily-activity-list { list-style: decimal; padding-left: 24px; margin-top: 0; margin-bottom: 0; }
 .daily-activity-list li { padding: 16px 4px; border-bottom: 1px solid var(--surface-line); }
 .daily-activity-list li:last-child { border-bottom: 0; }
 .daily-activity-list li > .ant-space { margin-top: 10px; }

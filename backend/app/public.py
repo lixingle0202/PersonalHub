@@ -26,6 +26,7 @@ import uuid
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field, ValidationError, field_validator
+from starlette.middleware.gzip import GZipMiddleware
 
 from .config import Settings
 from .main import create_app
@@ -62,9 +63,10 @@ class Credentials(BaseModel):
 
 
 class AccountStore:
-    def __init__(self, path: Path):
+    def __init__(self, path: Path, daily_generations: int | None = DAILY_GENERATIONS):
         path.parent.mkdir(parents=True, exist_ok=True)
         self.path = path
+        self.daily_generations = daily_generations
         self.lock = RLock()
         with closing(self.connect()) as connection:
             connection.executescript("""
@@ -152,7 +154,7 @@ class AccountStore:
             count = connection.execute(
                 "SELECT count FROM model_usage WHERE user_id=? AND day=?", (user_id, today)
             ).fetchone()
-            if count and count[0] >= DAILY_GENERATIONS:
+            if self.daily_generations is not None and count and count[0] >= self.daily_generations:
                 return False
             connection.execute("""
                 INSERT INTO model_usage VALUES (?, ?, 1)
@@ -169,20 +171,25 @@ class AccountStore:
 
 
 class PublicHub:
-    def __init__(self, data_root: Path, model: str = "qwen2.5:1.5b", secure_cookie: bool = True):
+    def __init__(self, data_root: Path, model: str = "qwen2.5:1.5b", secure_cookie: bool = True,
+                 *, model_url: str = MODEL_URL, model_concurrency: int = SHARED_MODEL_CONCURRENCY,
+                 daily_generations: int | None = DAILY_GENERATIONS, desktop_mode: bool = False):
         self.data_root = data_root.resolve()
-        self.store = AccountStore(self.data_root / "accounts.sqlite3")
+        self.store = AccountStore(self.data_root / "accounts.sqlite3", daily_generations)
         self.model = model
+        self.model_url = OllamaSettings(base_url=model_url).base_url
+        self.desktop_mode = desktop_mode
         self.secure_cookie = secure_cookie
         self.user_apps: dict[str, FastAPI] = {}
         self.user_apps_lock = RLock()
-        self.model_gate = asyncio.BoundedSemaphore(SHARED_MODEL_CONCURRENCY)
+        self.model_gate = asyncio.BoundedSemaphore(model_concurrency)
         self.generating_users: set[str] = set()
         self.generation_jobs = SharedGenerationJobs(self.model_gate, self.generating_users, self.store)
         self.attempts: dict[str, list[float]] = defaultdict(list)
         self.attempts_lock = RLock()
         self.auth = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
         self._auth_routes()
+        self.http = GZipMiddleware(self._handle_http, minimum_size=1000, compresslevel=5)
 
     def _limit(self, key: str, count: int, window: int) -> None:
         now = time.monotonic()
@@ -240,16 +247,19 @@ class PublicHub:
                                     allowed_hosts=("*",))
                 app = create_app(settings)
                 with app.state.database.session() as session:
-                    value = OllamaSettings(base_url=MODEL_URL, model=self.model).model_dump_json()
-                    saved = session.get(Setting, "ai_ollama")
-                    if saved is None:
-                        session.add(Setting(key="ai_ollama", value_json=value))
-                    else:
-                        # A shared account must follow the current server policy,
-                        # rather than retaining an uninstalled model from an old run.
-                        saved.value_json = value
+                    self._configure_user_model(session)
                 self.user_apps[user.id] = app
             return app
+
+    def _configure_user_model(self, session):
+        # Public accounts follow server policy; desktop overrides this hook to
+        # retain an explicitly selected model across application restarts.
+        value = OllamaSettings(base_url=self.model_url, model=self.model).model_dump_json()
+        saved = session.get(Setting, "ai_ollama")
+        if saved is None:
+            session.add(Setting(key="ai_ollama", value_json=value))
+        else:
+            saved.value_json = value
 
     @staticmethod
     def _forbidden_origin(request: Request) -> bool:
@@ -276,6 +286,9 @@ class PublicHub:
                     return
         if scope["type"] != "http":
             return
+        return await self.http(scope, receive, send)
+
+    async def _handle_http(self, scope, receive, send):
         request = Request(scope, receive)
         path = scope["path"]
         if self._forbidden_origin(request):
@@ -287,17 +300,18 @@ class PublicHub:
         if not path.startswith("/api/") and request.method in {"GET", "HEAD"}:
             # The login page and hashed frontend assets are public; app data is not.
             if path.startswith("/assets/") or "." not in Path(path).name:
-                user = self.store.user_for(request.cookies.get(COOKIE))
-                if not user:
-                    root = frontend_dist_path().resolve()
-                    relative = path.lstrip("/")
-                    target = (root / relative).resolve()
-                    if target.is_relative_to(root) and target.is_file():
-                        return await FileResponse(target)(scope, receive, send)
-                    return await FileResponse(root / "index.html", headers={"Cache-Control": "no-store"})(scope, receive, send)
+                root = frontend_dist_path().resolve()
+                relative = path.lstrip("/")
+                target = (root / relative).resolve()
+                if target.is_relative_to(root) and target.is_file():
+                    headers = {"Cache-Control": "public, max-age=31536000, immutable"} if path.startswith('/assets/') else {"Cache-Control": "no-cache"}
+                    return await FileResponse(target, headers=headers)(scope, receive, send)
+                if path.startswith('/assets/'):
+                    return await JSONResponse({'detail': '页面文件不存在'}, status_code=404, headers={'Cache-Control': 'no-store'})(scope, receive, send)
+                return await FileResponse(root / "index.html", headers={"Cache-Control": "no-store"})(scope, receive, send)
         user = self.store.user_for(request.cookies.get(COOKIE))
         if not user:
-            return await JSONResponse({"detail": "请先登录"}, status_code=401,
+            return await JSONResponse({"detail": "请先登录", "desktop_mode": self.desktop_mode}, status_code=401,
                                       headers={"Cache-Control": "no-store"})(scope, receive, send)
         app = self._user_app(user)
         if path == "/api/v1/bootstrap":
@@ -305,6 +319,7 @@ class PublicHub:
                 "app_name": "PersonalHub", "version": app.version,
                 "local_token": app.state.local_token,
                 "database_path": "独立个人空间", "public_mode": True, "username": user.username,
+                "desktop_mode": self.desktop_mode,
             }, headers={"Cache-Control": "no-store"})(scope, receive, send)
         if path == "/api/v1/ai/ollama/settings" and request.method != "GET":
             return await JSONResponse({"detail": "共享模型由服务端管理"}, status_code=403)(scope, receive, send)

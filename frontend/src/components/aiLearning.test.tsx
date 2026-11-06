@@ -156,7 +156,7 @@ describe('local model configuration and learning-plan preview', () => {
     const view = render(<AILearningGenerator onImported={vi.fn()} />)
     const dialog = await openAndFill()
     fireEvent.click(dialog.getByRole('button', { name: '生成草稿' }))
-    await screen.findByText('本地模型正在生成，首次加载可能需要较长时间')
+    await screen.findByText('本地模型正在生成，请稍候')
     if (action === 'unmount') view.unmount()
     else fireEvent.click(dialog.getByRole('button', { name: '取消等待' }))
     await waitFor(() => expect(aborted).toBe(true))

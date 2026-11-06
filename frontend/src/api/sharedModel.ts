@@ -6,7 +6,10 @@ const MAX_WAIT_MS = 10 * 60 * 1000
 type GenerationJob<T> = {
   job_id: string; state: 'queued' | 'running' | 'cancelling' | 'completed' | 'failed' | 'cancelled'
   result: T | null; detail: string; queue_position: number
+  elapsed_seconds?: number
 }
+
+export type SharedGenerationProgress = { state: string; queue_position: number; elapsed_seconds: number }
 
 function pause(ms: number, signal: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -39,7 +42,7 @@ async function boundedRequest<T>(path: string, signal: AbortSignal, init: Reques
   }
 }
 
-export async function generateSharedDraft<T>(requirements: unknown, signal: AbortSignal, onWaiting: () => void, path = '/ai/learning/generate', onRunning?: () => void): Promise<T> {
+export async function generateSharedDraft<T>(requirements: unknown, signal: AbortSignal, onWaiting: () => void, path = '/ai/learning/generate', onRunning?: () => void, onProgress?: (progress: SharedGenerationProgress) => void): Promise<T> {
   const started = Date.now()
   const requestKey = crypto.randomUUID()
   let jobId = ''
@@ -72,6 +75,7 @@ export async function generateSharedDraft<T>(requirements: unknown, signal: Abor
       if (!response || typeof response !== 'object' || !('job_id' in response)) return response as T
       const job = response as GenerationJob<T>
       jobId = job.job_id
+      onProgress?.({ state: job.state, queue_position: job.queue_position ?? 0, elapsed_seconds: job.elapsed_seconds ?? Math.floor((Date.now() - started) / 1000) })
       if (job.state === 'completed') {
         terminal = true
         if (!job.result) throw new Error('未收到完整草稿，请重新生成')

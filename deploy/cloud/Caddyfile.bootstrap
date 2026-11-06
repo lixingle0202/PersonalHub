@@ -1,0 +1,9 @@
+:80 {
+    handle /.well-known/acme-challenge/* {
+        root * /srv/acme
+        file_server
+    }
+    handle {
+        respond "PersonalHub HTTPS setup in progress" 503
+    }
+}

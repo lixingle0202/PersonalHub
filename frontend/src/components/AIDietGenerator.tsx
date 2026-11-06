@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Alert, Button, Card, Form, Input, InputNumber, Modal, Space, Typography } from 'antd'
-import { apiRequest, isPublicMode } from '../api/client'
+import { apiRequest, isPublicMode, isDesktopMode } from '../api/client'
 import { generateSharedDraft } from '../api/sharedModel'
 import { readVisitorModel, visitorGenerate, visitorModels } from '../api/visitorModel'
 import type { TemplateDraft } from './DietTemplates'
@@ -11,6 +11,7 @@ type ModelConfig = { base_url: string; model: string }
 
 export function AIDietGenerator({ onGenerated }: { onGenerated: (plan: TemplateDraft) => void }) {
   const hosted = isPublicMode()
+  const desktop = isDesktopMode()
   const [open, setOpen] = useState(false)
   const [config, setConfig] = useState<ModelConfig | null>(null)
   const [provider, setProvider] = useState<'shared' | 'local'>(hosted ? 'shared' : 'local')
@@ -29,7 +30,7 @@ export function AIDietGenerator({ onGenerated }: { onGenerated: (plan: TemplateD
     void (async () => {
       try {
         const preference = hosted ? readVisitorModel() : null
-        const selectedProvider = preference?.provider ?? 'local'
+        const selectedProvider = desktop ? 'shared' : preference?.provider ?? 'local'
         setProvider(selectedProvider)
         const settings = hosted && selectedProvider === 'local'
           ? { base_url: preference!.base_url, model: preference!.model }
@@ -70,7 +71,7 @@ export function AIDietGenerator({ onGenerated }: { onGenerated: (plan: TemplateD
 
   return <><Button onClick={() => setOpen(true)}>AI 生成菜谱 / 模板</Button>
     <Modal title="AI 生成饮食菜单" width={760} open={open} onCancel={close} footer={preview ? <Space><Button onClick={() => setPreview(null)}>重新生成</Button><Button type="primary" onClick={() => { onGenerated(preview); close() }}>编辑、保存或导入日历</Button></Space> : null}>
-      <Typography.Paragraph type="secondary">使用{provider === 'shared' ? '共享' : '本地'}大模型{config?.model ? ` · ${config.model}` : ''}。生成内容和热量都需核对食材、份量及个人过敏情况。</Typography.Paragraph>
+      <Typography.Paragraph type="secondary">{desktop ? '使用本机 AI' : `使用${provider === 'shared' ? '共享' : '本地'}大模型`}{config?.model ? ` · ${config.model}` : ''}。生成内容和热量都需核对食材、份量及个人过敏情况。</Typography.Paragraph>
       {error ? <Alert type="error" showIcon title={error} /> : null}
       {waiting ? <Alert type="info" showIcon title="共享模型忙碌，正在等待并重试" /> : null}
       {!config?.model && !error ? <Alert type="info" showIcon title="请先在数据与设置中配置大模型" /> : null}

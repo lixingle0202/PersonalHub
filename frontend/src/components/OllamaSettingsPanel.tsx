@@ -1,12 +1,81 @@
 import { useEffect, useState } from 'react'
-import { Alert, AutoComplete, Button, Card, Form, Input, Radio, Space, Typography, message } from 'antd'
-import { apiRequest, isPublicMode } from '../api/client'
+import { Alert, AutoComplete, Button, Card, Form, Input, Radio, Select, Space, Typography, message } from 'antd'
+import { apiRequest, isPublicMode, isDesktopMode } from '../api/client'
 import { readVisitorModel, saveVisitorModel, visitorModels, type VisitorModelPreference } from '../api/visitorModel'
 
 export type OllamaSettings = { base_url: string; model: string }
 
 export function OllamaSettingsPanel() {
+  if (isDesktopMode()) return <DesktopModelSettings />
   return isPublicMode() ? <VisitorModelSettings /> : <LocalModelSettings />
+}
+
+function DesktopModelSettings() {
+  type Choice = OllamaSettings & { source: 'builtin' | 'local' }
+  const [form] = Form.useForm<OllamaSettings>()
+  const [source, setSource] = useState<Choice['source']>('builtin')
+  const [status, setStatus] = useState<(Choice & { ready: boolean; detail?: string }) | null>(null)
+  const [models, setModels] = useState<string[]>([])
+  const [busy, setBusy] = useState('load')
+  const [error, setError] = useState('')
+  async function check() {
+    setBusy('check'); setError('')
+    try { setStatus(await apiRequest('/desktop/ai/status')) }
+    catch (reason) { setError(reason instanceof Error ? reason.message : '检查失败') }
+    finally { setBusy('') }
+  }
+  useEffect(() => {
+    void apiRequest<Choice>('/desktop/ai/settings').then(async (choice) => {
+      setSource(choice.source)
+      if (choice.source === 'local') {
+        form.setFieldsValue(choice)
+        setModels([choice.model])
+      }
+      setStatus(await apiRequest('/desktop/ai/status'))
+    }).catch((reason: Error) => setError(reason.message)).finally(() => setBusy(''))
+  }, [form])
+
+  async function refreshModels() {
+    setBusy('models'); setError('')
+    try {
+      const result = await apiRequest<{ models: string[] }>('/desktop/ai/models', { method: 'POST', body: JSON.stringify({ base_url: form.getFieldValue('base_url') }) })
+      setModels(result.models)
+      if (!result.models.includes(form.getFieldValue('model'))) form.setFieldValue('model', result.models[0])
+      if (!result.models.length) setError('此 Ollama 尚未下载模型。')
+    } catch (reason) { setError(reason instanceof Error ? reason.message : '连接失败') }
+    finally { setBusy('') }
+  }
+
+  async function save(values: OllamaSettings) {
+    setBusy('save'); setError('')
+    try {
+      const selected = await apiRequest<Choice>('/desktop/ai/settings', { method: 'PUT', body: JSON.stringify(source === 'builtin' ? { source } : { ...values, source }) })
+      setStatus({ ...selected, ready: true })
+      message.success('已切换，学习和饮食计划将使用此模型')
+    } catch (reason) { setError(reason instanceof Error ? reason.message : '切换失败') }
+    finally { setBusy('') }
+  }
+
+  return <Card title="本机 AI · 模型切换">
+    <Typography.Paragraph>学习计划和饮食计划共用所选模型，设置保存在当前账号。</Typography.Paragraph>
+    {status ? <Alert type={status.ready ? 'success' : 'warning'} showIcon title={status.ready ? `当前使用 · ${status.source === 'builtin' ? '内置模型' : '本机 Ollama'} · ${status.model}` : `${status.model}：${status.detail ?? '连接失败'}`} /> : null}
+    <Radio.Group aria-label="桌面模型来源" value={source} disabled={Boolean(busy)} style={{ marginTop: 20, marginBottom: 16 }} onChange={(event) => { setSource(event.target.value); setError('') }} options={[
+      { label: '内置模型', value: 'builtin' }, { label: '其他本机 Ollama 模型', value: 'local' },
+    ]} optionType="button" buttonStyle="solid" />
+    <Form form={form} layout="vertical" initialValues={{ base_url: 'http://127.0.0.1:11434', model: '' }} onFinish={(values) => void save(values)} disabled={Boolean(busy)}>
+      {source === 'local' ? <>
+        <Typography.Paragraph type="secondary">先在 Ollama 中下载模型，再刷新列表选择。</Typography.Paragraph>
+        <Form.Item name="base_url" label="Ollama 地址" rules={[{ required: true, message: '请输入本机服务地址' }]}><Input onChange={() => { setModels([]); form.setFieldValue('model', undefined) }} /></Form.Item>
+        <Form.Item name="model" label="模型" rules={[{ required: true, message: '请刷新并选择已下载的模型' }]}><Select showSearch options={models.map((value) => ({ value, label: value }))} placeholder="刷新后选择已下载的模型" /></Form.Item>
+      </> : <Typography.Paragraph type="secondary">qwen2.5:1.5b · 随软件启动，无需额外安装。</Typography.Paragraph>}
+      {error ? <Alert type="error" showIcon title={error} style={{ marginBottom: 16 }} /> : null}
+      <Space wrap>
+        {source === 'local' ? <Button loading={busy === 'models'} onClick={() => void refreshModels()}>刷新模型列表</Button> : null}
+        <Button type="primary" htmlType="submit" loading={busy === 'save'}>保存并切换</Button>
+        <Button loading={busy === 'check'} onClick={() => void check()}>检查当前模型</Button>
+      </Space>
+    </Form>
+  </Card>
 }
 
 function VisitorModelSettings() {
@@ -57,7 +126,7 @@ function VisitorModelSettings() {
       { label: '共享大模型', value: 'shared' }, { label: '本地大模型', value: 'local' },
     ]} optionType="button" buttonStyle="solid" />
     {saved.provider === 'shared' ? <Typography.Paragraph style={{ marginTop: 20 }}>
-      学习计划由网站主机上的 {sharedModel || '共享模型'} 生成。无需在这台电脑安装 Ollama。
+      学习与饮食计划由网站配置的 {sharedModel || '共享模型'} 生成。无需在这台电脑安装模型。
     </Typography.Paragraph> : <div style={{ marginTop: 20 }}>
       <Typography.Paragraph>只连接这台电脑的 Ollama。模型推理在你的电脑上运行，生成的草稿仍保存在你自己的网页账号中。</Typography.Paragraph>
       <Typography.Paragraph type="secondary">先安装、启动 Ollama 并下载模型。Windows 用户可在“编辑账户的环境变量”中新建 <code>OLLAMA_ORIGINS</code>，值填下方完整网址；退出并重新启动 Ollama。浏览器如询问本地网络访问，请允许。临时网址变化后需更新该变量。无需开放 Ollama 端口。</Typography.Paragraph>

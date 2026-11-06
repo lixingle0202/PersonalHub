@@ -9,6 +9,7 @@ import { EmptyStatePanel, ErrorPanel, LoadingPanel } from '../components/StatePa
 
 type LearningTask = { id: string; title: string; details?: string; estimated_minutes?: number | null; plan_date: string | null; status: string | null; section_id?: string | null; agenda_id?: string | null }
 type LearningSection = { id: string; name: string; is_completed: boolean }
+type StageEditor = { mode: 'create' | 'rename'; section?: LearningSection } | null
 type Editor = 'goal' | 'editGoal' | 'section' | 'editSection' | 'task' | 'editTask' | 'session' | 'resource'
 type LearningGoal = {
   id: string; name: string; goal: string; start_date: string | null; target_date: string | null
@@ -60,7 +61,10 @@ export function LearningPage() {
   const [savingProgress, setSavingProgress] = useState(false)
   const [resetting, setResetting] = useState(false)
   const [togglingTaskId, setTogglingTaskId] = useState<string | null>(null)
+  const [stageEditor, setStageEditor] = useState<StageEditor>(null)
+  const [savingStage, setSavingStage] = useState(false)
   const [form] = Form.useForm()
+  const [stageForm] = Form.useForm()
   const selectedRef = useRef(selectedId)
   selectedRef.current = selectedId
   const detailVersion = useRef(0)
@@ -145,6 +149,40 @@ export function LearningPage() {
     form.resetFields()
     setModal(null); setEditingGoal(null); setEditingTask(null); setEditingSection(null)
     setSaveError(''); setDeleteConfirmOpen(false); setDeleteError('')
+  }
+
+  function openStageEditor(mode: 'create' | 'rename') {
+    if (!detail) return
+    const sectionId = form.getFieldValue('section_id') as string | undefined
+    const section = detail.sections?.find((item) => item.id === sectionId)
+    if (mode === 'rename' && !section) {
+      message.info('请先选择要修改的阶段')
+      return
+    }
+    stageForm.resetFields()
+    stageForm.setFieldsValue({ name: section?.name ?? '' })
+    setStageEditor({ mode, section })
+  }
+
+  async function saveStage(values: { name: string }) {
+    if (!detail || !stageEditor) return
+    setSavingStage(true)
+    try {
+      if (stageEditor.mode === 'create') {
+        const created = await apiRequest<LearningSection>(`/learning/goals/${detail.id}/sections`, { method: 'POST', body: JSON.stringify({ name: values.name }) })
+        form.setFieldsValue({ section_id: created.id })
+        message.success('阶段已新增并选中')
+      } else if (stageEditor.section) {
+        await apiRequest(`/learning/sections/${stageEditor.section.id}`, { method: 'PATCH', body: JSON.stringify({ name: values.name }) })
+        message.success('阶段名称已修改')
+      }
+      setStageEditor(null)
+      await Promise.all([loadDetail(), loadGoals()])
+    } catch (reason) {
+      message.error(reason instanceof Error ? reason.message : '保存阶段失败')
+    } finally {
+      setSavingStage(false)
+    }
   }
 
   async function submit(values: Record<string, unknown>) {
@@ -299,9 +337,14 @@ export function LearningPage() {
       <Form form={form} layout="vertical" onFinish={(values) => void submit(values)}>
         {modal === 'goal' || modal === 'editGoal' ? <><Form.Item name="name" label="学习主题" rules={[{ required: true }]}><Input /></Form.Item><Form.Item name="goal" label="学习目标"><Input.TextArea /></Form.Item><Row gutter={12}><Col span={12}><Form.Item name="start_date" label="开始日期"><DatePicker /></Form.Item></Col><Col span={12}><Form.Item name="target_date" label="计划完成"><DatePicker /></Form.Item></Col></Row><Form.Item name="estimated_minutes" label="预计投入分钟"><InputNumber min={0} /></Form.Item></> : null}
         {modal === 'section' || modal === 'editSection' ? <Form.Item name="name" label="章节名称" rules={[{ required: true }]}><Input /></Form.Item> : null}
-        {modal === 'task' || modal === 'editTask' ? <><Form.Item name="title" label="学习任务" rules={[{ required: true }]}><Input /></Form.Item><Form.Item name="details" label="任务详情"><Input.TextArea rows={4} placeholder="具体内容、练习步骤或完成标准" /></Form.Item><Form.Item name="section_id" label="所属阶段"><select className="native-form-select"><option value="">未分类</option>{detail?.sections?.map((section) => <option value={section.id} key={section.id}>{section.name}</option>)}</select></Form.Item><Form.Item name="estimated_minutes" label="预计分钟"><InputNumber min={1} max={1440} /></Form.Item><Form.Item name="plan_date" label="计划日期"><DatePicker /></Form.Item></> : null}
+        {modal === 'task' || modal === 'editTask' ? <><Form.Item name="title" label="学习任务" rules={[{ required: true }]}><Input /></Form.Item><Form.Item name="details" label="任务详情"><Input.TextArea rows={4} placeholder="具体内容、练习步骤或完成标准" /></Form.Item><Form.Item name="section_id" label="所属阶段"><select className="native-form-select"><option value="">未分类</option>{detail?.sections?.map((section) => <option value={section.id} key={section.id}>{section.name}</option>)}</select></Form.Item><Space size="small" style={{ marginTop: -16, marginBottom: 16 }}><Button type="link" size="small" onClick={() => openStageEditor('create')}>新增阶段</Button><Button type="link" size="small" onClick={() => openStageEditor('rename')}>修改所选阶段</Button></Space><Form.Item name="estimated_minutes" label="预计分钟"><InputNumber min={1} max={1440} /></Form.Item><Form.Item name="plan_date" label="计划日期"><DatePicker /></Form.Item></> : null}
         {modal === 'session' ? <><Form.Item name="studied_on" label="学习日期" rules={[{ required: true }]}><DatePicker /></Form.Item><Form.Item name="actual_minutes" label="实际分钟" rules={[{ required: true }]}><InputNumber min={0} /></Form.Item><Form.Item name="notes" label="学习笔记"><Input.TextArea /></Form.Item><Form.Item name="problems" label="遇到的问题"><Input.TextArea /></Form.Item><Form.Item name="next_step" label="下一步"><Input /></Form.Item></> : null}
         {modal === 'resource' ? <><Form.Item name="name" label="资料名称" rules={[{ required: true }]}><Input /></Form.Item><Form.Item name="link" label="链接"><Input /></Form.Item><Form.Item name="notes" label="备注"><Input.TextArea /></Form.Item></> : null}
+      </Form>
+    </Modal>
+    <Modal title={stageEditor?.mode === 'create' ? '新增学习阶段' : '修改学习阶段'} open={Boolean(stageEditor)} centered destroyOnHidden onCancel={() => { if (!savingStage) setStageEditor(null) }} onOk={() => stageForm.submit()} okText="保存" cancelText="取消" confirmLoading={savingStage} okButtonProps={{ 'aria-label': '保存阶段' }} cancelButtonProps={{ disabled: savingStage }} closable={!savingStage} keyboard={!savingStage} mask={{ closable: !savingStage }}>
+      <Form form={stageForm} layout="vertical" onFinish={(values) => void saveStage(values)}>
+        <Form.Item name="name" label="阶段名称" rules={[{ required: true, whitespace: true, message: '请输入阶段名称' }]}><Input autoFocus placeholder="例如：基础复习" /></Form.Item>
       </Form>
     </Modal>
     <Modal title={editingTask ? '确认删除此学习任务？' : editingSection ? '确认删除此学习章节？' : '确认删除此学习计划？'} centered width={440} open={deleteConfirmOpen} onOk={() => void deleteCurrentPlan()} onCancel={() => { if (!deleting) { setDeleteConfirmOpen(false); setDeleteError('') } }} okText="确认" cancelText="取消" confirmLoading={deleting} okButtonProps={{ danger: true, disabled: editorBusy, 'aria-label': '确认删除' }} cancelButtonProps={{ disabled: deleting, 'aria-label': '取消删除' }} closable={!deleting} keyboard={!deleting} mask={{ closable: !deleting }}>

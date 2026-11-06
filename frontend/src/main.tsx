@@ -22,7 +22,7 @@ async function start() {
     )
   } catch (error) {
     root.render(error instanceof AuthenticationRequired
-      ? <AppearanceProvider><ConfigProvider><PublicAuthPage /></ConfigProvider></AppearanceProvider>
+      ? <AppearanceProvider><ConfigProvider><PublicAuthPage desktop={error.desktopMode} /></ConfigProvider></AppearanceProvider>
       : <main className="startup-error"><h1>无法启动 PersonalHub</h1><p>{error instanceof Error ? error.message : '本地数据服务不可用'}</p></main>)
   }
 }

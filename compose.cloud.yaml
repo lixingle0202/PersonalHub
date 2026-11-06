@@ -1,0 +1,49 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.cloud
+    env_file: .env
+    environment:
+      TZ: Asia/Shanghai
+    restart: unless-stopped
+    volumes:
+      - personalhub_data:/var/lib/personalhub
+      - personalhub_backups:/backups
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8766/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+  caddy:
+    image: caddy:2.10-alpine
+    command: ["caddy", "run", "--config", "/etc/caddy/${CADDY_CONFIG:-Caddyfile.bootstrap}", "--adapter", "caddyfile"]
+    environment:
+      PUBLIC_IP: ${PUBLIC_IP:?Set the server public IPv4 in .env}
+    ports:
+      - "80:80"
+      - "443:443"
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+    volumes:
+      - ./deploy/cloud:/etc/caddy:ro
+      - acme_webroot:/srv/acme
+      - letsencrypt:/etc/letsencrypt:ro
+      - caddy_data:/data
+      - caddy_config:/config
+  certbot:
+    image: certbot/certbot:v5.4.0
+    profiles: ["maintenance"]
+    volumes:
+      - acme_webroot:/var/www/certbot
+      - letsencrypt:/etc/letsencrypt
+volumes:
+  personalhub_data:
+  personalhub_backups:
+  acme_webroot:
+  letsencrypt:
+  caddy_data:
+  caddy_config:

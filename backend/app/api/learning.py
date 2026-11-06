@@ -105,9 +105,10 @@ def commit_response(session: Session, result: dict) -> dict:
     return result
 
 
-def task_out(session: Session, task: LearningTask) -> dict:
+def task_out(session: Session, task: LearningTask, agendas: list[AgendaItem] | None = None) -> dict:
     row = model_dict(task)
-    agendas = linked_task_agendas(session, [task])
+    if agendas is None:
+        agendas = linked_task_agendas(session, [task])
     agenda = next((item for item in agendas if item.deleted_at is None and item.id == task.agenda_id), None)
     if agenda is None:
         agenda = next((item for item in agendas if item.deleted_at is None), None)
@@ -162,7 +163,19 @@ def goal_out(session: Session, goal: LearningGoal, detail: bool = False) -> dict
         tasks = session.scalars(select(LearningTask).where(
             LearningTask.goal_id == goal.id, LearningTask.deleted_at.is_(None)
         ).order_by(LearningTask.created_at)).all()
-        data["tasks"] = [task_out(session, task) for task in tasks]
+        # One lookup for the whole plan instead of a SQL round trip per task.
+        by_task: dict[str, list[AgendaItem]] = {task.id: [] for task in tasks}
+        forward_links: dict[str, list[str]] = {}
+        for task in tasks:
+            if task.agenda_id:
+                forward_links.setdefault(task.agenda_id, []).append(task.id)
+        for agenda in linked_task_agendas(session, tasks):
+            if agenda.source_type == 'learning_task' and agenda.source_id in by_task:
+                by_task[agenda.source_id].append(agenda)
+            elif agenda.source_type is None or (agenda.source_type == 'learning_task' and agenda.source_id is None):
+                for task_id in forward_links.get(agenda.id, []):
+                    by_task[task_id].append(agenda)
+        data["tasks"] = [task_out(session, task, by_task[task.id]) for task in tasks]
         data["sessions"] = [model_dict(item) for item in session.scalars(select(StudySession).where(
             StudySession.goal_id == goal.id, StudySession.deleted_at.is_(None)
         ).order_by(StudySession.studied_on.desc())).all()]

@@ -27,6 +27,30 @@ REQUIREMENTS = {"topic": "Android", "objective": "完成练习", "start_date": "
                 "days": 2, "daily_minutes": 45}
 
 
+def test_public_assets_are_compressed_and_cached_without_account_lookups(tmp_path, monkeypatch):
+    from app import public as public_module
+    root = tmp_path / 'frontend'
+    (root / 'assets').mkdir(parents=True)
+    (root / 'index.html').write_text('<html>PersonalHub</html>', encoding='utf-8')
+    script = 'console.log("PersonalHub");\n' * 500
+    (root / 'assets' / 'app-a1b2c3.js').write_bytes(script.encode('utf-8'))
+    monkeypatch.setattr(public_module, 'frontend_dist_path', lambda: root)
+    app = create_public_app(tmp_path / 'public')
+    def no_auth_lookup(*args):
+        raise AssertionError('Public assets must not touch the account database')
+    monkeypatch.setattr(app.store, 'user_for', no_auth_lookup)
+    with TestClient(app, base_url=HOST) as browser:
+        response = browser.get('/assets/app-a1b2c3.js', headers={'Accept-Encoding': 'gzip'})
+        assert response.text == script
+        assert response.headers['content-encoding'] == 'gzip'
+        assert 'immutable' in response.headers['cache-control']
+        assert int(response.headers['content-length']) < len(script) / 4
+        assert browser.get('/learning').headers['cache-control'] == 'no-store'
+        missing = browser.get('/assets/old-missing.js')
+        assert missing.status_code == 404
+        assert missing.headers['cache-control'] == 'no-store'
+
+
 def register(client: TestClient, name: str) -> str:
     response = client.post("/api/v1/public/register", json={"username": name, "password": PASSWORD})
     assert response.status_code == 200, response.text

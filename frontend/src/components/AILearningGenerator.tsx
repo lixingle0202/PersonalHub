@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { Alert, Button, DatePicker, Form, Input, InputNumber, Modal, Space, Tag, Typography, message } from 'antd'
 import { BulbOutlined, DeleteOutlined } from '@ant-design/icons'
 import dayjs, { type Dayjs } from 'dayjs'
-import { apiRequest, currentUsername, isPublicMode } from '../api/client'
-import { generateSharedDraft } from '../api/sharedModel'
+import { apiRequest, currentUsername, isPublicMode, isDesktopMode } from '../api/client'
+import { generateSharedDraft, type SharedGenerationProgress } from '../api/sharedModel'
 import { readVisitorModel, visitorGenerate, visitorModels } from '../api/visitorModel'
 import type { OllamaSettings } from './OllamaSettingsPanel'
 
@@ -23,6 +23,7 @@ export function AILearningGenerator({ onImported, initialTopic = '', initialObje
   initialObjective?: string
 }) {
   const hosted = isPublicMode()
+  const desktop = isDesktopMode()
   const [open, setOpen] = useState(false)
   const [config, setConfig] = useState<OllamaSettings | null>(null)
   const [provider, setProvider] = useState<'shared' | 'local'>(hosted ? 'shared' : 'local')
@@ -31,6 +32,7 @@ export function AILearningGenerator({ onImported, initialTopic = '', initialObje
   const [error, setError] = useState('')
   const [busy, setBusy] = useState<'load' | 'generate' | 'import' | ''>('')
   const [waitingForShared, setWaitingForShared] = useState(false)
+  const [generationProgress, setGenerationProgress] = useState<SharedGenerationProgress | null>(null)
   const controller = useRef<AbortController | null>(null)
   const [form] = Form.useForm<Requirements>()
 
@@ -43,7 +45,7 @@ export function AILearningGenerator({ onImported, initialTopic = '', initialObje
     void (async () => {
       try {
         const preference = hosted ? readVisitorModel() : null
-        const selectedProvider = preference?.provider ?? 'local'
+        const selectedProvider = desktop ? 'shared' : preference?.provider ?? 'local'
         setProvider(selectedProvider)
         const settings = hosted && selectedProvider === 'local'
           ? { base_url: preference!.base_url, model: preference!.model }
@@ -77,7 +79,7 @@ export function AILearningGenerator({ onImported, initialTopic = '', initialObje
   async function generate(values: Requirements) {
     const abort = new AbortController()
     controller.current = abort
-    setBusy('generate'); setError(''); setWaitingForShared(false)
+    setBusy('generate'); setError(''); setWaitingForShared(false); setGenerationProgress(null)
     try {
       const requirements = { ...values, start_date: values.start_date.format('YYYY-MM-DD') }
       let generated: Draft
@@ -92,7 +94,7 @@ export function AILearningGenerator({ onImported, initialTopic = '', initialObje
         })
       } else {
         generated = hosted
-          ? await generateSharedDraft<Draft>(requirements, abort.signal, () => setWaitingForShared(true), '/ai/learning/generate', () => setWaitingForShared(false))
+          ? await generateSharedDraft<Draft>(requirements, abort.signal, () => setWaitingForShared(true), '/ai/learning/generate', () => setWaitingForShared(false), setGenerationProgress)
           : await apiRequest<Draft>('/ai/learning/generate', {
             method: 'POST', signal: abort.signal, body: JSON.stringify(requirements),
           })
@@ -128,7 +130,7 @@ export function AILearningGenerator({ onImported, initialTopic = '', initialObje
     <Button aria-label="AI 生成学习计划" icon={<BulbOutlined aria-hidden />} onClick={() => setOpen(true)}>AI 生成学习计划</Button>
     <Modal width={900} title="AI 生成学习计划" open={open} onCancel={close} footer={null} mask={{ closable: false }}>
       <div className="ai-generator">
-        <div className="ai-connection"><Typography.Text type="secondary">{provider === 'shared' ? '共享大模型' : '本地大模型'}{config?.model ? ` · ${config.model}` : ''}</Typography.Text><a href="/settings?tab=ai">大模型设置</a></div>
+        <div className="ai-connection"><Typography.Text type="secondary">{desktop ? '本机 AI' : provider === 'shared' ? '共享大模型' : '本地大模型'}{config?.model ? ` · ${config.model}` : ''}</Typography.Text><a href="/settings?tab=ai">大模型设置</a></div>
         {!config?.model && busy !== 'load' ? <Alert type="info" showIcon title={provider === 'shared' ? '共享模型暂不可用' : '请先配置本地模型'} description={provider === 'shared' ? '请稍后重试。' : '在数据与设置 → 大模型中检查连接、选择模型并保存，再打开这个窗口。'} /> : null}
         {connectionError ? <Alert type="warning" showIcon title={connectionError} /> : null}
         {error ? <Alert type="error" showIcon title={error} /> : null}
@@ -148,7 +150,7 @@ export function AILearningGenerator({ onImported, initialTopic = '', initialObje
           <Form.Item name="current_level" label="目前基础"><Input placeholder="例如：会 Java，尚未接触 Android" maxLength={1000} /></Form.Item>
           <div className="ai-request-schedule"><Form.Item name="start_date" label="开始日期" rules={[{ required: true }]}><DatePicker /></Form.Item><Form.Item name="days" label="计划天数" rules={[{ required: true }]}><InputNumber min={1} max={30} /></Form.Item><Form.Item name="daily_minutes" label="每天可用分钟" rules={[{ required: true }]}><InputNumber min={5} max={480} /></Form.Item></div>
           <Form.Item name="preferences" label="补充要求"><Input.TextArea rows={2} placeholder="例如：多安排动手练习，每三天复习一次" maxLength={2000} /></Form.Item>
-          {busy === 'generate' ? <Alert type="info" showIcon title={waitingForShared ? '共享模型正在处理其他请求，已自动等待' : provider === 'shared' ? '共享模型正在生成，请稍候' : '本地模型正在生成，首次加载可能需要较长时间'} description={waitingForShared ? '已加入队列，轮到后自动开始；排队期间不消耗每日生成次数。可以取消等待。' : '正在后台生成，页面会自动显示结果。可以取消；取消不会向正式计划添加内容。'} className="ai-status" /> : null}
+          {busy === 'generate' ? <Alert type="info" showIcon title={waitingForShared ? `正在排队${generationProgress?.queue_position ? ` · 第 ${generationProgress.queue_position} 位` : ''}` : provider === 'shared' ? `${desktop ? '本机 AI' : '共享模型'}正在生成${generationProgress ? ` · 已用 ${generationProgress.elapsed_seconds} 秒` : ''}` : '本地模型正在生成，请稍候'} description={waitingForShared ? '轮到后自动开始，可以取消。' : '完成后自动显示草稿，可随时取消。'} className="ai-status" /> : null}
           <div className="ai-generator-actions"><Typography.Text type="secondary">生成后先预览，再由你确认加入</Typography.Text><Space><Button aria-label="取消等待" onClick={close}>{busy === 'generate' ? '取消等待' : '取消'}</Button><Button type="primary" htmlType="submit" loading={busy === 'generate'} disabled={Boolean(busy) || !config?.model || Boolean(connectionError)}>生成草稿</Button></Space></div>
         </Form>}
       </div>

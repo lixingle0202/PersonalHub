@@ -11,7 +11,7 @@ function json(body: unknown, status = 200) {
 
 afterEach(() => vi.restoreAllMocks())
 
-it('checks before showing the learning page, keeps the overdue notice until acknowledged', async () => {
+it('shows the learning page immediately while checking and keeps notices until acknowledged', async () => {
   setLocalToken('test-token')
   let release!: () => void
   const pending = new Promise<Response>((resolve) => {
@@ -29,10 +29,10 @@ it('checks before showing the learning page, keeps the overdue notice until ackn
   })
 
   render(<LearningAutoExtension><div>学习内容</div></LearningAutoExtension>)
-  expect(screen.queryByText('学习内容')).not.toBeInTheDocument()
+  expect(screen.getByText('学习内容')).toBeInTheDocument()
   release()
-  expect(await screen.findByText('学习内容')).toBeInTheDocument()
-  expect(screen.getByText('学习计划「英语六级」已超时并自动顺延')).toBeInTheDocument()
+  expect(await screen.findByText('学习计划「英语六级」已超时并自动顺延')).toBeInTheDocument()
+  expect(screen.getByText('学习内容')).toBeInTheDocument()
   expect(screen.getByText(/最早一项从 2026-10-01 调整到 2026-10-04/)).toBeInTheDocument()
   fireEvent.click(screen.getByRole('button', { name: '确认收到 英语六级 顺延提醒' }))
   await waitFor(() => expect(screen.queryByText('学习计划「英语六级」已超时并自动顺延')).not.toBeInTheDocument())

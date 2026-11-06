@@ -4,6 +4,36 @@ from app.config import Settings
 from app.main import create_app
 
 
+def test_goal_detail_fetches_task_agendas_in_one_query(tmp_path):
+    from sqlalchemy import event
+    app = create_app(Settings(data_root=tmp_path / 'batch-links'))
+    with TestClient(app) as client:
+        client.headers['x-local-token'] = app.state.local_token
+        goal = client.post('/api/v1/learning/goals', json={'name': '练习计划'}).json()
+        tasks = [client.post(f"/api/v1/learning/goals/{goal['id']}/tasks", json={
+            'title': f'任务{index}', 'plan_date': '2026-11-06', 'estimated_minutes': index + 10,
+        }).json() for index in range(8)]
+        client.post(f"/api/v1/agenda/{tasks[0]['agenda_id']}/complete")
+        queries = []
+        def capture(connection, cursor, statement, parameters, context, executemany):
+            if statement.lstrip().upper().startswith('SELECT') and 'agenda_items' in statement:
+                queries.append(statement)
+        with app.state.database.session() as session:
+            engine = session.get_bind()
+        event.listen(engine, 'before_cursor_execute', capture)
+        try:
+            detail = client.get(f"/api/v1/learning/goals/{goal['id']}").json()
+        finally:
+            event.remove(engine, 'before_cursor_execute', capture)
+        assert len(queries) == 1
+        saved = {task['id']: task for task in detail['tasks']}
+        for index, task in enumerate(tasks):
+            assert saved[task['id']]['agenda_id'] == task['agenda_id']
+            assert saved[task['id']]['estimated_minutes'] == index + 10
+            assert saved[task['id']]['status'] == ('completed' if index == 0 else 'pending')
+    app.state.database.dispose()
+
+
 def test_daily_learning_task_completion_and_detail_changes_sync_with_agenda(tmp_path):
     app = create_app(Settings(data_root=tmp_path / "learning-tasks"))
     with TestClient(app) as client:

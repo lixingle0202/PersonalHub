@@ -27,8 +27,15 @@ def read_config(session: Session) -> OllamaSettings:
     return OllamaSettings.model_validate_json(record.value_json) if record else OllamaSettings()
 
 
+def generation_config(request: Request, session: Session):
+    return getattr(request.app.state, 'cloud_model', None) or read_config(session)
+
+
 @router.get('/ollama/settings')
-def ollama_settings(session: Session = Depends(get_session)):
+def ollama_settings(request: Request, session: Session = Depends(get_session)):
+    cloud = getattr(request.app.state, 'cloud_model', None)
+    if cloud is not None:
+        return cloud.public_view()
     return read_config(session)
 
 
@@ -52,7 +59,7 @@ def ollama_models(payload: LocalEndpoint):
 def generate_learning(payload: LearningGenerateRequest, request: Request):
     # Close the configuration transaction before waiting for model inference.
     with request.app.state.database.session() as session:
-        config = read_config(session)
+        config = generation_config(request, session)
     plan = generate_learning_plan(config, payload)
     with request.app.state.database.session() as session:
         draft = AILearningDraft(plan_json=plan.model_dump_json())

@@ -124,7 +124,8 @@ class SharedGenerationJobs:
                         job.state = 'cancelled'
                     elif response.is_success:
                         result = response.json()
-                        if not isinstance(result, dict) or 'id' not in result:
+                        required = {'id', 'plan'} if '/learning/' in job.path else {'plan'}
+                        if not isinstance(result, dict) or not required <= result.keys() or not isinstance(result['plan'], dict):
                             raise ValueError('Invalid generation response')
                         job.result = result
                         job.state = 'completed'

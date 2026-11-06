@@ -1,0 +1,20 @@
+{
+    auto_https off
+}
+
+:80 {
+    handle /.well-known/acme-challenge/* {
+        root * /srv/acme
+        file_server
+    }
+    handle {
+        redir https://{$PUBLIC_IP}{uri} permanent
+    }
+}
+
+https://{$PUBLIC_IP} {
+    tls /etc/letsencrypt/live/{$PUBLIC_IP}/fullchain.pem /etc/letsencrypt/live/{$PUBLIC_IP}/privkey.pem
+    reverse_proxy app:8766 {
+        header_up -CF-Connecting-IP
+    }
+}

@@ -45,6 +45,8 @@ export function DietPage() {
   const [health, setHealth] = useState<Health | null>(null)
   const [profile, setProfile] = useState<DietProfile | null>(null)
   const [error, setError] = useState('')
+  const [secondaryError, setSecondaryError] = useState('')
+  const [loadingSecondary, setLoadingSecondary] = useState(true)
   const [modal, setModal] = useState<'dish' | 'meal' | 'shopping' | 'shoppingList' | 'shoppingItem' | null>(null)
   const [editingMeal, setEditingMeal] = useState<Meal | null>(null)
   const [editingDish, setEditingDish] = useState<Dish | null>(null)
@@ -65,19 +67,25 @@ export function DietPage() {
     const version = ++loadVersion.current
     const { start, end } = calendarRange(month)
     setLoadingCalendar(true)
-    try {
-      const [dishData, mealData, shopData, healthData, profileData] = await Promise.all([
+    setLoadingSecondary(true)
+    const primary = Promise.all([
         apiRequest<Dish[]>('/diet/dishes'),
         apiRequest<Meal[]>(`/diet/meals?start_date=${start.format('YYYY-MM-DD')}&end_date=${end.format('YYYY-MM-DD')}`),
-        apiRequest<Shopping[]>('/diet/shopping-lists'),
-        apiRequest<Health>(`/diet/health/${dayjs().format('YYYY-MM-DD')}`),
         apiRequest<DietProfile>('/diet/profile'),
-      ])
+      ]).then(([dishData, mealData, profileData]) => {
       if (version === loadVersion.current) {
-        setDishes(dishData); setMeals(mealData); setShopping(shopData); setHealth(healthData); setProfile(profileData); setError('')
+        setDishes(dishData); setMeals(mealData); setProfile(profileData); setError('')
       }
-    } catch (reason) { if (version === loadVersion.current) setError(reason instanceof Error ? reason.message : '读取失败') }
-    finally { if (version === loadVersion.current) setLoadingCalendar(false) }
+    }).catch((reason) => { if (version === loadVersion.current) setError(reason instanceof Error ? reason.message : '读取失败') })
+      .finally(() => { if (version === loadVersion.current) setLoadingCalendar(false) })
+    const secondary = Promise.all([
+      apiRequest<Shopping[]>('/diet/shopping-lists'),
+      apiRequest<Health>(`/diet/health/${dayjs().format('YYYY-MM-DD')}`),
+    ]).then(([shopData, healthData]) => {
+      if (version === loadVersion.current) { setShopping(shopData); setHealth(healthData); setSecondaryError('') }
+    }).catch((reason) => { if (version === loadVersion.current) setSecondaryError(reason instanceof Error ? reason.message : '购物清单或每日记录加载失败') })
+      .finally(() => { if (version === loadVersion.current) setLoadingSecondary(false) })
+    await Promise.all([primary, secondary])
   }, [month])
   useEffect(() => { void load(); return () => { ++loadVersion.current } }, [load])
 
@@ -220,14 +228,16 @@ export function DietPage() {
   }
 
   if (error) return <ErrorPanel message={error} onRetry={() => void load()} />
-  if (!dishes || !health) return <LoadingPanel />
+  if (!dishes || !profile) return <LoadingPanel />
   return <div className="page-stack">
+    {secondaryError ? <Alert type="warning" title={secondaryError} action={<Button onClick={() => void load()}>重试</Button>} /> : null}
     <Card title="个人身体资料与热量估算"><Form layout="inline" initialValues={profile ?? {}} onFinish={(values) => void saveProfile(values)}><Form.Item name="height_cm" label="身高（cm）" rules={[{ required: true }]}><InputNumber min={80} max={250} step={0.1} /></Form.Item><Form.Item name="weight_kg" label="体重（kg）" rules={[{ required: true }]}><InputNumber min={20} max={400} step={0.1} /></Form.Item><Button type="primary" htmlType="submit" loading={profileSaving}>保存身体资料</Button></Form><Typography.Text type="secondary">热量按食物、配方和用餐份数估算，同样食物和份量不随餐次改变。填写食材用量或包装上的每份热量会更准确；身高体重不参与计算。</Typography.Text></Card>
     <Tabs items={[
       { key: 'calendar', label: '饮食日历', children: <><div className="page-actions diet-calendar-intro"><div><Typography.Title level={4}>饮食日历</Typography.Title><Typography.Text type="secondary">按天查看餐食及估算热量，点击卡片可修改或删除</Typography.Text></div><Space><ConfirmDangerButton label="清零全部饮食计划" title="确认清零全部饮食计划？" description="所有日期的早、午、晚餐和加餐安排都会取消并从页面隐藏，可在回收站中恢复。" disabled={resetting} onConfirm={resetAllPlans} /><Button type="primary" onClick={() => openMealEditor(dayjs(), 'dinner')}>安排一餐</Button></Space></div><DietCalendar month={month} meals={meals} loading={loadingCalendar} onMonthChange={setMonth} onEdit={(date, type, meal) => openMealEditor(date, type, meal)} /></> },
       { key: 'dishes', label: '常用菜品', children: <><div className="tab-actions"><Button type="primary" onClick={() => openSimpleModal('dish')}>新增菜品</Button></div><Row gutter={[12, 12]}>{dishes.map((dish) => <Col span={8} key={dish.id}><Card title={dish.name} extra={<Button aria-label={`修改菜品 ${dish.name}`} onClick={() => openDishEditor(dish)}>修改</Button>}><p>{dish.instructions || '暂无做法'}</p><Typography.Text type="secondary">{dish.ingredients.map((item) => item.name).join('、') || '暂无食材'}</Typography.Text></Card></Col>)}</Row></> },
       { key: 'templates', label: '饮食模板', children: <DietTemplates onImported={async (startDate) => { if (!startDate.isSame(month, 'month')) setMonth(startDate.startOf('month')); else await load() }} /> },
       { key: 'shopping', label: '购物清单', children: <>
+        {loadingSecondary ? <LoadingPanel /> : null}
         <div className="tab-actions"><Space><Button type="primary" onClick={() => openSimpleModal('shopping')}>按当前月份饮食生成</Button><Button onClick={() => openSimpleModal('shoppingList')}>新建空清单</Button></Space></div>
         {shopping.map((list) => <Card className="shopping-list-card" title={`${list.name} · ${list.start_date}—${list.end_date}`} extra={<Space wrap>
           <Button disabled={shoppingDeleting} onClick={() => openShoppingItem(list.id)}>手动添加物品</Button>
@@ -240,7 +250,7 @@ export function DietPage() {
           </div>) : <Typography.Text type="secondary">清单暂无物品，可手动添加。</Typography.Text>}
         </Card>)}
       </> },
-      { key: 'daily', label: '每日记录', children: <Card title="今天"><Form layout="vertical" initialValues={health} onFinish={(values) => void saveHealth(values)}><Row gutter={12}><Col span={8}><Form.Item name="water_ml" label="饮水量（ml）"><InputNumber min={0} /></Form.Item></Col><Col span={8}><Form.Item name="weight_kg" label="体重（kg）"><InputNumber min={1} step={0.1} /></Form.Item></Col></Row><Form.Item name="feeling" label="今日感受"><Input.TextArea /></Form.Item><Button type="primary" htmlType="submit">保存记录</Button></Form></Card> },
+      { key: 'daily', label: '每日记录', children: health ? <Card title="今天"><Form layout="vertical" initialValues={health} onFinish={(values) => void saveHealth(values)}><Row gutter={12}><Col span={8}><Form.Item name="water_ml" label="饮水量（ml）"><InputNumber min={0} /></Form.Item></Col><Col span={8}><Form.Item name="weight_kg" label="体重（kg）"><InputNumber min={1} step={0.1} /></Form.Item></Col></Row><Form.Item name="feeling" label="今日感受"><Input.TextArea /></Form.Item><Button type="primary" htmlType="submit">保存记录</Button></Form></Card> : loadingSecondary ? <LoadingPanel /> : null },
     ]} />
     <Modal forceRender centered styles={{ body: { maxHeight: 'calc(100dvh - 260px)', overflowY: 'auto' } }} title={modal === 'dish' ? editingDish ? '修改菜品' : '新增菜品' : modal === 'meal' ? editingMeal ? '修改饮食安排' : '安排一餐' : modal === 'shoppingItem' ? shoppingTarget?.itemId ? '修改购物项目' : '手动添加物品' : modal === 'shoppingList' ? '新建空清单' : '生成购物清单'} open={Boolean(modal)} closable={{ disabled: saving || deleting }} keyboard={!saving && !deleting} mask={{ closable: !saving && !deleting }} onCancel={() => { if (!saving && !deleting) closeModal() }} footer={<div className="diet-editor-footer"><div>{editingMeal ? <Button aria-label="删除这餐" danger disabled={saving || deleting} onClick={() => { setDeleteError(''); setDeleteConfirmOpen(true) }}>删除这餐</Button> : null}</div><Space><Button aria-label="取消" disabled={saving || deleting} onClick={closeModal}>取消</Button><Button aria-label={editingMeal || editingDish || shoppingTarget?.itemId ? '保存修改' : '创建'} type="primary" loading={saving} disabled={deleting} onClick={() => form.submit()}>{editingMeal || editingDish || shoppingTarget?.itemId ? '保存修改' : '创建'}</Button></Space></div>}>
       <Form form={form} layout="vertical" onFinish={(values) => void submit(values)}>

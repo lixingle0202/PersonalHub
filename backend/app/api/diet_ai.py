@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
-from .ai import read_config
+from .ai import generation_config
 from .diet_templates import TemplateIn
 from ..services.ollama import ollama_request
 
@@ -74,7 +74,7 @@ def diet_preview(request: DietGenerateRequest, data: dict) -> dict:
 @router.post("/generate")
 def generate_diet(payload: DietGenerateRequest, request: Request):
     with request.app.state.database.session() as session:
-        config = read_config(session)
+        config = generation_config(request, session)
     if not config.model:
         raise HTTPException(422, "请先在数据与设置中选择并保存大模型")
     result = ollama_request(config, "/api/chat", {"model": config.model, **diet_chat_payload(payload)})

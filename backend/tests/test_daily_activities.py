@@ -48,6 +48,77 @@ def test_spoken_description_preserves_words_quantities_and_activity_boundaries(t
     assert skipped == []
 
 
+@pytest.mark.parametrize('text,category', [
+    ('上午上安卓课', 'learning'),
+    ('上午上了两节Android课', 'learning'),
+    ('下午上毛概课', 'learning'),
+    ('上了一节高数课', 'learning'),
+    ('晚上听了两小时网课', 'learning'),
+    ('去教室听老师讲操作系统课', 'learning'),
+    ('参加了数据库课程', 'learning'),
+    ('听医生讲急救课', 'learning'),
+    ('上瑜伽课', 'learning'),
+    ('下午做实验', 'learning'),
+    ('完成物理实验', 'learning'),
+    ('写了实验报告', 'learning'),
+    ('参加安卓实训', 'learning'),
+    ('晚自习做了笔记', 'learning'),
+    ('自己自学Python', 'learning'),
+    ('下课后跑步30分钟', 'exercise'),
+    ('上课前散步20分钟', 'exercise'),
+    ('下午跑八百米', 'exercise'),
+    ('下午跑800米', 'exercise'),
+    ('体育课跑800米', 'exercise'),
+    ('参加800米跑', 'exercise'),
+    ('上完课后吃晚饭', 'diet'),
+    ('买了英语教材', 'life'),
+    ('我们买了英语教材', 'life'),
+    ('去书店买了一本英语书', 'life'),
+    ('网购了一副羽毛球拍', 'life'),
+    ('上网买了课程', 'life'),
+    ('给学生上安卓课', 'work'),
+    ('上午备课一小时', 'work'),
+    ('在公司做产品实验', 'work'),
+    ('晚上听音乐', 'leisure'),
+    ('打扫实验室', 'life'),
+])
+def test_classification_understands_the_activity_and_its_context(text, category):
+    activities, skipped = split_narration(text)
+    assert [(item.content, item.category) for item in activities] == [(text, category)]
+    assert skipped == []
+
+
+@pytest.mark.parametrize('text,expected', [
+    ('上午上安卓课，下午做实验，晚上听网课',
+     [('上午上安卓课', 'learning'), ('下午做实验', 'learning'), ('晚上听网课', 'learning')]),
+    ('上午上安卓课下午做实验晚上听网课',
+     [('上午上安卓课', 'learning'), ('下午做实验', 'learning'), ('晚上听网课', 'learning')]),
+    ('上了安卓课然后上毛概课', [('上了安卓课', 'learning'), ('上毛概课', 'learning')]),
+    ('买了英语教材，然后上了两节安卓课，课后打篮球',
+     [('买了英语教材', 'life'), ('上了两节安卓课', 'learning'), ('课后打篮球', 'exercise')]),
+])
+def test_class_activities_are_split_without_losing_course_names_or_quantities(text, expected):
+    activities, skipped = split_narration(text)
+    assert [(item.content, item.category) for item in activities] == expected
+    assert skipped == []
+
+
+def test_missed_or_future_classes_are_not_recorded_as_attended():
+    activities, skipped = split_narration('还没上安卓课。没上高数课，但是听了网课。明天打算参加实训。')
+    assert [(item.content, item.category) for item in activities] == [('听了网课', 'learning')]
+    assert skipped == ['还没上安卓课', '没上高数课', '明天打算参加实训']
+
+
+def test_attended_classes_are_saved_as_learning_and_remain_so_on_home_reload(client):
+    text = '上午上安卓课，下午做实验，晚上听网课'
+    response = client.post('/api/v1/daily-activities/narrate', json=narration(text))
+    assert response.status_code == 201
+    rows = response.json()['items']
+    assert [item['category'] for item in rows] == ['learning'] * 3
+    assert all(item['source_text'] == text for item in rows)
+    assert client.get('/api/v1/home?date=2026-10-28').json()['daily_activities'] == rows
+
+
 def test_future_and_negative_clauses_do_not_become_completed_activities():
     activities, skipped = split_narration('上午学了英语。明天打算跑步然后吃饭。还没吃晚饭。')
     assert [item.content for item in activities] == ['上午学了英语']

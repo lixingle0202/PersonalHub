@@ -6,6 +6,12 @@ $tunnels = @(Get-CimInstance Win32_Process | Where-Object {
     $_.CommandLine -match '127\.0\.0\.1:8766'
 })
 foreach ($tunnel in $tunnels) { Stop-Process -Id $tunnel.ProcessId }
+$ngrokConfig = Join-Path $projectRoot '.public-runtime\ngrok-agent.yml'
+$fixedTunnels = @(Get-CimInstance Win32_Process | Where-Object {
+    $_.Name -eq 'ngrok.exe' -and $_.CommandLine -match [regex]::Escape($ngrokConfig) -and
+    $_.CommandLine -match '127\.0\.0\.1:8766'
+})
+foreach ($tunnel in $fixedTunnels) { Stop-Process -Id $tunnel.ProcessId }
 $listener = Get-NetTCPConnection -State Listen -LocalPort 8766 -ErrorAction SilentlyContinue | Select-Object -First 1
 if ($listener) {
     $server = Get-CimInstance Win32_Process -Filter ('ProcessId=' + [int]$listener.OwningProcess)

@@ -16,11 +16,22 @@ import { currentUsername, isPublicMode } from '../api/client'
 import { LoadingPanel } from '../components/StatePanels'
 import { loadPageModule, PageLoadErrorBoundary } from './pageLoadRecovery'
 
-const HomePage = lazy(() => loadPageModule(() => import('../pages/HomePage').then((module) => ({ default: module.HomePage }))))
-const TodayPage = lazy(() => loadPageModule(() => import('../pages/TodayPage').then((module) => ({ default: module.TodayPage }))))
-const LearningPage = lazy(() => loadPageModule(() => import('../pages/LearningPage').then((module) => ({ default: module.LearningPage }))))
-const DietPage = lazy(() => loadPageModule(() => import('../pages/DietPage').then((module) => ({ default: module.DietPage }))))
-const SettingsPage = lazy(() => loadPageModule(() => import('../pages/SettingsPage').then((module) => ({ default: module.SettingsPage }))))
+const pageLoaders = {
+  '/': () => import('../pages/HomePage').then((module) => ({ default: module.HomePage })),
+  '/today': () => import('../pages/TodayPage').then((module) => ({ default: module.TodayPage })),
+  '/learning': () => import('../pages/LearningPage').then((module) => ({ default: module.LearningPage })),
+  '/diet': () => import('../pages/DietPage').then((module) => ({ default: module.DietPage })),
+  '/settings': () => import('../pages/SettingsPage').then((module) => ({ default: module.SettingsPage })),
+}
+const HomePage = lazy(() => loadPageModule(pageLoaders['/']))
+const TodayPage = lazy(() => loadPageModule(pageLoaders['/today']))
+const LearningPage = lazy(() => loadPageModule(pageLoaders['/learning']))
+const DietPage = lazy(() => loadPageModule(pageLoaders['/diet']))
+const SettingsPage = lazy(() => loadPageModule(pageLoaders['/settings']))
+function prefetchPage(path: string) {
+  const loader = pageLoaders[path as keyof typeof pageLoaders]
+  if (loader) void loader().catch(() => undefined)
+}
 const QuickCreate = lazy(() => loadPageModule(() => import('../components/QuickCreate').then((module) => ({ default: module.QuickCreate }))))
 const GlobalSearch = lazy(() => loadPageModule(() => import('../components/GlobalSearch').then((module) => ({ default: module.GlobalSearch }))))
 
@@ -52,7 +63,7 @@ export function App() {
         </div>
         <div className="nav-caption" aria-hidden="true">我的工作空间</div>
         <nav className="primary-nav" aria-label="主导航">
-          {pages.map((page) => <Link to={page.path} key={page.path} aria-current={page.path === active.path ? 'page' : undefined}>
+          {pages.map((page) => <Link to={page.path} key={page.path} onMouseEnter={() => prefetchPage(page.path)} onFocus={() => prefetchPage(page.path)} onTouchStart={() => prefetchPage(page.path)} aria-current={page.path === active.path ? 'page' : undefined}>
             <span className={`nav-icon nav-icon-${page.path.slice(1) || 'home'}`} aria-hidden="true">{page.icon}</span>
             <span>{page.label}</span><span className="nav-indicator" aria-hidden="true" />
           </Link>)}

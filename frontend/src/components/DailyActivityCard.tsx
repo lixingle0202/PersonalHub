@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Alert, Button, Card, Empty, Input, Modal, Space, Spin, Tag, Typography, message } from 'antd'
 import { EditOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
@@ -29,6 +29,9 @@ export function DailyActivityCard({ initialDate, initialItems = EMPTY }: { initi
   const request = useRef<{ date: string; text: string; id: string } | null>(null)
   const text = drafts[date] ?? ''
   const busy = saving || changing
+  const groupedItems = useMemo(() => Object.entries(categories).map(([category, label]) => ({
+    category, label, rows: items.filter((item) => item.category === category),
+  })).filter((group) => group.rows.length), [items])
 
   useEffect(() => {
     if (date === initialDate) setItems(initialItems)
@@ -123,9 +126,12 @@ export function DailyActivityCard({ initialDate, initialItems = EMPTY }: { initi
     {skipped.length ? <Alert type="info" showIcon title="以下内容含未完成或计划表述，未记入已做事项" description={skipped.join('；')} /> : null}
     {loadError ? <Alert type="error" title={loadError} action={<Button onClick={() => setReload((value) => value + 1)}>重新读取记录</Button>} />
       : loading ? <div className="journal-loading"><Spin /><span>正在读取这一天的记录</span></div>
-        : items.length ? <ol className="daily-activity-list" aria-label="这一天的活动记录">
-          {items.map((item) => <li key={item.id}>
-            <div className="daily-activity-content"><Tag>{categories[item.category]}</Tag><Typography.Text>{item.content}</Typography.Text>
+        : items.length ? <div className="daily-activity-groups" role="group" aria-label="这一天的活动记录">
+          {groupedItems.map((group) => <section className="daily-activity-group" aria-label={`${group.label}记录`} key={group.category}>
+            <div className="daily-activity-group-heading"><Typography.Title level={5}>{group.label}</Typography.Title><Tag>{group.rows.length} 条</Tag></div>
+            <ol className="daily-activity-list" aria-label={`${group.label}事项`}>
+          {group.rows.map((item) => <li key={item.id}>
+            <div className="daily-activity-content"><Typography.Text>{item.content}</Typography.Text>
               <details><summary>查看原始描述</summary><p>{item.source_text}</p></details>
             </div>
             <Space wrap size={4}>
@@ -133,7 +139,9 @@ export function DailyActivityCard({ initialDate, initialItems = EMPTY }: { initi
               <Button size="small" danger disabled={busy} aria-label={`删除日常记录：${item.content}`} onClick={() => setDeleting(item)}>删除</Button>
             </Space>
           </li>)}
-        </ol> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="这一天还没有日常记录" />}
+            </ol>
+          </section>)}
+        </div> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="这一天还没有日常记录" />}
     <Modal title="修改日常记录" open={Boolean(editing)} onCancel={() => !changing && setEditing(null)} onOk={() => void saveEdit()} okText="保存记录" cancelText="取消" confirmLoading={changing} okButtonProps={{ disabled: !editing?.content.trim() || !editing.activity_date }} cancelButtonProps={{ disabled: changing }}>
       {editing ? <div className="journal-editor">
         <label>记录日期<input type="date" aria-label="修改记录日期" className="native-form-select" value={editing.activity_date} max={today} onChange={(event) => setEditing({ ...editing, activity_date: event.target.value })} /></label>
