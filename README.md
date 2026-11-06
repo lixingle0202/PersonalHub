@@ -97,7 +97,7 @@ flowchart LR
 
 ## 下载使用
 
-在 [Releases 发布页](https://github.com/lxl0202-rgb/PersonalHub/releases/latest) 下载附件 **PersonalHub-Full-Windows-20261106-v3.zip**（约 1.09 GB，Windows 10/11 64 位）。
+在 [Releases 发布页](https://github.com/lxl0202-rgb/PersonalHub/releases/latest) 下载附件 **[PersonalHub.zip](https://github.com/lxl0202-rgb/PersonalHub/releases/download/v0.1.0/PersonalHub.zip)**（约 1.09 GB，Windows 10/11 64 位）。
 
 1. 完整解压后，双击 `PersonalHub/PersonalHub.exe`。
 2. 浏览器自动打开，注册或登录后开始使用。

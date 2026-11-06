@@ -4,7 +4,7 @@
 
 ## 完整本机版：登录与内置 AI
 
-分发 `PersonalHub-Full-Windows-*.zip`，使用者完整解压后双击 `PersonalHub/PersonalHub.exe`，首次在登录页创建本机账号。包内包含 Ollama CPU 运行环境及 `qwen2.5:1.5b` 模型，学习与饮食 AI 均可离线使用，无需另装 Python、Node.js、Ollama 或下载模型。
+分发 `PersonalHub.zip`，使用者完整解压后双击 `PersonalHub/PersonalHub.exe`，首次在登录页创建本机账号。包内包含 Ollama CPU 运行环境及 `qwen2.5:1.5b` 模型，学习与饮食 AI 均可离线使用，无需另装 Python、Node.js、Ollama 或下载模型。
 
 数据位于 `%LOCALAPPDATA%\PersonalHubDesktop`，每个账号使用独立数据库。它与旧免登录版、共享网页版的数据分开；不同电脑的账号与数据不会自动同步。关闭程序会一并关闭它启动的模型服务，不修改用户原先安装的 Ollama。
 
