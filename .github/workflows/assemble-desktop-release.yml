@@ -1,0 +1,70 @@
+name: Temporary PersonalHub v0.1.1 assembly
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  assemble:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Verify this release, assemble exact package and publish
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, os, pathlib, re, subprocess, zipfile
+          repo = os.environ['GITHUB_REPOSITORY']
+          assert repo == 'lxl0202-rgb/PersonalHub'
+          tag = 'v0.1.1'
+          expected = 'c6f7b98d179d7f6ef462b6ca6151b337e00dfc4259ad7d84fe76fe25e90bc112'
+          size = 1092412804
+          def gh(*args):
+              return subprocess.check_output(['gh', *args], text=True)
+          release = json.loads(gh('api', f'repos/{repo}/releases/437406760'))
+          assert release['draft'] and release['tag_name'] == tag
+          assets = {item['name']: item for item in release['assets']}
+          assert 'PersonalHub.zip' not in assets, 'Do not replace an existing complete package'
+          parts = sorted(name for name in assets if re.fullmatch(r'PersonalHub\.zip\.part\d{3}', name))
+          assert parts and len(parts) <= 100 and 'PersonalHub.upload.json' in assets
+          directory = pathlib.Path('upload-parts')
+          directory.mkdir()
+          gh('release', 'download', tag, '--repo', repo, '--pattern', 'PersonalHub.upload.json', '--dir', str(directory))
+          manifest = json.loads((directory / 'PersonalHub.upload.json').read_text())
+          assert manifest['name'] == 'PersonalHub.zip' and manifest['size'] == size and manifest['sha256'] == expected
+          assert [entry['name'] for entry in manifest['parts']] == parts
+          assert parts == [f'PersonalHub.zip.part{i:03d}' for i in range(len(parts))]
+          gh('release', 'download', tag, '--repo', repo, '--pattern', 'PersonalHub.zip.part???', '--dir', str(directory))
+          digest = hashlib.sha256()
+          with open('PersonalHub.zip', 'wb') as output:
+              for entry in manifest['parts']:
+                  path = directory / entry['name']
+                  assert path.stat().st_size == entry['size']
+                  part_digest = hashlib.sha256()
+                  with path.open('rb') as source:
+                      while block := source.read(1024 * 1024):
+                          part_digest.update(block)
+                          digest.update(block)
+                          output.write(block)
+                  assert part_digest.hexdigest() == entry['sha256']
+          assert pathlib.Path('PersonalHub.zip').stat().st_size == size and digest.hexdigest() == expected
+          with zipfile.ZipFile('PersonalHub.zip') as archive:
+              assert 'PersonalHub/PersonalHub.exe' in archive.namelist()
+              assert not any(name.lower().endswith(('.sqlite', '.sqlite3', '.db', '/.env')) for name in archive.namelist())
+          gh('release', 'upload', tag, 'PersonalHub.zip', '--repo', repo)
+          uploaded = json.loads(gh('api', f"repos/{repo}/releases/{release['id']}"))
+          complete = next(asset for asset in uploaded['assets'] if asset['name'] == 'PersonalHub.zip')
+          assert complete['state'] == 'uploaded' and complete['size'] == size
+          assert complete.get('digest', '').lower() == 'sha256:' + expected
+          # Delete only this attempt's verified temporary parts, before publishing.
+          for name in parts + ['PersonalHub.upload.json']:
+              gh('api', '--method', 'DELETE', f"repos/{repo}/releases/assets/{assets[name]['id']}")
+          gh('release', 'edit', tag, '--repo', repo, '--draft=false', '--latest')
+          summary = f"Published {tag}: PersonalHub.zip ({size} bytes), SHA-256 {expected}\n"
+          pathlib.Path(os.environ['GITHUB_STEP_SUMMARY']).write_text(summary)
+          print(summary)
+          PY
