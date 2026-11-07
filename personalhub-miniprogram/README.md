@@ -80,7 +80,7 @@ personalhub-miniprogram/
 │   ├── api.js                       请求封装：Cookie 会话、写令牌、401 跳登录
 │   ├── util.js                      日期、月历网格、颜色、枚举
 │   └── theme.js                     主题色/深色模式的读写
-├── custom-tab-bar/                  自定义底部导航（5 个入口，图标随主题色变化）
+├── custom-tab-bar/                  自定义底部导航
 └── pages/
     ├── login/                       登录 / 注册
     ├── home/                        首页总览
