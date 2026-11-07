@@ -1,6 +1,6 @@
 # 自然语言条件搜索与计划实际对照
 
-状态：已通过 PR #4 合并到 `main`，原网站前后端已更新；[v0.1.1 完整本机包已发布](https://github.com/lxl0202-rgb/PersonalHub/releases/tag/v0.1.1)。旧版 exe 和旧压缩包不会自动更新，需要启动新版程序。
+状态：已通过 PR #4 合并到 `main`，自 v0.1.1 起包含于完整本机版；[最新 v0.1.2](https://github.com/lxl0202-rgb/PersonalHub/releases/tag/v0.1.2) 继续保留，并加入学习趋势与饮食草稿恢复。下文 v0.1.1 验收记录作为历史保留。旧版 exe 和旧压缩包不会自动更新，需要启动新版程序。
 
 ## 问题
 

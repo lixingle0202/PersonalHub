@@ -13,6 +13,7 @@ def main():
     parser.add_argument('url')
     parser.add_argument('--real-ai', action='store_true')
     parser.add_argument('--local-ollama', help='Also verify a selected external loopback Ollama service')
+    parser.add_argument('--expected-version', help='Require the executable API to report this release version')
     args = parser.parse_args()
     browser = httpx.Client(base_url=args.url, trust_env=False, timeout=20)
     today = date.today().isoformat()
@@ -30,6 +31,8 @@ def main():
     request('POST', '/public/register', credentials)
     bootstrap = request('GET', '/bootstrap')
     assert bootstrap['desktop_mode']
+    if args.expected_version:
+        assert bootstrap['version'] == args.expected_version, bootstrap['version']
     browser.headers['X-Local-Token'] = bootstrap['local_token']
     assert request('GET', '/desktop/ai/status')['ready']
     print('PASS: login-required pages, registration, and independent built-in Ollama', flush=True)
@@ -91,6 +94,17 @@ def main():
     exercise = request('GET', '/search/assist?q=今天的运动记录&today=' + today)
     assert any('跑八百米' in item['title'] for item in exercise['results'])
     print('PASS: natural-language date/category search, plan completion comparison, and separate actual-time evidence', flush=True)
+
+    trends = request('GET', f'/learning/trends?today={today}&days=7&goal_id={search_goal["id"]}')
+    assert trends['manual']['minutes'] == 20 and trends['manual']['current_streak'] == 1
+    assert trends['tasks']['completion_rate'] == 50 and trends['tasks']['planned'] == 2
+    assert trends['focus']['record_count'] == 0
+    request('POST', '/learning/focus/start', {'goal_id': search_goal['id']})
+    request('POST', '/learning/focus/stop', {})
+    trends = request('GET', f'/learning/trends?today={today}&days=30&goal_id={search_goal["id"]}')
+    assert len(trends['days']) == 30 and trends['focus']['record_count'] == 1
+    assert trends['manual']['minutes'] == 20
+    print('PASS: packaged learning trends, goal filtering, task completion, manual logs and separate finished focus timers', flush=True)
 
     refs = request('GET', '/diet/food-references?q=土豆&limit=5')
     assert refs

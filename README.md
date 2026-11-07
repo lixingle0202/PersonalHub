@@ -108,13 +108,13 @@ flowchart LR
 
 ## 下载使用
 
-在 [Releases 发布页](https://github.com/lxl0202-rgb/PersonalHub/releases/latest) 下载 **v0.1.1** 的附件 **[PersonalHub.zip](https://github.com/lxl0202-rgb/PersonalHub/releases/download/v0.1.1/PersonalHub.zip)**（约 1.09 GB，Windows 10/11 64 位）。新版包含自然语言条件搜索和计划与实际对照。
+在 [Releases 发布页](https://github.com/lxl0202-rgb/PersonalHub/releases/latest) 下载 **v0.1.2** 的附件 **[PersonalHub.zip](https://github.com/lxl0202-rgb/PersonalHub/releases/download/v0.1.2/PersonalHub.zip)**（约 1.01 GB，Windows 10/11 64 位）。新版加入学习趋势，以及饮食 AI 生成进度和草稿恢复，并保留自然语言搜索与计划对照等完整功能。
 
 1. 完整解压后，双击 `PersonalHub/PersonalHub.exe`。
 2. 浏览器自动打开，注册或登录后开始使用。
 3. 升级前先关闭旧版程序窗口，完整解压新版后启动其中的 exe；同一台电脑会继续使用原有本机账号与记录，无需重新注册。
 
-打开后可在顶部“搜索或提问”输入“昨天的运动记录”或“这周学习计划与实际对照”体验新功能。旧版 exe 和旧版压缩包不会自动更新；仅合并 GitHub 代码也不会更新正在运行的网站。源码部署的更新步骤见[开发说明](docs/DEVELOPMENT.md#更新到最新-main)。
+学习页底部可查看“学习趋势”；在“学习记录 → 记录一次学习”填写实际分钟，或结束专注计时后，图表自动更新。饮食 AI 生成时可以收起并切页，返回后继续查看进度、预览和编辑草稿；完整本机版支持刷新后重连。顶部“搜索或提问”仍支持“昨天的运动记录”“这周学习计划与实际对照”等查询。旧版 exe 和旧版压缩包不会自动更新；源码部署的更新步骤见[开发说明](docs/DEVELOPMENT.md#更新到最新-main)。
 
 ## 技术与文档
 
@@ -124,3 +124,4 @@ React + TypeScript + Ant Design · FastAPI + SQLAlchemy + SQLite · Ollama
 - [完整本机版使用说明](docs/FullDesktopGuide.txt)
 - [数据模型](docs/DATA_MODEL.md) · [接口说明](docs/API.md)
 - [测试用例](docs/TEST_CASES.md) · [热量估算说明](docs/calorie-estimates.md)
+- [v0.1.2 完整软件包验收](docs/releases/v0.1.2.md)

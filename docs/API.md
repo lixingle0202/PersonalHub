@@ -68,6 +68,7 @@
 
 ## 7. 学习计划
 
+- `GET /api/v1/learning/trends?today=&days=&offset_minutes=&goal_id=`：7 / 30 / 90 天学习趋势，可按目标筛选；手动分钟与已结束专注计时分别统计，返回每日序列、连续学习天数和按计划日期统计的任务完成率。参数与口径见[学习趋势](learning-trends.md)。
 - `GET|POST /api/v1/learning/goals`
 - `GET|PATCH|DELETE /api/v1/learning/goals/{id}`
 - `GET|POST /api/v1/learning/goals/{id}/sections`
@@ -79,6 +80,8 @@
 更新学习目标时允许按需提交名称、目标、日期、预计分钟和 `progress`；`progress` 必须在 0—100 之间。
 
 ## 8. 饮食计划
+
+完整本机版饮食 AI 后台任务可在切页或刷新后按原任务编号重连；浏览器按当前标签页和账号保留草稿及未保存编辑。保存范围与限制见[饮食 AI 草稿恢复](diet-ai-recovery.md)。
 
 - `GET|POST /api/v1/diet/dishes`
 - `GET|PATCH|DELETE /api/v1/diet/dishes/{id}`
