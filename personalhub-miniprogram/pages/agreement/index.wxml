@@ -1,0 +1,31 @@
+<view class="app agreement {{themeMode === 'dark' ? 'theme-dark' : ''}}" style="{{themeStyle}}">
+  <view class="ag-head">
+    <view class="back-btn" bindtap="goBack">
+      <text class="back-ic">←</text>
+    </view>
+    <text class="ag-title">用户协议与隐私政策</text>
+  </view>
+
+  <view class="ag-body">
+    <view class="card">
+      <text class="h2">一、用户协议</text>
+      <text class="muted ag-p">1. 本小程序（PersonalHub）是一款个人事务记录工具，用于管理今日计划、学习计划与饮食记录等内容。</text>
+      <text class="muted ag-p">2. 你需要注册账号（用户名与密码）后才能使用，账号仅限本人使用，请妥善保管登录凭据。</text>
+      <text class="muted ag-p">3. 你在本小程序中产生的全部数据（计划、备忘、记录等）归你本人所有。请自行通过「数据与设置」中的备份功能妥善保存数据。</text>
+      <text class="muted ag-p">4. 请勿利用本小程序从事违反法律法规或侵害他人合法权益的活动；因违反使用规范造成的后果由使用者自行承担。</text>
+      <text class="muted ag-p">5. 本服务按现状提供。若因不可抗力、服务器故障等原因导致服务中断或数据丢失，我们会尽力协助恢复，但不承诺赔偿。</text>
+    </view>
+
+    <view class="card">
+      <text class="h2">二、隐私政策</text>
+      <text class="muted ag-p">1. 我们收集的信息：仅包括你注册时主动提供的用户名与密码，以及你使用过程中主动录入的计划、记录等内容。</text>
+      <text class="muted ag-p">2. 信息用途：上述信息仅用于账号验证、数据保存与本小程序功能实现，不会用于任何其他用途。</text>
+      <text class="muted ag-p">3. 信息存储：数据保存在服务提供者自托管的服务器中，传输过程采用 HTTPS 加密。密码经加密存储，任何人（包括管理员）均无法查看明文。</text>
+      <text class="muted ag-p">4. 信息共享：我们不会向任何第三方提供、出售或共享你的个人信息。</text>
+      <text class="muted ag-p">5. 你的权利：你可以随时在「数据与设置」中退出登录或删除数据；如需彻底删除账号及全部数据，请联系服务提供者。</text>
+      <text class="muted ag-p">6. 未成年人保护：本小程序面向成年人使用，不主动收集未成年人信息。</text>
+    </view>
+
+    <text class="tiny ag-foot">本协议自你勾选同意并开始使用本小程序时生效。</text>
+  </view>
+</view>

@@ -1,0 +1,360 @@
+/* 顶部品牌标（小） */
+.mark-sm {
+  width: 64rpx;
+  height: 64rpx;
+  font-size: 36rpx;
+  border-radius: 20rpx;
+}
+
+.retry-btn {
+  margin-top: 20rpx;
+}
+
+/* 欢迎区 */
+.welcome {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  padding: 14rpx 8rpx 26rpx;
+}
+
+.welcome-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+
+.welcome-title {
+  font-size: 40rpx;
+  font-weight: 650;
+  letter-spacing: -1.4rpx;
+  line-height: 1.35;
+}
+
+.ring-wrap {
+  position: relative;
+  width: 154rpx;
+  height: 154rpx;
+  flex: none;
+}
+
+.ring {
+  width: 154rpx;
+  height: 154rpx;
+}
+
+.ring-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2rpx;
+}
+
+.ring-num {
+  font-size: 32rpx;
+  font-weight: 650;
+  letter-spacing: -1rpx;
+}
+
+.ring-cap {
+  font-size: 17rpx;
+  color: var(--text-3);
+}
+
+/* 指标卡 */
+.stats {
+  display: flex;
+  gap: 14rpx;
+}
+
+.stat {
+  flex: 1;
+  min-width: 0;
+  padding: 22rpx 18rpx 20rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+
+.stat-chip {
+  width: 52rpx;
+  height: 52rpx;
+  border-radius: 16rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 4rpx;
+}
+
+.chip-blue { background: var(--primary-soft); }
+.chip-green { background: var(--green-soft); }
+.chip-amber { background: var(--amber-soft); }
+
+.stat-val {
+  font-size: 44rpx;
+  font-weight: 650;
+  letter-spacing: -1.6rpx;
+  line-height: 1.1;
+}
+
+.stat-unit {
+  font-size: 22rpx;
+  font-weight: 500;
+  color: var(--text-3);
+  margin-left: 4rpx;
+}
+
+.stat-label {
+  font-size: 22rpx;
+  color: var(--text-2);
+}
+
+/* 计划概览 */
+.overviews {
+  display: flex;
+  gap: 14rpx;
+  margin-bottom: 8rpx;
+}
+
+.overview {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
+  padding: 20rpx 18rpx;
+  border: 1rpx solid var(--line);
+  border-radius: 20rpx;
+  background: var(--surface-subtle);
+}
+
+.overview:active {
+  background: var(--primary-soft);
+  border-color: var(--primary-tint);
+}
+
+.overview-head {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  margin-bottom: 2rpx;
+}
+
+.overview-name {
+  font-size: 22rpx;
+  color: var(--text-2);
+}
+
+.overview-title {
+  font-size: 26rpx;
+  font-weight: 600;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.overview-desc {
+  font-size: 21rpx;
+  color: var(--text-3);
+  line-height: 1.5;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sub-title {
+  font-size: 26rpx;
+  font-weight: 600;
+  padding: 22rpx 0 6rpx;
+}
+
+.agenda-mini-row {
+  align-items: center;
+}
+
+.agenda-mini-row:active {
+  background: var(--surface-subtle);
+}
+
+.agenda-title {
+  font-size: 27rpx;
+  line-height: 1.5;
+  display: block;
+}
+
+.agenda-title.done {
+  color: var(--text-3);
+  text-decoration: line-through;
+}
+
+.agenda-meta {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  margin-top: 4rpx;
+}
+
+.tiny-tag {
+  padding: 2rpx 10rpx;
+  font-size: 18rpx;
+}
+
+/* 备忘 */
+.notes-caption {
+  display: block;
+  margin: -4rpx 0 18rpx;
+}
+
+.note-compose {
+  display: flex;
+  gap: 12rpx;
+  align-items: center;
+}
+
+.note-list {
+  margin-top: 8rpx;
+}
+
+.note-row {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  padding: 20rpx 0;
+  border-bottom: 1rpx solid var(--line);
+}
+
+.note-row:last-child {
+  border-bottom: none;
+}
+
+.note-text {
+  font-size: 26rpx;
+  line-height: 1.5;
+}
+
+.note-actions {
+  display: flex;
+  gap: 8rpx;
+  flex: none;
+}
+
+.notes-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10rpx;
+  padding: 40rpx 0 20rpx;
+  text-align: center;
+  opacity: 0.75;
+}
+
+/* 日常记录 */
+.journal-tools {
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+  margin-bottom: 16rpx;
+}
+
+.journal-date {
+  width: 100%;
+}
+
+.journal-nav {
+  display: flex;
+  gap: 10rpx;
+}
+
+.journal-input {
+  min-height: 150rpx;
+}
+
+.journal-submit {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12rpx;
+  margin-top: 14rpx;
+}
+
+.journal-warn {
+  margin-top: 16rpx;
+  flex-direction: column;
+}
+
+.skip-item {
+  display: block;
+  margin-top: 6rpx;
+  opacity: 0.9;
+}
+
+.journal-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12rpx;
+  padding: 30rpx 0;
+  color: var(--text-2);
+  font-size: 24rpx;
+}
+
+.activity-list {
+  margin-top: 10rpx;
+}
+
+.activity-group-head {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  padding: 16rpx 0 6rpx;
+  border-top: 1rpx solid var(--line);
+}
+
+.activity-group:first-child .activity-group-head {
+  border-top: none;
+  padding-top: 4rpx;
+}
+
+.activity-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12rpx;
+  padding: 18rpx 0;
+  border-bottom: 1rpx solid var(--line);
+}
+
+.activity-row:last-child {
+  border-bottom: none;
+}
+
+.activity-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+  align-items: flex-start;
+}
+
+.activity-text {
+  font-size: 26rpx;
+  line-height: 1.55;
+}
+
+.source-toggle {
+  color: var(--primary-readable);
+}
+
+.source-text {
+  background: var(--surface-subtle);
+  border-radius: 12rpx;
+  padding: 12rpx 14rpx;
+  line-height: 1.6;
+  width: 100%;
+}

@@ -1,0 +1,567 @@
+<view class="app {{themeMode === 'dark' ? 'theme-dark' : ''}}" style="{{themeStyle}}">
+  <view class="topbar topbar-two">
+    <view class="topbar-head">
+      <view class="brand-mark mark-sm">P</view>
+      <view class="grow">
+        <view class="topbar-title">饮食计划</view>
+        <view class="topbar-desc">认真吃饭，也认真生活</view>
+      </view>
+    </view>
+    <view class="topbar-actions">
+      <view class="btn btn-sm btn-soft" bindtap="openAiDiet">
+        <text>AI 菜单</text>
+      </view>
+      <view class="btn btn-sm btn-primary" data-date="{{selectedDate}}" data-type="breakfast" bindtap="openMeal">
+        <view class="ic ic-plus-white ic-xs"></view>
+        <text>安排一餐</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="segment tabs">
+    <view class="segment-item {{tab === 'calendar' ? 'on' : ''}}" data-tab="calendar" bindtap="setTab">饮食日历</view>
+    <view class="segment-item {{tab === 'dishes' ? 'on' : ''}}" data-tab="dishes" bindtap="setTab">常用菜品</view>
+    <view class="segment-item {{tab === 'shopping' ? 'on' : ''}}" data-tab="shopping" bindtap="setTab">购物清单</view>
+    <view class="segment-item {{tab === 'health' ? 'on' : ''}}" data-tab="health" bindtap="setTab">每日记录</view>
+  </view>
+
+  <view wx:if="{{loading}}" class="loading-block">
+    <view class="spinner"></view>
+    <text>正在加载</text>
+  </view>
+
+  <view wx:elif="{{error}}" class="card">
+    <view class="banner banner-danger"><text>{{error}}</text></view>
+    <view class="btn btn-soft btn-block retry-btn" bindtap="retry">重新加载</view>
+  </view>
+
+  <block wx:else>
+    <!-- 饮食日历 -->
+    <block wx:if="{{tab === 'calendar'}}">
+      <view class="card calendar-card">
+        <view class="cal-bar">
+          <view class="cal-nav" bindtap="shiftMonth" data-delta="-1">
+            <view class="ic ic-chevron-muted ic-xs flip"></view>
+          </view>
+          <text class="cal-title">{{title}}</text>
+          <view class="cal-nav" bindtap="shiftMonth" data-delta="1">
+            <view class="ic ic-chevron-muted ic-xs"></view>
+          </view>
+          <view class="grow"></view>
+          <view class="btn btn-sm btn-ghost" bindtap="backToday">回到今天</view>
+        </view>
+
+        <view class="week-head">
+          <text wx:for="{{weekHead}}" wx:key="*this" class="week-cell">{{item}}</text>
+        </view>
+
+        <view class="grid">
+          <view
+            wx:for="{{cells}}"
+            wx:key="date"
+            class="cell {{item.inMonth ? '' : 'other'}} {{item.selected ? 'sel' : ''}} {{item.isToday ? 'today' : ''}}"
+            data-date="{{item.date}}"
+            bindtap="selectDay"
+          >
+            <text class="cell-day">{{item.day}}</text>
+            <view class="cell-dots">
+              <view wx:for="{{item.dots}}" wx:for-item="d" wx:key="*this" class="mdot mdot-{{d}}"></view>
+            </view>
+            <text wx:if="{{item.kcal}}" class="cell-kcal">{{item.kcal}}</text>
+          </view>
+        </view>
+
+        <view class="legend">
+          <view class="legend-item"><view class="mdot mdot-breakfast"></view><text class="tiny">早餐</text></view>
+          <view class="legend-item"><view class="mdot mdot-lunch"></view><text class="tiny">午餐</text></view>
+          <view class="legend-item"><view class="mdot mdot-dinner"></view><text class="tiny">晚餐</text></view>
+          <view class="legend-item"><view class="mdot mdot-snack"></view><text class="tiny">加餐</text></view>
+        </view>
+      </view>
+    </block>
+
+    <!-- 常用菜品 -->
+    <block wx:elif="{{tab === 'dishes'}}">
+      <view class="tab-action">
+        <text class="tiny">共 {{dishes.length}} 个菜品 · 点一下即可修改</text>
+        <view class="btn btn-sm btn-soft" bindtap="openDish">新增菜品</view>
+      </view>
+
+      <view wx:for="{{dishes}}" wx:key="id" class="card dish-row" data-id="{{item.id}}" bindtap="editDish">
+        <view class="grow">
+          <view class="between">
+            <text class="dish-name">{{item.name}}</text>
+            <text wx:if="{{item.estimated_kcal}}" class="tag tag-amber">{{item.estimated_kcal}} kcal</text>
+          </view>
+          <text wx:if="{{item.instructions}}" class="tiny dish-note">{{item.instructions}}</text>
+          <text class="tiny">食材 {{item.ingredients.length}} 项 · {{item.recipe_servings}} 份</text>
+        </view>
+        <view class="dish-edit" data-id="{{item.id}}" catchtap="editDish">
+          <view class="ic ic-edit-muted ic-xs"></view>
+        </view>
+        <view class="dish-del" data-id="{{item.id}}" catchtap="deleteDish">
+          <view class="ic ic-trash-muted ic-xs"></view>
+        </view>
+      </view>
+
+      <view wx:if="{{!dishes.length}}" class="empty empty-dashed big-empty">
+        <view class="ic ic-bowl-muted ic-lg"></view>
+        <text>还没有常用菜品</text>
+        <view class="btn btn-sm btn-soft" bindtap="openDish">添加一个</view>
+      </view>
+    </block>
+
+    <!-- 购物清单 -->
+    <block wx:elif="{{tab === 'shopping'}}">
+      <view class="tab-action">
+        <text class="tiny">按日期范围汇总食材</text>
+        <view class="btn btn-sm btn-soft" bindtap="openShopping">生成清单</view>
+      </view>
+
+      <view wx:for="{{shoppingLists}}" wx:key="id" class="card shop-card">
+        <view class="between">
+          <view class="grow">
+            <text class="dish-name">{{item.name}}</text>
+            <text class="tiny">{{item.start_date}} 至 {{item.end_date}} · {{item.items.length}} 项</text>
+          </view>
+          <view class="dish-del" data-id="{{item.id}}" bindtap="deleteShoppingList">
+            <view class="ic ic-trash-muted ic-xs"></view>
+          </view>
+        </view>
+
+        <view class="shop-items">
+          <view wx:for="{{item.items}}" wx:for-item="it" wx:key="id" class="shop-item">
+            <block wx:if="{{itemEditId === it.id}}">
+              <view class="shop-edit">
+                <input
+                  class="input"
+                  value="{{itemEditForm.name}}"
+                  placeholder="物品名称"
+                  placeholder-class="placeholder"
+                  focus="{{true}}"
+                  maxlength="200"
+                  data-key="name"
+                  bindinput="onEditItemInput"
+                  confirm-type="done"
+                />
+                <view class="shop-edit-row">
+                  <input
+                    class="input grow"
+                    value="{{itemEditForm.quantity}}"
+                    placeholder="数量，例如 2 斤"
+                    placeholder-class="placeholder"
+                    maxlength="100"
+                    data-key="quantity"
+                    bindinput="onEditItemInput"
+                    confirm-type="done"
+                    bindconfirm="saveShoppingItem"
+                  />
+                  <view class="btn btn-sm btn-primary" catchtap="saveShoppingItem">{{itemSaving ? '保存中…' : '保存'}}</view>
+                  <view class="btn btn-sm btn-ghost" catchtap="cancelEditItem">取消</view>
+                </view>
+              </view>
+            </block>
+            <block wx:else>
+              <view class="shop-main" data-id="{{it.id}}" data-done="{{it.done}}" bindtap="toggleShoppingItem">
+                <view class="checkbox small {{it.done ? 'checked' : ''}}">
+                  <view wx:if="{{it.done}}" class="ic ic-check-white ic-xs"></view>
+                </view>
+                <text class="shop-name {{it.done ? 'done' : ''}}">{{it.name}}</text>
+                <text class="tiny shop-qty">{{it.quantity}}</text>
+              </view>
+              <view class="dish-edit" data-id="{{it.id}}" catchtap="startEditItem">
+                <view class="ic ic-edit-muted ic-xs"></view>
+              </view>
+              <view class="dish-del" data-id="{{it.id}}" data-name="{{it.name}}" catchtap="deleteShoppingItem">
+                <view class="ic ic-trash-muted ic-xs"></view>
+              </view>
+            </block>
+          </view>
+          <view wx:if="{{!item.items.length}}" class="tiny">清单暂无物品，可手动添加。</view>
+        </view>
+
+        <view class="shop-add">
+          <input class="input grow" value="{{itemDraft}}" placeholder="手动添加物品" placeholder-class="placeholder" bindinput="onItemDraft" />
+          <view class="btn btn-sm btn-soft" data-id="{{item.id}}" bindtap="addShoppingItem">添加</view>
+        </view>
+      </view>
+
+      <view wx:if="{{!shoppingLists.length}}" class="empty empty-dashed big-empty">
+        <view class="ic ic-cart-muted ic-lg"></view>
+        <text>还没有购物清单</text>
+        <view class="btn btn-sm btn-soft" bindtap="openShopping">生成清单</view>
+      </view>
+    </block>
+
+    <!-- 每日记录 -->
+    <block wx:else>
+      <view class="card">
+        <view class="card-head">
+          <view class="card-title">
+            <view class="ic ic-droplet-muted"></view>
+            <text>每日记录</text>
+          </view>
+          <picker mode="date" value="{{selectedDate}}" bindchange="pickHealthDate">
+            <text class="tiny">{{selectedDate}}</text>
+          </picker>
+        </view>
+
+        <view class="water-row">
+          <view class="water-value">
+            <text class="water-num num">{{health.water_ml}}</text>
+            <text class="tiny">ml 饮水</text>
+          </view>
+          <view class="water-actions">
+            <view class="btn btn-sm btn-soft" data-delta="200" bindtap="addWater">+200</view>
+            <view class="btn btn-sm btn-soft" data-delta="500" bindtap="addWater">+500</view>
+            <view class="btn btn-sm btn-ghost" data-delta="-200" bindtap="addWater">-200</view>
+          </view>
+        </view>
+
+        <view class="field-row">
+          <view class="field grow">
+            <text class="field-label">体重（kg）</text>
+            <input class="input" type="digit" value="{{health.weight_kg}}" placeholder="可选" placeholder-class="placeholder" data-key="weight_kg" bindinput="onHealthInput" />
+          </view>
+        </view>
+
+        <view class="field">
+          <text class="field-label">今日感受</text>
+          <input class="input" value="{{health.feeling}}" placeholder="饿不饿、有没有不适" placeholder-class="placeholder" data-key="feeling" bindinput="onHealthInput" />
+        </view>
+
+        <view class="btn btn-primary btn-block save-btn" bindtap="saveHealth">保存记录</view>
+      </view>
+
+      <view class="card">
+        <view class="card-head">
+          <view class="card-title">
+            <view class="ic ic-user-muted"></view>
+            <text>身体资料</text>
+          </view>
+        </view>
+        <text class="tiny body-hint">用于估算每日热量参考，与网页版同步。</text>
+        <view class="field-row">
+          <view class="field grow">
+            <text class="field-label">身高（cm）</text>
+            <input class="input" type="digit" value="{{profile.height_cm}}" placeholder="170" placeholder-class="placeholder" data-key="height_cm" bindinput="onProfileInput" />
+          </view>
+          <view class="field grow">
+            <text class="field-label">体重（kg）</text>
+            <input class="input" type="digit" value="{{profile.weight_kg}}" placeholder="60" placeholder-class="placeholder" data-key="weight_kg" bindinput="onProfileInput" />
+          </view>
+        </view>
+        <view class="btn btn-soft btn-block save-btn" bindtap="saveProfile">保存身体资料</view>
+      </view>
+    </block>
+  </block>
+
+  <!-- 当日餐次 -->
+  <view wx:if="{{daySheet}}" class="mask" bindtap="closeDay"></view>
+  <view wx:if="{{daySheet}}" class="sheet" catchtap="noop">
+    <view class="sheet-head">
+      <text class="sheet-title">{{selectedDate}}</text>
+      <view class="ic ic-close-muted ic-sm" bindtap="closeDay"></view>
+    </view>
+    <scroll-view scroll-y class="sheet-body">
+      <view class="day-sum">
+        <text class="tiny">当天合计约</text>
+        <text class="day-sum-num num">{{dayKcal}}</text>
+        <text class="tiny">kcal</text>
+      </view>
+
+      <view wx:for="{{dayMeals}}" wx:key="id" class="day-meal" data-id="{{item.id}}" bindtap="openMeal">
+        <view class="meal-type-tag mdot-{{item.meal_type}}"></view>
+        <view class="grow">
+          <view class="between">
+            <text class="meal-name">{{item.name}}</text>
+            <text class="tiny">{{item.kcal}} kcal</text>
+          </view>
+          <view class="meal-sub">
+            <text class="tiny">{{item.typeLabel}} · {{item.servings}} 份</text>
+            <text wx:if="{{item.actual_food}}" class="tiny">实吃：{{item.actual_food}}</text>
+          </view>
+        </view>
+        <view class="meal-add" data-id="{{item.id}}" catchtap="openMealAdd">
+          <text>＋ 加菜</text>
+        </view>
+      </view>
+
+      <view wx:if="{{!dayMeals.length}}" class="empty empty-dashed">这一天还没有安排餐食</view>
+
+      <view class="btn btn-primary btn-block" data-date="{{selectedDate}}" data-type="breakfast" bindtap="openMeal">安排一餐</view>
+      <view class="btn btn-ghost btn-block" bindtap="goHealth">修改饮水量</view>
+    </scroll-view>
+  </view>
+
+  <!-- 安排 / 修改餐食 -->
+  <view wx:if="{{mealSheet}}" class="mask" bindtap="closeMeal"></view>
+  <view wx:if="{{mealSheet}}" class="sheet" catchtap="noop">
+    <view class="sheet-head">
+      <text class="sheet-title">{{mealAppend ? '给这餐加菜' : (mealForm.id ? '修改这一餐' : '安排一餐')}}</text>
+      <view class="ic ic-close-muted ic-sm" bindtap="closeMeal"></view>
+    </view>
+    <scroll-view scroll-y class="sheet-body" scroll-into-view="{{sugScroll}}" scroll-with-animation>
+      <view class="segment">
+        <view
+          wx:for="{{mealTypes}}"
+          wx:key="value"
+          class="segment-item {{mealForm.meal_type === item.value ? 'on' : ''}}"
+          data-value="{{item.value}}"
+          bindtap="setMealType"
+        >{{item.label}}</view>
+      </view>
+
+      <view class="field">
+        <text class="field-label">日期</text>
+        <picker mode="date" value="{{mealForm.meal_date}}" bindchange="pickMealDate">
+          <view class="picker-box">
+            <text>{{mealForm.meal_date}}</text>
+            <view class="ic ic-calendar-muted ic-xs"></view>
+          </view>
+        </picker>
+      </view>
+
+      <view class="field">
+        <text class="field-label">选择常用菜品</text>
+        <scroll-view scroll-x class="hscroll dish-scroll">
+          <view
+            wx:for="{{dishes}}"
+            wx:key="id"
+            class="chip {{mealForm.dish_id === item.id ? 'on' : ''}}"
+            data-id="{{item.id}}"
+            bindtap="pickDish"
+          >{{item.name}}</view>
+        </scroll-view>
+        <text wx:if="{{!dishes.length}}" class="tiny">还没有常用菜品，可以在下面直接写菜名。</text>
+        <text wx:elif="{{mealForm.dish_id}}" class="tiny">已选常用菜品；想自己写菜名，再点一下取消选择。</text>
+      </view>
+
+      <view wx:if="{{!mealForm.dish_id}}" class="field">
+        <text class="field-label">吃了什么</text>
+
+        <view wx:for="{{mealRows}}" wx:key="id" id="dishline{{index}}" class="dish-line">
+          <view class="dish-input-wrap">
+            <input
+              class="input dish-input"
+              value="{{item.name}}"
+              placeholder="{{index === 0 ? '例如：鸡肉粥、鸡胸肉 150克' : '再加一道菜'}}"
+              placeholder-class="placeholder"
+              focus="{{autoFocusIdx === index}}"
+              data-idx="{{index}}"
+              cursor-spacing="24"
+              confirm-type="done"
+              bindinput="onRowInput"
+              bindfocus="onRowFocus"
+              bindblur="hideSuggest"
+            />
+            <view wx:if="{{mealRows.length > 1}}" class="dish-del" data-idx="{{index}}" catchtap="removeRow">×</view>
+          </view>
+
+          <view wx:if="{{item.sug.length}}" class="sug-box">
+            <view
+              wx:for="{{item.sug}}"
+              wx:for-item="s"
+              wx:key="name"
+              class="sug-item"
+              data-idx="{{index}}"
+              data-name="{{s.name}}"
+              data-kcal="{{s.kcal}}"
+              catchtap="pickSuggest"
+            >
+              <text class="sug-name">{{s.name}}</text>
+              <text class="sug-detail">{{s.detail}}</text>
+            </view>
+          </view>
+          <text wx:elif="{{item.sugEmpty}}" class="tiny sug-empty">没搜到参考菜品，直接填名字也能保存</text>
+        </view>
+
+        <view class="add-dish" bindtap="addRow">
+          <text class="add-dish-plus">＋</text>
+          <text>添加一道菜或主食</text>
+        </view>
+        <text class="tiny">输入时会自动联想菜品和热量。每行一道菜，可以带上克数或份数（如「鸡胸肉 150克」），算得更准。</text>
+      </view>
+
+      <view class="field-row">
+        <view class="field grow">
+          <text class="field-label">这一餐几份</text>
+          <input class="input" type="digit" value="{{mealForm.servings}}" data-key="servings" bindinput="onMealInput" />
+        </view>
+        <view class="field grow">
+          <text class="field-label">总热量（kcal）</text>
+          <input
+            class="input"
+            type="digit"
+            value="{{mealForm.kcalText}}"
+            placeholder="{{mealEstimating ? '估算中…' : '自动算出'}}"
+            placeholder-class="placeholder"
+            bindinput="onKcalInput"
+          />
+        </view>
+      </view>
+
+      <view class="est-card">
+        <view class="between">
+          <text class="est-title">本餐合计</text>
+          <text class="tiny">{{mealEstimating ? '正在估算…' : (mealEstimate.kcal ? '参考值，可直接改上面的数字' : '')}}</text>
+        </view>
+        <view class="est-total">
+          <text class="est-num num">{{mealForm.kcalText || '—'}}</text>
+          <text class="est-unit">kcal</text>
+        </view>
+        <view wx:if="{{mealEstimate.items.length}}" class="est-items">
+          <view wx:for="{{mealEstimate.items}}" wx:key="name" class="est-item">
+            <text class="est-item-name">{{item.name}}</text>
+            <text class="est-item-kcal num">{{item.kcal ? item.kcal + ' kcal' : '待补充'}}</text>
+          </view>
+        </view>
+        <text wx:if="{{!estHasInput && !mealForm.dish_id}}" class="tiny est-note">写上菜名后，这里会自动算出总热量。</text>
+        <text wx:if="{{mealEstimate.note}}" class="tiny est-note">{{mealEstimate.note}}</text>
+        <text wx:if="{{estHasInput && !mealEstimating && !mealEstimate.kcal}}" class="tiny est-warn">没识别出热量，可以直接在上面填这餐的总热量。</text>
+      </view>
+
+      <view class="field">
+        <text class="field-label">实际吃了什么</text>
+        <input class="input" value="{{mealForm.actual_food}}" placeholder="可留空" placeholder-class="placeholder" data-key="actual_food" bindinput="onMealInput" />
+      </view>
+    </scroll-view>
+    <view class="sheet-foot">
+      <view wx:if="{{mealForm.id}}" class="btn btn-danger" bindtap="deleteMeal">删除这餐</view>
+      <view class="btn btn-primary" bindtap="saveMeal">{{saving ? '保存中…' : '保存'}}</view>
+    </view>
+  </view>
+
+  <!-- 新增 / 编辑菜品 -->
+  <view wx:if="{{dishSheet}}" class="mask" bindtap="closeDish"></view>
+  <view wx:if="{{dishSheet}}" class="sheet" catchtap="noop">
+    <view class="sheet-head">
+      <text class="sheet-title">{{dishEditing ? '编辑菜品' : '新增菜品'}}</text>
+      <view class="ic ic-close-muted ic-sm" bindtap="closeDish"></view>
+    </view>
+    <scroll-view scroll-y class="sheet-body">
+      <view class="field">
+        <text class="field-label">菜品名称</text>
+        <input class="input" value="{{dishForm.name}}" placeholder="例如：番茄牛肉面" placeholder-class="placeholder" data-key="name" bindinput="onDishInput" />
+      </view>
+      <view class="field">
+        <text class="field-label">简单做法</text>
+        <textarea class="textarea notes-input" value="{{dishForm.instructions}}" placeholder="可选" placeholder-class="placeholder" data-key="instructions" bindinput="onDishInput" />
+      </view>
+      <view class="field-row">
+        <view class="field grow">
+          <text class="field-label">每份热量（kcal）</text>
+          <input class="input" type="number" value="{{dishForm.estimated_kcal}}" placeholder="可选" placeholder-class="placeholder" data-key="estimated_kcal" bindinput="onDishInput" />
+        </view>
+        <view class="field grow">
+          <text class="field-label">可做几份</text>
+          <input class="input" type="digit" value="{{dishForm.recipe_servings}}" data-key="recipe_servings" bindinput="onDishInput" />
+        </view>
+      </view>
+      <view class="field">
+        <text class="field-label">食材（每行：名称 | 数量 | 单位）</text>
+        <textarea class="textarea notes-input" value="{{dishForm.ingredients_text}}" placeholder="面条 | 100 | g" placeholder-class="placeholder" data-key="ingredients_text" bindinput="onDishInput" />
+      </view>
+      <view wx:if="{{dishEditing}}" class="dish-sheet-del btn btn-ghost btn-block" bindtap="deleteDishInSheet">删除这个菜品</view>
+    </scroll-view>
+    <view class="sheet-foot">
+      <view class="btn btn-ghost" bindtap="closeDish">取消</view>
+      <view class="btn btn-primary" bindtap="saveDish">{{saving ? '保存中…' : (dishEditing ? '保存修改' : '保存菜品')}}</view>
+    </view>
+  </view>
+
+  <!-- 生成购物清单 -->
+  <view wx:if="{{shoppingSheet}}" class="mask" bindtap="closeShopping"></view>
+  <view wx:if="{{shoppingSheet}}" class="sheet" catchtap="noop">
+    <view class="sheet-head">
+      <text class="sheet-title">生成购物清单</text>
+      <view class="ic ic-close-muted ic-sm" bindtap="closeShopping"></view>
+    </view>
+    <scroll-view scroll-y class="sheet-body">
+      <text class="tiny">按日期范围内的饮食安排汇总食材，已有同日期同餐次不会被覆盖。</text>
+      <view class="field">
+        <text class="field-label">清单名称</text>
+        <input class="input" value="{{shoppingForm.name}}" placeholder="一周采购" placeholder-class="placeholder" data-key="name" bindinput="onShoppingInput" />
+      </view>
+      <view class="field-row">
+        <view class="field grow">
+          <text class="field-label">开始日期</text>
+          <picker mode="date" value="{{shoppingForm.start_date}}" data-key="start_date" bindchange="pickShoppingDate">
+            <view class="picker-box"><text>{{shoppingForm.start_date}}</text></view>
+          </picker>
+        </view>
+        <view class="field grow">
+          <text class="field-label">结束日期</text>
+          <picker mode="date" value="{{shoppingForm.end_date}}" data-key="end_date" bindchange="pickShoppingDate">
+            <view class="picker-box"><text>{{shoppingForm.end_date}}</text></view>
+          </picker>
+        </view>
+      </view>
+    </scroll-view>
+    <view class="sheet-foot">
+      <view class="btn btn-ghost" bindtap="closeShopping">取消</view>
+      <view class="btn btn-primary" bindtap="generateShopping">{{saving ? '生成中…' : '生成'}}</view>
+    </view>
+  </view>
+
+  <!-- AI 生成菜单 -->
+  <view wx:if="{{aiDietSheet}}" class="mask" bindtap="closeAiDiet"></view>
+  <view wx:if="{{aiDietSheet}}" class="sheet" catchtap="noop">
+    <view class="sheet-head">
+      <text class="sheet-title">AI 生成菜单</text>
+      <view class="ic ic-close-muted ic-sm" bindtap="closeAiDiet"></view>
+    </view>
+
+    <!-- 表单态 -->
+    <block wx:if="{{!aiDietPlan}}">
+      <scroll-view scroll-y class="sheet-body">
+        <view class="field">
+          <text class="field-label">菜单主题</text>
+          <input class="input" value="{{aiDietForm.theme}}" placeholder="例如：低脂减脂餐、快手晚餐" placeholder-class="placeholder" data-key="theme" bindinput="onAiDietInput" maxlength="200" />
+        </view>
+        <view class="field">
+          <text class="field-label">口味偏好</text>
+          <input class="input" value="{{aiDietForm.preferences}}" placeholder="可选，例如：不吃辣、少油少盐" placeholder-class="placeholder" data-key="preferences" bindinput="onAiDietInput" maxlength="1000" />
+        </view>
+        <view class="field">
+          <text class="field-label">天数（1-7）</text>
+          <input class="input" type="number" value="{{aiDietForm.days}}" data-key="days" bindinput="onAiDietInput" />
+        </view>
+
+        <view wx:if="{{aiDietError}}" class="banner banner-danger"><text>{{aiDietError}}</text></view>
+        <view wx:if="{{aiDietGenerating}}" class="banner">
+          <text>AI 正在用本机模型生成菜单，请稍候…</text>
+        </view>
+      </scroll-view>
+      <view class="sheet-foot">
+        <view class="btn btn-ghost" bindtap="closeAiDiet">取消</view>
+        <view class="btn btn-primary" bindtap="generateDiet">{{aiDietGenerating ? '生成中…' : '开始生成'}}</view>
+      </view>
+    </block>
+
+    <!-- 预览态 -->
+    <block wx:else>
+      <scroll-view scroll-y class="sheet-body">
+        <view class="ai-plan-head">
+          <text class="ai-plan-name">{{aiDietPlan.name}}</text>
+          <text class="tiny ai-plan-meta">将以「{{selectedDate}}」为第一天写入饮食日历</text>
+        </view>
+        <view wx:for="{{aiDietDays}}" wx:key="key" class="ai-day">
+          <text class="ai-day-date">{{item.label}}</text>
+          <view wx:for="{{item.items}}" wx:for-item="m" wx:key="name" class="ai-task">
+            <view class="ai-task-row">
+              <text class="tiny ai-task-type">{{m.type}}</text>
+              <text class="ai-task-title">{{m.name}}</text>
+            </view>
+            <text wx:if="{{m.kcal}}" class="tiny ai-task-min">约 {{m.kcal}} 千卡</text>
+          </view>
+        </view>
+        <view wx:if="{{aiDietError}}" class="banner banner-danger"><text>{{aiDietError}}</text></view>
+      </scroll-view>
+      <view class="sheet-foot">
+        <view class="btn btn-ghost" bindtap="regenerateDiet">重新生成</view>
+        <view class="btn btn-primary" bindtap="applyAiDiet">{{aiDietImporting ? '写入中…' : '加入饮食日历'}}</view>
+      </view>
+    </block>
+  </view>
+</view>

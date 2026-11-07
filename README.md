@@ -1,5 +1,11 @@
 # PersonalHub
 
+## 微信小程序分支
+
+本分支包含微信小程序源码，位于 [personalhub-miniprogram](personalhub-miniprogram/README.md)。使用微信开发者工具导入该目录，并在 `config.js` 中配置后端地址。本地调试代理位于 `_tools/proxy.js`。
+
+网页版与本机软件的说明见下文。
+
 一个管理学习、饮食和日常生活的网页应用，把计划、执行和回顾放在同一个工作空间中。
 
 ## 核心功能

@@ -1,0 +1,66 @@
+.agreement {
+  padding: calc(var(--sb, 0px) + 20rpx) 24rpx 60rpx;
+  min-height: 100vh;
+}
+
+.ag-head {
+  display: flex;
+  align-items: center;
+  gap: 18rpx;
+  padding: 10rpx 0 26rpx;
+}
+
+.back-btn {
+  width: 60rpx;
+  height: 60rpx;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 2rpx solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+
+.back-ic {
+  font-size: 34rpx;
+  line-height: 34rpx;
+  color: var(--text);
+  margin-top: -4rpx;
+}
+
+.ag-title {
+  font-size: 32rpx;
+  font-weight: 650;
+}
+
+.ag-body {
+  display: flex;
+  flex-direction: column;
+  gap: 24rpx;
+}
+
+.ag-body .card {
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+  padding: 34rpx 30rpx;
+  border-radius: 26rpx;
+}
+
+.h2 {
+  font-size: 30rpx;
+  font-weight: 650;
+  color: var(--text);
+}
+
+.ag-p {
+  font-size: 25rpx;
+  line-height: 1.7;
+}
+
+.ag-foot {
+  text-align: center;
+  padding: 6rpx 0 20rpx;
+  color: var(--text-3);
+}

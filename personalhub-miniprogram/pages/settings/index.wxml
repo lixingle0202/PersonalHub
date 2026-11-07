@@ -1,0 +1,170 @@
+<view class="app {{themeMode === 'dark' ? 'theme-dark' : ''}}" style="{{themeStyle}}">
+  <view class="topbar">
+    <view class="brand-mark mark-sm">P</view>
+    <view class="grow">
+      <view class="topbar-title">数据与设置</view>
+      <view class="topbar-desc">打造适合自己的工作空间</view>
+    </view>
+  </view>
+
+  <view wx:if="{{loading}}" class="loading-block">
+    <view class="spinner"></view>
+    <text>正在加载</text>
+  </view>
+
+  <block wx:else>
+    <!-- 账户 -->
+    <view class="card">
+      <view class="card-head">
+        <view class="card-title">
+          <view class="ic ic-user-muted"></view>
+          <text>账户</text>
+        </view>
+        <view class="row gap8">
+          <text class="tiny">{{username}}</text>
+          <view class="btn btn-sm btn-soft" bindtap="save">{{saving ? '保存中…' : '保存'}}</view>
+        </view>
+      </view>
+
+      <view class="field">
+        <text class="field-label">昵称</text>
+        <input class="input" value="{{settings.nickname}}" placeholder="给自己起个名字" placeholder-class="placeholder" data-key="nickname" bindinput="onInput" maxlength="32" />
+      </view>
+      <text class="tiny">计划与记录仅你可见，独立保存在自己的空间里。</text>
+    </view>
+
+    <!-- 个性化 -->
+    <view class="card">
+      <view class="card-head">
+        <view class="card-title">
+          <view class="ic ic-sliders-muted"></view>
+          <text>个性化设置</text>
+        </view>
+      </view>
+
+      <view class="field">
+        <view class="between">
+          <text class="field-label">主题颜色</text>
+          <text class="tiny field-hint wheel-toggle" bindtap="toggleWheel">{{showWheel ? '收起色环' : '用色环自己调'}}</text>
+        </view>
+        <view class="swatches">
+          <view
+            wx:for="{{themeColors}}"
+            wx:key="value"
+            class="swatch {{settings.theme_color === item.value ? 'on' : ''}}"
+            style="background:{{item.value}}"
+            data-value="{{item.value}}"
+            bindtap="pickColor"
+          >
+            <view wx:if="{{settings.theme_color === item.value}}" class="ic ic-check-white ic-xs"></view>
+          </view>
+        </view>
+
+        <view wx:if="{{showWheel}}" class="wheel-wrap">
+          <view class="wheel-canvas-wrap">
+            <view
+              id="wheel"
+              class="wheel"
+              bindtouchstart="onWheelTouch"
+              bindtouchmove="onWheelTouch"
+              bindtouchend="onWheelTouchEnd"
+              bindtouchcancel="onWheelTouchEnd"
+            ></view>
+            <view
+              wx:if="{{wheelCursor}}"
+              class="wheel-cursor"
+              style="left:{{wheelCursor.left}}px;top:{{wheelCursor.top}}px"
+            ></view>
+          </view>
+          <view class="wheel-side">
+            <view class="wheel-preview" style="background:{{settings.theme_color}}"></view>
+            <text class="tiny num">{{settings.theme_color}}</text>
+            <text class="tiny wheel-tip">按住圆点拖动选色相，越靠近圆心颜色越淡。选好后点下方「保存设置」才会记住。</text>
+          </view>
+        </view>
+        <text wx:if="{{!showWheel}}" class="tiny">不想只用这 5 个颜色？点右上「用色环自己调」。</text>
+      </view>
+
+      <view class="switch-row">
+        <view class="grow">
+          <text class="row-label">深色模式</text>
+          <text class="tiny">夜间使用更柔和</text>
+        </view>
+        <switch checked="{{settings.theme_mode === 'dark'}}" color="{{color}}" bindchange="toggleDark" />
+      </view>
+
+      <view class="field">
+        <text class="field-label">一周起始日</text>
+        <view class="segment">
+          <view class="segment-item {{settings.week_starts_on === 1 ? 'on' : ''}}" data-value="1" bindtap="setWeekStart">星期一</view>
+          <view class="segment-item {{settings.week_starts_on === 0 ? 'on' : ''}}" data-value="0" bindtap="setWeekStart">星期日</view>
+        </view>
+      </view>
+
+      <view class="field-row">
+        <view class="field grow">
+          <text class="field-label">默认工作开始</text>
+          <picker mode="time" value="{{settings.default_work_start}}" data-key="default_work_start" bindchange="pickTime">
+            <view class="picker-box"><text>{{settings.default_work_start}}</text></view>
+          </picker>
+        </view>
+        <view class="field grow">
+          <text class="field-label">默认工作结束</text>
+          <picker mode="time" value="{{settings.default_work_end}}" data-key="default_work_end" bindchange="pickTime">
+            <view class="picker-box"><text>{{settings.default_work_end}}</text></view>
+          </picker>
+        </view>
+      </view>
+
+      <view class="field">
+        <text class="field-label">默认每日学习分钟</text>
+        <input class="input" type="number" value="{{settings.default_study_minutes}}" data-key="default_study_minutes" bindinput="onInput" />
+      </view>
+
+      <view class="btn btn-primary btn-block" bindtap="save">{{saving ? '保存中…' : '保存设置'}}</view>
+    </view>
+
+    <!-- 数据 -->
+    <view class="card">
+      <view class="card-head">
+        <view class="card-title">
+          <view class="ic ic-chart-muted"></view>
+          <text>数据管理</text>
+        </view>
+        <view class="btn btn-sm btn-soft" bindtap="makeBackup">{{backingUp ? '备份中…' : '立即备份'}}</view>
+      </view>
+
+      <view wx:if="{{backups.length}}" class="backup-list">
+        <view wx:for="{{backups}}" wx:key="filename" class="backup-row">
+          <view class="grow">
+            <text class="backup-name">{{item.filename}}</text>
+            <text class="tiny">{{item.created}} {{item.size}}</text>
+          </view>
+        </view>
+      </view>
+      <view wx:else class="empty empty-dashed backup-empty">还没有备份记录</view>
+    </view>
+
+    <!-- 关于 -->
+    <view class="card">
+      <view class="card-head">
+        <view class="card-title">
+          <view class="ic ic-note-muted"></view>
+          <text>关于</text>
+        </view>
+      </view>
+      <view class="about-row"><text class="tiny">应用</text><text class="tiny">PersonalHub 小程序</text></view>
+      <view class="about-row"><text class="tiny">版本</text><text class="tiny">{{version}}</text></view>
+      <view class="about-row about-url"><text class="tiny">数据服务</text><text class="tiny url-text">{{baseUrl}}</text></view>
+    </view>
+
+    <view class="btn btn-danger btn-block logout-btn" bindtap="logout">
+      <view class="ic ic-logout-danger ic-xs"></view>
+      <text>退出登录</text>
+    </view>
+
+    <view class="foot-note">
+      <text class="tiny">生活，有条不紊</text>
+    </view>
+  </block>
+</view>
