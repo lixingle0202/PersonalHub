@@ -110,8 +110,6 @@ flowchart LR
 2. 浏览器自动打开，注册或登录后开始使用。
 3. 升级前先关闭旧版程序窗口，再启动新版。
 
-软件包包含运行环境和内置模型。账号与数据保存在使用者电脑，不同电脑之间不会自动同步。
-
 ## 技术与文档
 
 React + TypeScript + Ant Design · FastAPI + SQLAlchemy + SQLite · Ollama
