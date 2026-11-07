@@ -7,6 +7,7 @@ import { apiRequest } from '../api/client'
 import { AILearningGenerator } from '../components/AILearningGenerator'
 import { ConfirmDangerButton } from '../components/ConfirmDangerButton'
 import { FocusTimer } from '../components/FocusTimer'
+import { LearningTrends } from '../components/LearningTrends'
 import { EmptyStatePanel, ErrorPanel, LoadingPanel } from '../components/StatePanels'
 
 type LearningTask = { id: string; title: string; details?: string; estimated_minutes?: number | null; plan_date: string | null; status: string | null; section_id?: string | null; agenda_id?: string | null }
@@ -51,6 +52,7 @@ export function LearningPage() {
   const requestedTab = params.get('tab')
   useEffect(() => { setLearningTab(requestedTab === 'sessions' || requestedTab === 'resources' ? requestedTab : 'plan') }, [requestedTab, requestedGoal])
   const [goals, setGoals] = useState<LearningGoal[] | null>(null)
+  const [trendRevision, setTrendRevision] = useState(0)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [detail, setDetail] = useState<LearningGoal | null>(null)
   useSearchHighlight(params.get('task') ? `learning-task-${params.get('task')}` : params.get('record') ? `study-session-${params.get('record')}` : null, Boolean(detail && detail.id === requestedGoal))
@@ -86,6 +88,7 @@ export function LearningPage() {
       const data = await apiRequest<LearningGoal[]>('/learning/goals')
       if (version !== goalsVersion.current) return
       setGoals(data)
+      setTrendRevision((value) => value + 1)
       setSelectedId((current) => requestedGoal && data.some((goal) => goal.id === requestedGoal) ? requestedGoal : data.some((goal) => goal.id === current) ? current : data[0]?.id ?? null)
       setError('')
     } catch (reason) { if (version === goalsVersion.current) setError(reason instanceof Error ? reason.message : '读取失败') }
@@ -332,12 +335,13 @@ export function LearningPage() {
     <div className="page-actions"><Typography.Text type="secondary">从长期目标拆到章节和任务</Typography.Text><Space><AILearningGenerator initialTopic={detail?.name} initialObjective={detail?.goal} onImported={async (id) => { await loadGoals(); setSelectedId(id); if (id === selectedId) await loadDetail() }} /><ConfirmDangerButton label="清零全部学习计划" title="确认清零全部学习计划？" description="所有学习目标、任务和记录都会取消并从页面隐藏，可在回收站中恢复。" disabled={resetting || goals.length === 0} onConfirm={resetAllPlans} /><Button type="primary" onClick={openCreateGoal}>新建学习目标</Button></Space></div>
     <Row gutter={20}>
       <Col span={7}><Card title="学习目标"><div className="selectable-list">{goals.map((goal) => <button type="button" aria-label={`编辑学习目标 ${goal.name}`} disabled={editorBusy || savingProgress} key={goal.id} className={goal.id === selectedId ? 'selected' : ''} onClick={() => openGoalEditor(goal)}><strong>{goal.name}</strong><span>{goal.progress}% · 点击修改</span></button>)}</div></Card></Col>
-      <Col span={17}>{detailError ? <ErrorPanel message={detailError} onRetry={() => void loadDetail()} /> : selectedId && detail?.id !== selectedId ? <LoadingPanel /> : detail ? <Card title={detail.name} extra={<Space><Typography.Text type="secondary">{detail.progress_is_manual ? '手动进度' : '按章节计算'}</Typography.Text><InputNumber aria-label="学习进度" min={0} max={100} value={progressValue} onChange={(value) => setProgressValue(value ?? 0)} /><Typography.Text>%</Typography.Text><Button type="primary" loading={savingProgress} onClick={() => void saveProgress()}>保存进度</Button></Space>}><Typography.Paragraph>{detail.goal}</Typography.Paragraph><Typography.Text type="secondary">计划：{detail.start_date ?? '未设置'} 至 {detail.target_date ?? '未设置'} · 预计投入 {detail.estimated_minutes} 分钟</Typography.Text><Progress percent={detail.progress} /><FocusTimer goalId={detail.id} tasks={detail.tasks ?? []} /><Tabs activeKey={learningTab} onChange={setLearningTab} items={[
+      <Col span={17}>{detailError ? <ErrorPanel message={detailError} onRetry={() => void loadDetail()} /> : selectedId && detail?.id !== selectedId ? <LoadingPanel /> : detail ? <Card title={detail.name} extra={<Space><Typography.Text type="secondary">{detail.progress_is_manual ? '手动进度' : '按章节计算'}</Typography.Text><InputNumber aria-label="学习进度" min={0} max={100} value={progressValue} onChange={(value) => setProgressValue(value ?? 0)} /><Typography.Text>%</Typography.Text><Button type="primary" loading={savingProgress} onClick={() => void saveProgress()}>保存进度</Button></Space>}><Typography.Paragraph>{detail.goal}</Typography.Paragraph><Typography.Text type="secondary">计划：{detail.start_date ?? '未设置'} 至 {detail.target_date ?? '未设置'} · 预计投入 {detail.estimated_minutes} 分钟</Typography.Text><Progress percent={detail.progress} /><FocusTimer goalId={detail.id} tasks={detail.tasks ?? []} onStopped={() => setTrendRevision((value) => value + 1)} /><Tabs activeKey={learningTab} onChange={setLearningTab} items={[
         { key: 'plan', label: '学习计划', children: planTab },
         { key: 'sessions', label: '学习记录', children: <><div className="tab-actions"><Button onClick={() => openChildEditor('session')}>记录一次学习</Button></div>{(detail.sessions ?? []).map((item) => <Card size="small" key={item.id} id={`study-session-${item.id}`} data-search-target={item.id === params.get('record')}><strong>{item.studied_on} · {item.actual_minutes} 分钟</strong><p>{item.notes}</p><Typography.Text type="secondary">下一步：{item.next_step || '未填写'}</Typography.Text></Card>)}</> },
         { key: 'resources', label: '笔记与资料', children: <><div className="tab-actions"><Button onClick={() => openChildEditor('resource')}>添加资料</Button></div>{(detail.resources ?? []).map((item) => <Card size="small" key={item.id}><a href={item.link} target="_blank" rel="noreferrer">{item.name}</a><p>{item.notes}</p></Card>)}</> },
       ]} /></Card> : <EmptyStatePanel description="选择或创建学习目标" />}</Col>
     </Row>
+    <LearningTrends goals={goals} revision={trendRevision} />
     <Modal forceRender title={{ goal: '新建学习目标', editGoal: '编辑学习目标', section: '添加章节', editSection: '编辑学习章节', task: '安排学习任务', editTask: '编辑学习任务', session: '记录学习', resource: '添加学习资料' }[modal ?? 'goal']} open={Boolean(modal)} closable={{ disabled: editorBusy }} keyboard={!editorBusy} mask={{ closable: !editorBusy }} onCancel={() => { if (!editorBusy) closeEditor() }} footer={
       <div className="editor-footer"><div>{modal === 'editGoal' || modal === 'editTask' || modal === 'editSection' ? <Button danger aria-label={modal === 'editTask' ? '删除此任务' : modal === 'editSection' ? '删除此章节' : '删除此计划'} disabled={editorBusy} onClick={() => { setDeleteError(''); setDeleteConfirmOpen(true) }}>{modal === 'editTask' ? '删除此任务' : modal === 'editSection' ? '删除此章节' : '删除此计划'}</Button> : null}</div><Space><Button aria-label="取消" disabled={editorBusy} onClick={closeEditor}>取消</Button><Button type="primary" aria-label={modal === 'editGoal' || modal === 'editTask' || modal === 'editSection' ? '保存修改' : '创建'} loading={saving} disabled={deleting} onClick={() => form.submit()}>{modal === 'editGoal' || modal === 'editTask' || modal === 'editSection' ? '保存修改' : '创建'}</Button></Space></div>
     }>

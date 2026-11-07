@@ -44,6 +44,12 @@ function mockLearning(options: {
     const method = (init?.method ?? 'GET').toUpperCase()
     const values = init?.body ? JSON.parse(String(init.body)) as Record<string, unknown> : {}
     if (method !== 'GET') writes.push({ method, path, body: values })
+    if (method === 'GET' && path === '/learning/trends') return json({
+      start_date: '2026-11-01', end_date: '2026-11-07', days: [],
+      manual: { minutes: 0, record_count: 0, active_days: 0, current_streak: 0 },
+      focus: { minutes: 0, record_count: 0, active_days: 0, current_streak: 0 },
+      tasks: { planned: 0, completed: 0, completion_rate: null },
+    })
     if (failures[`${method} ${path}`]) {
       failures[`${method} ${path}`]--
       return json({ detail: '暂时无法保存，请重试' }, 503)

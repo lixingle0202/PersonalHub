@@ -1,0 +1,29 @@
+.learning-trend-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
+.learning-trend-toolbar label { display: flex; align-items: center; gap: 8px; }
+.learning-trend-toolbar .native-form-select { width: auto; max-width: 230px; }
+.learning-trend-caption { margin: 12px 0; font-size: 12px; }
+.learning-trend-loading { padding: 60px 16px; text-align: center; color: var(--text-secondary); }
+.learning-trend-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.learning-trend-metrics > div { padding: 18px; border-radius: 14px; background: var(--surface-subtle); }
+.learning-trend-metrics span, .learning-trend-metrics small { display: block; color: var(--text-secondary); font-size: 12px; }
+.learning-trend-metrics strong { display: block; margin-top: 8px; color: var(--primary-readable); font-size: 27px; font-variant-numeric: tabular-nums; }
+.learning-trend-charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; margin-top: 24px; }
+.learning-trend-charts section { min-width: 0; }
+.learning-trend-charts h3 { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; font-size: 14px; margin: 0 0 10px; }
+.learning-trend-charts h3 small { color: var(--text-secondary); font-size: 12px; font-weight: normal; }
+.learning-trend-scroll { overflow-x: auto; max-width: 100%; border-radius: 8px; }
+.learning-trend-scroll svg { display: block; min-width: 100%; height: 208px; }
+.learning-trend-scroll svg text { fill: var(--text-secondary); font: 11px sans-serif; }
+.trend-grid-line { stroke: var(--surface-line); stroke-dasharray: 3 4; }
+.trend-duration-bar { fill: var(--primary-color); }
+.trend-completed-bar { fill: #308776; }
+.trend-planned-bar, .trend-no-data { fill: var(--surface-line); }
+.learning-trend-scroll g[tabindex]:focus { outline: 2px solid var(--primary-readable); }
+.trend-key-done, .trend-key-pending { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin: 0 4px 0 7px; background: #308776; }
+.trend-key-pending { background: var(--surface-line); }
+.learning-trend-details summary { cursor: pointer; color: var(--primary-readable); padding: 8px 0; }
+.learning-trend-details table { width: 100%; border-collapse: collapse; font-size: 13px; text-align: left; white-space: nowrap; }
+.learning-trend-details th, .learning-trend-details td { padding: 10px 12px; border-bottom: 1px solid var(--surface-line); }
+.learning-trend-details caption { text-align: left; padding: 10px 12px; color: var(--text-secondary); }
+@media (max-width: 1100px) { .learning-trend-charts { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 600px) { .learning-trend-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } .learning-trend-metrics strong { font-size: 23px; } .learning-trend-toolbar .native-form-select { max-width: 170px; } }

@@ -15,7 +15,7 @@ function formatSeconds(value: number) {
   return `${String(Math.floor(safe / 60)).padStart(2, '0')}:${String(safe % 60).padStart(2, '0')}`
 }
 
-export function FocusTimer({ goalId, tasks }: { goalId: string; tasks: Array<{ id: string; title: string }> }) {
+export function FocusTimer({ goalId, tasks, onStopped }: { goalId: string; tasks: Array<{ id: string; title: string }>; onStopped?: () => void }) {
   const [data, setData] = useState<FocusState | null>(null)
   const [taskId, setTaskId] = useState('')
   const [fetchedAt, setFetchedAt] = useState(Date.now())
@@ -38,6 +38,7 @@ export function FocusTimer({ goalId, tasks }: { goalId: string; tasks: Array<{ i
         method: 'POST',
         body: JSON.stringify(data?.running ? {} : { goal_id: goalId, task_id: taskId || null }),
       })
+      if (data?.running) onStopped?.()
       await load()
     } catch (reason) { setError(reason instanceof Error ? reason.message : '专注记录保存失败') }
     finally { setBusy(false) }
