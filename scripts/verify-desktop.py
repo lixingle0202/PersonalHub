@@ -76,6 +76,22 @@ def main():
     assert request('GET', f"/learning/goals/{goal['id']}")['tasks']
     print('PASS: learning stages, editing, grouped deletion and full restoration', flush=True)
 
+    search_goal = request('POST', '/learning/goals', {'name': '英语对照验收'})
+    for index, minutes in enumerate((30, 45)):
+        request('POST', f"/learning/goals/{search_goal['id']}/tasks", {
+            'title': f'英语对照任务{index + 1}', 'plan_date': today, 'estimated_minutes': minutes})
+    search_detail = request('GET', f"/learning/goals/{search_goal['id']}")
+    request('POST', f"/agenda/{search_detail['tasks'][0]['agenda_id']}/complete")
+    request('POST', f"/learning/goals/{search_goal['id']}/sessions", {
+        'studied_on': today, 'actual_minutes': 20, 'notes': '英语手动学习记录'})
+    comparison = request('GET', '/search/assist?q=今天英语学习计划与实际对照&today=' + today)['comparison']
+    assert comparison['planned_count'] == 2 and comparison['completed_count'] == 1
+    assert comparison['completion_rate'] == 50 and comparison['planned_learning_minutes'] == 75
+    assert comparison['manual_learning_minutes'] == 20 and comparison['focus_minutes'] is None
+    exercise = request('GET', '/search/assist?q=今天的运动记录&today=' + today)
+    assert any('跑八百米' in item['title'] for item in exercise['results'])
+    print('PASS: natural-language date/category search, plan completion comparison, and separate actual-time evidence', flush=True)
+
     refs = request('GET', '/diet/food-references?q=土豆&limit=5')
     assert refs
     greens = request('GET', '/diet/food-references?q=炒青菜')
@@ -126,6 +142,7 @@ def main():
     assert other.get('/api/v1/learning/goals').json() == []
     assert other.get('/api/v1/desktop/ai/settings').json()['source'] == 'builtin'
     assert other.get(f"/api/v1/learning/goals/{goal['id']}").status_code == 404
+    assert other.get('/api/v1/search/assist', params={'q': '英语对照验收'}).json()['total_count'] == 0
     request('POST', '/public/logout')
     assert browser.get('/api/v1/bootstrap').status_code == 401
     request('POST', '/public/login', credentials)

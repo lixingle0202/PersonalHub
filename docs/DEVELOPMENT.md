@@ -12,6 +12,17 @@
 
 源码验收入口为 `Start-PersonalHub-Full.cmd`。构建完整包运行 `scripts/Build-FullPackage.ps1`；构建脚本会校验模型文件摘要并保留第三方许可，产物不包含个人数据库。完整使用说明见 [FullDesktopGuide.txt](FullDesktopGuide.txt)。
 
+## 更新到最新 main
+
+1. 在当前版本创建数据备份，关闭 PersonalHub 程序窗口及本项目正在运行的共享网站后端。保留 `%LOCALAPPDATA%\PersonalHubDesktop` 和 `.public-hub-data`，不要用演示数据库覆盖。
+2. 确认本地修改已提交或另行保存，再运行 `git switch main`、`git pull --ff-only origin main`。
+3. 在 `frontend` 目录运行 `pnpm install --frozen-lockfile`、`pnpm build`，回到项目根目录。使用项目虚拟环境按 `backend/requirements.txt` 安装依赖。
+4. 共享网页版运行 `scripts/Start-PublicHub.ps1`；仅本机使用可加 `-LocalOnly`。若旧后端仍在运行，脚本会复用它，必须先关闭旧后端。分享隧道地址可能变化，以脚本实际返回且通过健康检查的地址为准。
+5. 完整本机版运行 `scripts/Build-FullPackage.ps1`，将输出目录中的整个 `PersonalHub` 文件夹压缩为 `PersonalHub.zip`，包含 `PersonalHub.exe`、`_internal`、`ai`、许可和使用说明。不要将账号数据库、个人备份或 `.env` 放入分发包。
+6. 启动新版 exe，确认登录、内置模型与顶部“搜索或提问”可用，再用 Ctrl+F5 刷新原浏览器页面。同一数据目录的单实例机制会复用正在运行的程序，因此要先关闭旧版。
+
+v0.1.1 加入自然语言条件搜索和计划与实际对照，接口与前端须一同更新。该功能不改变现有数据库结构；旧版发布附件保留在对应 GitHub Release，升级无需新建账号。查看与筛选说明见[自然语言搜索](natural-language-search.md)。
+
 ## 使用原免登录打包版
 
 1. 打开 `dist\PersonalHub` 文件夹。

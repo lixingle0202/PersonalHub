@@ -83,6 +83,8 @@ flowchart TD
     B --> G["口语化输入日常记录"]
     G --> H["自动分条分类，按日期回顾"]
     B --> I["设置、备份与回收站"]
+    B --> J["搜索或提问：日期、类别、状态、关键词"]
+    J --> K["查找来源 / 计划与实际对照"]
 ```
 
 ## AI 辅助生成
@@ -104,11 +106,13 @@ flowchart LR
 
 ## 下载使用
 
-在 [Releases 发布页](https://github.com/lxl0202-rgb/PersonalHub/releases/latest) 下载附件 **[PersonalHub.zip](https://github.com/lxl0202-rgb/PersonalHub/releases/download/v0.1.0/PersonalHub.zip)**（约 1.09 GB，Windows 10/11 64 位）。
+在 [Releases 发布页](https://github.com/lxl0202-rgb/PersonalHub/releases/latest) 下载 **v0.1.1** 的附件 **[PersonalHub.zip](https://github.com/lxl0202-rgb/PersonalHub/releases/download/v0.1.1/PersonalHub.zip)**（约 1.09 GB，Windows 10/11 64 位）。新版包含自然语言条件搜索和计划与实际对照。
 
 1. 完整解压后，双击 `PersonalHub/PersonalHub.exe`。
 2. 浏览器自动打开，注册或登录后开始使用。
-3. 升级前先关闭旧版程序窗口，再启动新版。
+3. 升级前先关闭旧版程序窗口，完整解压新版后启动其中的 exe；同一台电脑会继续使用原有本机账号与记录，无需重新注册。
+
+打开后可在顶部“搜索或提问”输入“昨天的运动记录”或“这周学习计划与实际对照”体验新功能。旧版 exe 和旧版压缩包不会自动更新；仅合并 GitHub 代码也不会更新正在运行的网站。源码部署的更新步骤见[开发说明](docs/DEVELOPMENT.md#更新到最新-main)。
 
 ## 技术与文档
 

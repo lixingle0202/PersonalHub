@@ -23,7 +23,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     database = Database(current.database_path)
     token = create_local_token()
 
-    app = FastAPI(title="PersonalHub Local API", version="0.1.0")
+    app = FastAPI(title="PersonalHub Local API", version="0.1.1")
     app.state.settings = current
     app.state.database = database
     app.state.local_token = token
