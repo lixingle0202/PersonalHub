@@ -109,6 +109,7 @@ flowchart LR
 
 React + TypeScript + Ant Design · FastAPI + SQLAlchemy + SQLite · Ollama
 
+- [网页版使用指南与流程图](docs/USER_GUIDE.md) · [待补截图清单](docs/SCREENSHOT_CHECKLIST.md)
 - [开发、运行与测试](docs/DEVELOPMENT.md)
 - [完整本机版使用说明](docs/FullDesktopGuide.txt)
 - [数据模型](docs/DATA_MODEL.md) · [接口说明](docs/API.md)
