@@ -9,6 +9,7 @@ describe('learning Pomodoro', () => {
   beforeEach(() => { vi.restoreAllMocks(); window.localStorage.clear(); setLocalToken('focus-test-token') })
 
   it('starts on a selected task, stops, and shows persisted daily focus time', async () => {
+    const onStopped = vi.fn()
     let running = false
     let seconds = 0
     const writes: Array<{ path: string; body: unknown }> = []
@@ -18,15 +19,17 @@ describe('learning Pomodoro', () => {
       if (path.includes('/focus/stop')) { writes.push({ path, body: {} }); running = false; seconds = 1500; return json({ id: 'focus-1', seconds }) }
       return json({ date: '2026-10-09', seconds, running: running ? { id: 'focus-1', goal_id: 'goal-1', task_id: 'task-1', started_at: new Date().toISOString() } : null })
     })
-    render(<FocusTimer goalId="goal-1" tasks={[{ id: 'task-1', title: '变量练习' }]} />)
+    render(<FocusTimer goalId="goal-1" tasks={[{ id: 'task-1', title: '变量练习' }]} onStopped={onStopped} />)
     await screen.findByText('今日专注 00:00')
     fireEvent.change(screen.getByLabelText('关联学习任务'), { target: { value: 'task-1' } })
     fireEvent.click(screen.getByRole('button', { name: '开始专注' }))
     await screen.findByRole('button', { name: '结束专注并计入时长' })
     expect(writes[0].body).toEqual({ goal_id: 'goal-1', task_id: 'task-1' })
+    expect(onStopped).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: '结束专注并计入时长' }))
     await waitFor(() => expect(screen.getByText('今日专注 25:00')).toBeInTheDocument())
     expect(writes).toHaveLength(2)
+    expect(onStopped).toHaveBeenCalledTimes(1)
   })
 
   it('saves a custom duration and restarts an active interval from zero', async () => {
