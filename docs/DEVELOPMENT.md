@@ -1,6 +1,6 @@
 # 开发与运行说明
 
-本文包含源码启动、AI 配置、测试、打包和多人共享方式。产品功能概览见 [项目首页](../README.md)。
+本文包含源码启动、AI 配置、测试和打包说明。产品功能概览见 [项目首页](../README.md)。
 
 ## 完整本机版：登录与内置 AI
 
@@ -31,38 +31,6 @@ v0.1.1 加入自然语言条件搜索和计划与实际对照，接口与前端�
 4. 若程序已经运行，再次双击会打开已有页面，不会启动第二份数据服务。
 
 程序只监听 `127.0.0.1`，同一网络中的其他电脑无法访问。
-
-## 分享独立的多人网页
-
-本机版继续使用自己的数据库和 `127.0.0.1:8765`。多人版使用另一个本机服务 `127.0.0.1:8766`，每位访客注册账号后拥有独立的学习、饮食、设置和备份数据。默认共享 AI 由主机上的 `qwen2.5:1.5b` 处理，访客电脑不需要 Ollama。学习与饮食生成共用3个并发名额，允许3个不同账号同时生成；每个账号同一时间仅允许1个请求。名额满时网页最多自动等待并重试10分钟，可随时取消，等待或生成失败不消耗成功次数；每个账号每天最多成功生成12次。
-
-仅在本机调试多人版时，运行 `.\scripts\Start-PublicHub.ps1 -LocalOnly`，打开固定地址 <http://127.0.0.1:8766/learning>。此模式保留原来的多人账号和数据，不新建公网隧道，也不需要安装 cloudflared；其他电脑不能通过此本机地址访问。模型仍需先按下文启动。
-
-项目模型启动脚本配置3个并行推理槽和8192上下文。旧服务需要通过 `Configure-HostLocalModel.ps1` 重启后才应用新配置；脚本只处理已验证属于本项目的 Ollama。并发允许同时处理，不保证每个人的生成速度与单人使用相同；CPU推理、内存余量、计划天数及纠正重试都会影响耗时。共享服务应使用一个应用进程，避免多个独立进程绕过同一并发上限。
-
-访客也可登录共享网页后，在“数据与设置 → 大模型”切换为“本地大模型”，让浏览器直接访问访客电脑上的 Ollama；不会通过网站主机转发 Ollama 请求。访客需要先安装、启动 Ollama 并下载模型，把网页显示的**准确来源**加入本机 Ollama 的 `OLLAMA_ORIGINS`，重启 Ollama，再允许浏览器提出的本地网络访问请求。服务地址只能填写访客电脑的 `http://127.0.0.1:11434`（或其他本机端口），不可填写公网地址。检查连接、选择已安装模型并保存后，学习计划和饮食计划中的 AI 生成都会使用该模型。切回“共享大模型”即可继续使用主机模型；访客本地模式不消耗共享模型的每日次数。访客本机模型设置保存在该浏览器、该账号的本地存储中，换电脑或浏览器需要重新配置；学习草稿仍按账号保存在网页数据空间。临时隧道网址改变后，访客需要更新 `OLLAMA_ORIGINS` 中允许的来源。[Ollama 来源配置说明](https://docs.ollama.com/faq#how-can-i-allow-additional-web-origins-to-access-ollama)
-
-先按“从源码启动”准备 Python 环境并构建前端；在主机上启动 Ollama 和 `qwen2.5:1.5b`。从 [Cloudflare 官方下载页](https://developers.cloudflare.com/tunnel/downloads/)取得 Windows 64 位 `cloudflared.exe`，放到项目下 `.public-runtime/cloudflared.exe`。文件和公开版数据库都保存在本项目的 D 盘目录，已加入 Git 忽略。然后运行：
-
-```powershell
-.\scripts\Start-PublicHub.ps1
-```
-
-脚本验证模型与 cloudflared 的数字签名，启动独立服务和 HTTPS 隧道，并打印可以分享的网址。访客在该网址注册和登录后使用完整网页。关闭分享时运行 `.\scripts\Stop-PublicHub.ps1`；账号数据仍保存在 `.public-hub-data`。主机必须保持开机、联网并运行 Ollama。
-
-启动脚本会实际访问公网健康接口，只有可用的隧道才会复用；进程仍在运行但链接返回 1033 等错误时，会重新建立隧道并打印新网址。使用 VPN 时若隧道反复断线，可运行 `.\scripts\Start-PublicHub.ps1 -DirectNetwork`，新建隧道会绑定到当前已联网的物理 IPv4 网卡，不修改系统或 VPN 的网络设置。已有可用隧道仍会复用；临时网址重建后需重新发给访客。
-
-如果**主机自己**也要从上述公网网址选择“本地大模型”，运行 `.\scripts\Configure-HostLocalModel.ps1`。脚本读取当前临时网址，验证运行中的 Ollama 确属本项目，再用仅允许该网址的 `OLLAMA_ORIGINS` 重启它，并检查跨域预检、已安装模型和公网网页。网址改变后重新运行此脚本。浏览器首次访问本地网络时，还需要在浏览器提示中允许该网页；若此前拒绝，可在该网址的站点设置中允许“本地网络访问”后刷新。此设置不会开放 Ollama 的网络监听端口。可重复运行 `.\scripts\Test-PublicLocalModel.ps1 -Origin <当前公网网址>` 验证连接。
-
-当前使用 Cloudflare 临时隧道；重启隧道后网址会改变，也没有长期可用保证。要固定网址，需在自己的 Cloudflare 账号和域名下创建正式隧道，并把它指向 `http://127.0.0.1:8766`。不要把原本的 `8765` 本机服务或 `11434` Ollama 端口公开到互联网。[临时隧道说明](https://developers.cloudflare.com/tunnel/get-started/quick-tunnels/)
-
-### 免费固定域名调试（ngrok）
-
-也可免费注册 ngrok，通过其自动分配的固定开发域名分享本机多人版，无需部署服务器。先从 [Microsoft Store 官方页面](https://apps.microsoft.com/detail/9mvs1j51gmk6)安装 ngrok。双击项目根目录的 `Configure-FixedTunnel.cmd`，在密码输入框粘贴账号的 Authtoken 或完整配置命令，点击“保存配置”。令牌通过 Windows DPAPI 加密保存在已被 Git 忽略的 `.public-runtime/ngrok-token.xml`，仅供本机当前用户使用，不要把令牌发到聊天或提交到仓库。
-
-然后双击 `Start-FixedTunnel.cmd`。启动器复用本机多人服务，仅公开 `127.0.0.1:8766`，并验证公网健康接口；还应使用正常浏览器检查网址后再分享。进程通过环境变量接收令牌，命令行与配置文件不包含明文令牌。关闭分享仍使用 `scripts/Stop-PublicHub.ps1`。
-
-域名重启后保持不变，但仍依赖电脑开机、网络和本机服务。免费版有流量与请求配额，普通浏览器首次访问会出现 ngrok 提示页，点击 Visit Site 后继续；固定网址不代表永不掉线或无限使用。[固定开发域名](https://ngrok.com/docs/gateway/domains)、[免费版限制](https://ngrok.com/docs/pricing-limits/free-plan-limits)。
 
 ## 使用本地大模型生成学习计划
 
