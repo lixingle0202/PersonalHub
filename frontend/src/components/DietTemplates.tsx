@@ -3,6 +3,7 @@ import { Alert, Button, Card, DatePicker, Input, InputNumber, Modal, Popconfirm,
 import dayjs, { type Dayjs } from 'dayjs'
 import { apiRequest } from '../api/client'
 import { AIDietGenerator } from './AIDietGenerator'
+import { discardDietDraft, getDietDraft, updateDietDraftEditor } from '../api/dietDraft'
 
 export type TemplateMeal = { day_number: number; meal_type: 'breakfast' | 'lunch' | 'dinner' | 'snack'; name: string; estimated_kcal: number }
 export type DietTemplate = { id: string; name: string; description: string; cycle_days: number; builtin: boolean; meals: TemplateMeal[] }
@@ -25,15 +26,17 @@ function parseLines(input: string): TemplateMeal[] {
   })
 }
 
-export function DietTemplates({ onImported }: { onImported: (startDate: Dayjs) => Promise<void> | void }) {
+export function DietTemplates({ onImported, openAIRequest = 0 }: { onImported: (startDate: Dayjs) => Promise<void> | void; openAIRequest?: number }) {
+  const savedEditor = getDietDraft().editor
   const [templates, setTemplates] = useState<DietTemplate[]>([])
   const [error, setError] = useState('')
   const [editing, setEditing] = useState<DietTemplate | null>(null)
-  const [editorOpen, setEditorOpen] = useState(false)
-  const [name, setName] = useState('')
-  const [description, setDescription] = useState('')
-  const [cycleDays, setCycleDays] = useState(1)
-  const [lines, setLines] = useState('')
+  const [editorOpen, setEditorOpen] = useState(Boolean(savedEditor))
+  const [aiEditing, setAiEditing] = useState(Boolean(savedEditor))
+  const [name, setName] = useState(savedEditor?.name ?? '')
+  const [description, setDescription] = useState(savedEditor?.description ?? '')
+  const [cycleDays, setCycleDays] = useState(savedEditor?.cycleDays ?? 1)
+  const [lines, setLines] = useState(savedEditor?.lines ?? '')
   const [importing, setImporting] = useState<DietTemplate | null>(null)
   const [startDate, setStartDate] = useState(dayjs())
   const [days, setDays] = useState(7)
@@ -43,13 +46,27 @@ export function DietTemplates({ onImported }: { onImported: (startDate: Dayjs) =
     catch (reason) { setError(reason instanceof Error ? reason.message : '读取饮食模板失败') }
   }, [])
   useEffect(() => { void load() }, [load])
+  useEffect(() => {
+    const editor = getDietDraft().editor
+    if (openAIRequest && editor) {
+      setEditing(null); setAiEditing(true)
+      setName(editor.name); setDescription(editor.description); setCycleDays(editor.cycleDays); setLines(editor.lines)
+      setEditorOpen(true)
+    }
+  }, [openAIRequest])
+  useEffect(() => {
+    if (aiEditing && editorOpen) updateDietDraftEditor({ name, description, cycleDays, lines })
+  }, [aiEditing, editorOpen, name, description, cycleDays, lines])
 
   function openEditor(template?: DietTemplate | TemplateDraft) {
+    const isAI = Boolean(template && !('id' in template))
+    const recovered = isAI ? getDietDraft().editor : undefined
+    setAiEditing(isAI)
     setEditing(template && 'id' in template && !template.builtin ? template : null)
-    setName(template?.name ?? '我的饮食模板')
-    setDescription(template?.description ?? '')
-    setCycleDays(template?.cycle_days ?? 1)
-    setLines(template ? linesFor(template) : '1 | 早餐 | 燕麦牛奶 | 400\n1 | 午餐 | 鸡肉蔬菜饭 | 650\n1 | 晚餐 | 番茄鸡蛋面 | 600')
+    setName(recovered?.name ?? template?.name ?? '我的饮食模板')
+    setDescription(recovered?.description ?? template?.description ?? '')
+    setCycleDays(recovered?.cycleDays ?? template?.cycle_days ?? 1)
+    setLines(recovered?.lines ?? (template ? linesFor(template) : '1 | 早餐 | 燕麦牛奶 | 400\n1 | 午餐 | 鸡肉蔬菜饭 | 650\n1 | 晚餐 | 番茄鸡蛋面 | 600'))
     setEditorOpen(true); setError('')
   }
 
@@ -62,6 +79,7 @@ export function DietTemplates({ onImported }: { onImported: (startDate: Dayjs) =
       const saved = await apiRequest<DietTemplate>(editing ? `/diet/templates/${editing.id}` : '/diet/templates', {
         method: editing ? 'PATCH' : 'POST', body: JSON.stringify(payload),
       })
+      if (aiEditing) { discardDietDraft(); setAiEditing(false) }
       setEditorOpen(false); await load()
       if (importAfter) {
         const result = await apiRequest<{ imported: number; skipped: number }>(`/diet/templates/${encodeURIComponent(saved.id)}/import`, {
@@ -95,7 +113,7 @@ export function DietTemplates({ onImported }: { onImported: (startDate: Dayjs) =
   }
 
   return <div className="page-stack">
-    <div className="page-actions"><Typography.Text type="secondary">三日示例可以循环导入；导入会跳过已有餐次，热量均为粗估。</Typography.Text><Space><AIDietGenerator onGenerated={openEditor} /><Button type="primary" onClick={() => openEditor()}>手动创建模板</Button></Space></div>
+    <div className="page-actions"><Typography.Text type="secondary">三日示例可以循环导入；导入会跳过已有餐次，热量均为粗估。</Typography.Text><Space><AIDietGenerator onGenerated={openEditor} openRequest={openAIRequest} /><Button type="primary" onClick={() => openEditor()}>手动创建模板</Button></Space></div>
     {error ? <Alert type="error" showIcon title={error} /> : null}
     <div className="diet-template-grid">{templates.map((template) => <Card key={template.id} title={template.name} extra={template.builtin ? '内置示例' : '我的模板'}>
       <Typography.Paragraph>{template.description}</Typography.Paragraph>

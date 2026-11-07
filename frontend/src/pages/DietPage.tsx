@@ -6,6 +6,7 @@ import { ConfirmDangerButton } from '../components/ConfirmDangerButton'
 import { CaloriePreview } from '../components/CaloriePreview'
 import { MealFoodInput } from '../components/MealFoodInput'
 import { DietTemplates } from '../components/DietTemplates'
+import { DietDraftNotice } from '../components/AIDietGenerator'
 import { calendarRange, DietCalendar, mealTypes, type Meal, type MealType } from '../components/DietCalendar'
 import { ErrorPanel, LoadingPanel } from '../components/StatePanels'
 import '../components/DishMultiSelect.css'
@@ -38,6 +39,8 @@ function DishMultiSelect({ dishes, value = [], onChange }: {
 }
 
 export function DietPage() {
+  const [activeTab, setActiveTab] = useState('calendar')
+  const [openAIRequest, setOpenAIRequest] = useState(0)
   const [month, setMonth] = useState(dayjs().startOf('month'))
   const [dishes, setDishes] = useState<Dish[] | null>(null)
   const [meals, setMeals] = useState<Meal[]>([])
@@ -232,10 +235,11 @@ export function DietPage() {
   return <div className="page-stack">
     {secondaryError ? <Alert type="warning" title={secondaryError} action={<Button onClick={() => void load()}>重试</Button>} /> : null}
     <Card title="个人身体资料与热量估算"><Form layout="inline" initialValues={profile ?? {}} onFinish={(values) => void saveProfile(values)}><Form.Item name="height_cm" label="身高（cm）" rules={[{ required: true }]}><InputNumber min={80} max={250} step={0.1} /></Form.Item><Form.Item name="weight_kg" label="体重（kg）" rules={[{ required: true }]}><InputNumber min={20} max={400} step={0.1} /></Form.Item><Button type="primary" htmlType="submit" loading={profileSaving}>保存身体资料</Button></Form><Typography.Text type="secondary">热量按食物、配方和用餐份数估算，同样食物和份量不随餐次改变。填写食材用量或包装上的每份热量会更准确；身高体重不参与计算。</Typography.Text></Card>
-    <Tabs items={[
+      <DietDraftNotice onOpen={() => { setActiveTab('templates'); setOpenAIRequest((value) => value + 1) }} />
+      <Tabs activeKey={activeTab} onChange={setActiveTab} items={[
       { key: 'calendar', label: '饮食日历', children: <><div className="page-actions diet-calendar-intro"><div><Typography.Title level={4}>饮食日历</Typography.Title><Typography.Text type="secondary">按天查看餐食及估算热量，点击卡片可修改或删除</Typography.Text></div><Space><ConfirmDangerButton label="清零全部饮食计划" title="确认清零全部饮食计划？" description="所有日期的早、午、晚餐和加餐安排都会取消并从页面隐藏，可在回收站中恢复。" disabled={resetting} onConfirm={resetAllPlans} /><Button type="primary" onClick={() => openMealEditor(dayjs(), 'dinner')}>安排一餐</Button></Space></div><DietCalendar month={month} meals={meals} loading={loadingCalendar} onMonthChange={setMonth} onEdit={(date, type, meal) => openMealEditor(date, type, meal)} /></> },
       { key: 'dishes', label: '常用菜品', children: <><div className="tab-actions"><Button type="primary" onClick={() => openSimpleModal('dish')}>新增菜品</Button></div><Row gutter={[12, 12]}>{dishes.map((dish) => <Col span={8} key={dish.id}><Card title={dish.name} extra={<Button aria-label={`修改菜品 ${dish.name}`} onClick={() => openDishEditor(dish)}>修改</Button>}><p>{dish.instructions || '暂无做法'}</p><Typography.Text type="secondary">{dish.ingredients.map((item) => item.name).join('、') || '暂无食材'}</Typography.Text></Card></Col>)}</Row></> },
-      { key: 'templates', label: '饮食模板', children: <DietTemplates onImported={async (startDate) => { if (!startDate.isSame(month, 'month')) setMonth(startDate.startOf('month')); else await load() }} /> },
+        { key: 'templates', label: '饮食模板', children: <DietTemplates openAIRequest={openAIRequest} onImported={async (startDate) => { if (!startDate.isSame(month, 'month')) setMonth(startDate.startOf('month')); else await load() }} /> },
       { key: 'shopping', label: '购物清单', children: <>
         {loadingSecondary ? <LoadingPanel /> : null}
         <div className="tab-actions"><Space><Button type="primary" onClick={() => openSimpleModal('shopping')}>按当前月份饮食生成</Button><Button onClick={() => openSimpleModal('shoppingList')}>新建空清单</Button></Space></div>
