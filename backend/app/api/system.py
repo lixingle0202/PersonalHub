@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import date, timedelta
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
@@ -11,10 +12,11 @@ from sqlalchemy.orm import Session
 from .deps import get_session
 from ..models import (
     AgendaItem, Consultation, DevIssue, DevProject, DevTask, Dish,
-    LearningGoal, MediaContent, Setting,
+    DailyActivity, LearningGoal, MediaContent, QuickNote, Setting,
 )
 from ..services.data_safety import create_backup, list_backups, resolve_backup, restore_backup
 from ..services.trash import list_trash, purge_trash, restore_category, restore_trash
+from ..services.search_assistant import CATEGORIES, parse_query, search_and_compare
 
 
 router = APIRouter(tags=["system"])
@@ -109,7 +111,54 @@ def search(q: str = Query(min_length=1, max_length=100), session: Session = Depe
             title = getattr(row, title_col.key)
             text = getattr(row, text_col.key) or ""
             results.append({"id": row.id, "module": module, "type": label, "title": title, "snippet": snippet(text, q), "path": path + row.id})
+    for note in session.scalars(select(QuickNote).where(
+        QuickNote.deleted_at.is_(None), QuickNote.is_archived.is_(False), QuickNote.content.contains(q, autoescape=True),
+    ).limit(20)):
+        results.append({"id": note.id, "module": "home", "type": "备忘", "title": note.content[:100], "snippet": snippet(note.content, q), "path": f"/?note={note.id}#quick-notes"})
+    for activity in session.scalars(select(DailyActivity).where(
+        DailyActivity.deleted_at.is_(None), DailyActivity.content.contains(q, autoescape=True),
+    ).limit(20)):
+        results.append({"id": activity.id, "module": "home", "type": "日常记录", "title": activity.content[:100], "snippet": snippet(activity.content, q), "path": f"/?date={activity.activity_date}&activity={activity.id}#daily-activities"})
     return results[:50]
+
+
+@router.get("/search/assist")
+def assisted_search(
+    q: str = Query(min_length=1, max_length=200),
+    today: date | None = None,
+    offset_minutes: int = Query(default=0, ge=-840, le=720),
+    start_date: date | None = None,
+    end_date: date | None = None,
+    all_dates: bool = False,
+    category: str | None = None,
+    status_filter: Literal["all", "pending", "completed"] | None = None,
+    keyword: str | None = Query(default=None, max_length=200),
+    mode: Literal["search", "compare"] | None = None,
+    session: Session = Depends(get_session),
+):
+    try:
+        anchor = today or date.today()
+        intent = parse_query(q, anchor)
+        if start_date is not None or end_date is not None:
+            intent.start_date, intent.end_date = start_date, end_date
+        if all_dates:
+            intent.start_date = intent.end_date = None
+        if category is not None:
+            if category not in CATEGORIES:
+                raise ValueError("不支持的类别")
+            intent.category = category
+        if status_filter is not None:
+            intent.status = status_filter
+        if keyword is not None:
+            intent.keyword = keyword.strip()
+        if mode is not None:
+            intent.mode = mode
+        if intent.mode == "compare" and intent.start_date is None and not all_dates:
+            intent.start_date = anchor - timedelta(days=anchor.weekday())
+            intent.end_date = intent.start_date + timedelta(days=6)
+        return search_and_compare(session, intent, anchor, offset_minutes)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
 
 
 @router.get("/backups")

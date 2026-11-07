@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button, Card, DatePicker, Form, Input, Modal, Select, Space, Typography, message } from 'antd'
 import dayjs, { Dayjs } from 'dayjs'
+import { useSearchParams } from 'react-router-dom'
+import { useSearchHighlight } from '../hooks/useSearchHighlight'
 import { apiRequest } from '../api/client'
 import { AgendaList } from '../components/AgendaList'
 import { ErrorPanel, LoadingPanel } from '../components/StatePanels'
@@ -16,8 +18,13 @@ const groups = [
 type PlanValues = { title: string; bucket: string; priority: string; notes?: string; plan_date: string }
 
 export function TodayPage() {
-  const [selectedDate, setSelectedDate] = useState<Dayjs>(dayjs())
+  const [params] = useSearchParams()
+  const requestedDate = params.get('date')
+  const validDate = requestedDate && /^\d{4}-\d{2}-\d{2}$/.test(requestedDate) && dayjs(requestedDate).format('YYYY-MM-DD') === requestedDate ? requestedDate : null
+  const [selectedDate, setSelectedDate] = useState<Dayjs>(() => dayjs(validDate ?? undefined))
   const [items, setItems] = useState<AgendaItem[] | null>(null)
+  useEffect(() => { if (validDate) setSelectedDate(dayjs(validDate)) }, [validDate])
+  useSearchHighlight(params.get('item') ? `agenda-${params.get('item')}` : null, Boolean(items))
   const [error, setError] = useState('')
   const [createOpen, setCreateOpen] = useState(false)
   const [editingItem, setEditingItem] = useState<AgendaItem | null>(null)
@@ -160,6 +167,7 @@ export function TodayPage() {
       {groups.map(([key, label]) => (
         <Card className={`agenda-group agenda-group-${key}`} title={<span className="agenda-group-title"><span className="group-dot" aria-hidden="true" />{label} · {grouped[key].length}</span>} key={key}>
           <AgendaList
+            highlightId={params.get('item')}
             items={grouped[key]}
             onToggleComplete={(item) => void toggleComplete(item)}
             onRescheduleTomorrow={key === 'completed' ? undefined : (item) => void tomorrow(item)}

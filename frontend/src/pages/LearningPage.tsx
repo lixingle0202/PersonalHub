@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Alert, Button, Card, Col, DatePicker, Form, Input, InputNumber, Modal, Progress, Row, Space, Tabs, Typography, message } from 'antd'
 import dayjs, { type Dayjs } from 'dayjs'
+import { useSearchParams } from 'react-router-dom'
+import { useSearchHighlight } from '../hooks/useSearchHighlight'
 import { apiRequest } from '../api/client'
 import { AILearningGenerator } from '../components/AILearningGenerator'
 import { ConfirmDangerButton } from '../components/ConfirmDangerButton'
@@ -43,9 +45,15 @@ function dailyTaskGroups(goal: LearningGoal): Array<[string, LearningTask[]]> {
 }
 
 export function LearningPage() {
+  const [params] = useSearchParams()
+  const requestedGoal = params.get('item')
+  const [learningTab, setLearningTab] = useState('plan')
+  const requestedTab = params.get('tab')
+  useEffect(() => { setLearningTab(requestedTab === 'sessions' || requestedTab === 'resources' ? requestedTab : 'plan') }, [requestedTab, requestedGoal])
   const [goals, setGoals] = useState<LearningGoal[] | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [detail, setDetail] = useState<LearningGoal | null>(null)
+  useSearchHighlight(params.get('task') ? `learning-task-${params.get('task')}` : params.get('record') ? `study-session-${params.get('record')}` : null, Boolean(detail && detail.id === requestedGoal))
   const [error, setError] = useState('')
   const [modal, setModal] = useState<Editor | null>(null)
   const [editingGoal, setEditingGoal] = useState<LearningGoal | null>(null)
@@ -78,10 +86,10 @@ export function LearningPage() {
       const data = await apiRequest<LearningGoal[]>('/learning/goals')
       if (version !== goalsVersion.current) return
       setGoals(data)
-      setSelectedId((current) => data.some((goal) => goal.id === current) ? current : data[0]?.id ?? null)
+      setSelectedId((current) => requestedGoal && data.some((goal) => goal.id === requestedGoal) ? requestedGoal : data.some((goal) => goal.id === current) ? current : data[0]?.id ?? null)
       setError('')
     } catch (reason) { if (version === goalsVersion.current) setError(reason instanceof Error ? reason.message : '读取失败') }
-  }, [])
+  }, [requestedGoal])
   const loadDetail = useCallback(async () => {
     const version = ++detailVersion.current
     setDetailError('')
@@ -306,7 +314,7 @@ export function LearningPage() {
       <div className="learning-day-header"><Typography.Title level={5}>{date}</Typography.Title>{date !== '未排期' ? <Button type="text" className="learning-day-add" aria-label={`添加 ${date} 学习任务`} onClick={() => openChildEditor('task', date)}>＋</Button> : null}</div>
       {tasks.length ? <div className="learning-task-list">{tasks.map((item) => {
         const section = detail.sections?.find((candidate) => candidate.id === item.section_id)
-        return <div className={`learning-task ${item.status === 'completed' ? 'record-complete' : ''}`} key={item.id}>
+        return <div id={`learning-task-${item.id}`} data-search-target={item.id === params.get('task')} className={`learning-task ${item.status === 'completed' ? 'record-complete' : ''}`} key={item.id}>
           <input type="checkbox" aria-label={`完成学习任务 ${item.title}`} checked={item.status === 'completed'} disabled={!item.agenda_id || Boolean(togglingTaskId)} onChange={() => void toggleTask(item)} />
           <div className="learning-task-content"><strong>{item.title}</strong>{item.details ? <span className="learning-task-details">{item.details}</span> : null}
             {section ? <div className="learning-task-stage"><span>学习阶段：</span><Button type="link" size="small" aria-label={`修改学习章节 ${section.name}`} onClick={() => openSectionEditor(section)}>{section.name}</Button><label><input type="checkbox" aria-label={`完成阶段 ${section.name}`} checked={section.is_completed} onChange={(event) => void toggleSection(section.id, event.target.checked)} /> 阶段完成</label></div> : null}
@@ -324,9 +332,9 @@ export function LearningPage() {
     <div className="page-actions"><Typography.Text type="secondary">从长期目标拆到章节和任务</Typography.Text><Space><AILearningGenerator initialTopic={detail?.name} initialObjective={detail?.goal} onImported={async (id) => { await loadGoals(); setSelectedId(id); if (id === selectedId) await loadDetail() }} /><ConfirmDangerButton label="清零全部学习计划" title="确认清零全部学习计划？" description="所有学习目标、任务和记录都会取消并从页面隐藏，可在回收站中恢复。" disabled={resetting || goals.length === 0} onConfirm={resetAllPlans} /><Button type="primary" onClick={openCreateGoal}>新建学习目标</Button></Space></div>
     <Row gutter={20}>
       <Col span={7}><Card title="学习目标"><div className="selectable-list">{goals.map((goal) => <button type="button" aria-label={`编辑学习目标 ${goal.name}`} disabled={editorBusy || savingProgress} key={goal.id} className={goal.id === selectedId ? 'selected' : ''} onClick={() => openGoalEditor(goal)}><strong>{goal.name}</strong><span>{goal.progress}% · 点击修改</span></button>)}</div></Card></Col>
-      <Col span={17}>{detailError ? <ErrorPanel message={detailError} onRetry={() => void loadDetail()} /> : selectedId && detail?.id !== selectedId ? <LoadingPanel /> : detail ? <Card title={detail.name} extra={<Space><Typography.Text type="secondary">{detail.progress_is_manual ? '手动进度' : '按章节计算'}</Typography.Text><InputNumber aria-label="学习进度" min={0} max={100} value={progressValue} onChange={(value) => setProgressValue(value ?? 0)} /><Typography.Text>%</Typography.Text><Button type="primary" loading={savingProgress} onClick={() => void saveProgress()}>保存进度</Button></Space>}><Typography.Paragraph>{detail.goal}</Typography.Paragraph><Typography.Text type="secondary">计划：{detail.start_date ?? '未设置'} 至 {detail.target_date ?? '未设置'} · 预计投入 {detail.estimated_minutes} 分钟</Typography.Text><Progress percent={detail.progress} /><FocusTimer goalId={detail.id} tasks={detail.tasks ?? []} /><Tabs items={[
+      <Col span={17}>{detailError ? <ErrorPanel message={detailError} onRetry={() => void loadDetail()} /> : selectedId && detail?.id !== selectedId ? <LoadingPanel /> : detail ? <Card title={detail.name} extra={<Space><Typography.Text type="secondary">{detail.progress_is_manual ? '手动进度' : '按章节计算'}</Typography.Text><InputNumber aria-label="学习进度" min={0} max={100} value={progressValue} onChange={(value) => setProgressValue(value ?? 0)} /><Typography.Text>%</Typography.Text><Button type="primary" loading={savingProgress} onClick={() => void saveProgress()}>保存进度</Button></Space>}><Typography.Paragraph>{detail.goal}</Typography.Paragraph><Typography.Text type="secondary">计划：{detail.start_date ?? '未设置'} 至 {detail.target_date ?? '未设置'} · 预计投入 {detail.estimated_minutes} 分钟</Typography.Text><Progress percent={detail.progress} /><FocusTimer goalId={detail.id} tasks={detail.tasks ?? []} /><Tabs activeKey={learningTab} onChange={setLearningTab} items={[
         { key: 'plan', label: '学习计划', children: planTab },
-        { key: 'sessions', label: '学习记录', children: <><div className="tab-actions"><Button onClick={() => openChildEditor('session')}>记录一次学习</Button></div>{(detail.sessions ?? []).map((item) => <Card size="small" key={item.id}><strong>{item.studied_on} · {item.actual_minutes} 分钟</strong><p>{item.notes}</p><Typography.Text type="secondary">下一步：{item.next_step || '未填写'}</Typography.Text></Card>)}</> },
+        { key: 'sessions', label: '学习记录', children: <><div className="tab-actions"><Button onClick={() => openChildEditor('session')}>记录一次学习</Button></div>{(detail.sessions ?? []).map((item) => <Card size="small" key={item.id} id={`study-session-${item.id}`} data-search-target={item.id === params.get('record')}><strong>{item.studied_on} · {item.actual_minutes} 分钟</strong><p>{item.notes}</p><Typography.Text type="secondary">下一步：{item.next_step || '未填写'}</Typography.Text></Card>)}</> },
         { key: 'resources', label: '笔记与资料', children: <><div className="tab-actions"><Button onClick={() => openChildEditor('resource')}>添加资料</Button></div>{(detail.resources ?? []).map((item) => <Card size="small" key={item.id}><a href={item.link} target="_blank" rel="noreferrer">{item.name}</a><p>{item.notes}</p></Card>)}</> },
       ]} /></Card> : <EmptyStatePanel description="选择或创建学习目标" />}</Col>
     </Row>

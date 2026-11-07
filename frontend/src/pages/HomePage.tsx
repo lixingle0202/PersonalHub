@@ -2,7 +2,8 @@ import { useCallback, useEffect, useState } from 'react'
 import { ArrowRightOutlined, CalendarOutlined, CheckOutlined, CoffeeOutlined, DeleteOutlined, EditOutlined, FlagOutlined, ReadOutlined } from '@ant-design/icons'
 import { Button, Card, Col, Input, Progress, Row, Space, Statistic, Typography, message } from 'antd'
 import dayjs from 'dayjs'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useSearchHighlight } from '../hooks/useSearchHighlight'
 import { apiRequest } from '../api/client'
 import { AgendaList } from '../components/AgendaList'
 import { DailyActivityCard } from '../components/DailyActivityCard'
@@ -15,8 +16,13 @@ const summaryMeta = {
 } as const
 
 export function HomePage() {
+  const [params] = useSearchParams()
   const today = dayjs().format('YYYY-MM-DD')
+  const requestedDate = params.get('date')
+  const requestedActivityDate = requestedDate && /^\d{4}-\d{2}-\d{2}$/.test(requestedDate) && dayjs(requestedDate).format('YYYY-MM-DD') === requestedDate ? requestedDate : null
   const [data, setData] = useState<HomeData | null>(null)
+  const activityDate = requestedActivityDate ?? data?.date ?? today
+  useSearchHighlight(params.get('note') ? `note-${params.get('note')}` : null, Boolean(data))
   const [error, setError] = useState('')
   const [note, setNote] = useState('')
   const [editingNote, setEditingNote] = useState<{ id: string; content: string } | null>(null)
@@ -109,7 +115,7 @@ export function HomePage() {
         <Col xs={24} sm={8}><Card className="summary-card"><span className="summary-icon summary-icon-green"><CheckOutlined aria-hidden="true" /></span><Statistic title="已经完成" value={data.stats.completed} suffix={<span className="stat-unit">项</span>} /><span className="summary-caption">每一小步，都算数</span></Card></Col>
         <Col xs={24} sm={8}><Card className="summary-card"><span className="summary-icon summary-icon-amber"><FlagOutlined aria-hidden="true" /></span><Statistic title="必须完成" value={data.stats.must} suffix={<span className="stat-unit">项</span>} /><span className="summary-caption">把精力放在重要的事上</span></Card></Col>
       </Row>
-      <DailyActivityCard initialDate={data.date} initialItems={data.daily_activities} />
+      <DailyActivityCard key={activityDate} initialDate={activityDate} initialItems={activityDate === data.date ? data.daily_activities : undefined} loadInitial={activityDate !== data.date} highlightId={params.get('activity')} />
       <Row gutter={[20, 20]} align="stretch" className="home-detail-grid">
         <Col xs={24} xl={15}>
           <Card title={<span className="card-title-icon"><CalendarOutlined aria-hidden="true" />今日计划</span>} extra={<Button type="link" onClick={() => navigate('/today')}>查看全部 <ArrowRightOutlined aria-hidden="true" /></Button>}>
@@ -138,7 +144,7 @@ export function HomePage() {
             </Space.Compact>
             <div className="note-list">
               {data.quick_notes.map((item) => (
-                <div className="note-row" key={item.id}>
+                <div id={`note-${item.id}`} data-search-target={item.id === params.get('note')} className="note-row" key={item.id}>
                   {editingNote?.id === item.id ? <>
                     <Input
                       aria-label="编辑备忘内容"

@@ -6,6 +6,7 @@ import { setLocalToken } from '../api/client'
 import { GlobalSearch } from '../components/GlobalSearch'
 import { quickCreateEndpoint, quickCreateTargets } from '../components/QuickCreate'
 import { SettingsPage } from './SettingsPage'
+import { searchPayload } from '../test/searchFixtures'
 
 function json(body: unknown, status = 200) {
   return Promise.resolve(new Response(JSON.stringify(body), {
@@ -36,11 +37,11 @@ describe('system-wide features', () => {
 
   it('filters removed modules from search and opens a retained result', async () => {
     const user = userEvent.setup()
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(() => json([
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(() => json(searchPayload([
       { id: 'p1', module: 'development', type: '项目', title: '个人中心', snippet: '本地应用', path: '/development?project=p1' },
       { id: 'game1', module: 'games', type: '游戏', title: '示例游戏', snippet: '已经退出', path: '/games?item=game1' },
       { id: 'g1', module: 'learning', type: '学习目标', title: 'Python 入门', snippet: '每天练习', path: '/learning?item=g1' },
-    ]))
+    ])))
     render(<MemoryRouter initialEntries={['/']}><GlobalSearch /><LocationProbe /></MemoryRouter>)
 
     await user.type(screen.getByRole('searchbox', { name: '全局搜索' }), '计划')
@@ -48,7 +49,7 @@ describe('system-wide features', () => {
     expect(await screen.findByText('Python 入门')).toBeInTheDocument()
     expect(screen.queryByText('个人中心')).not.toBeInTheDocument()
     expect(screen.queryByText('示例游戏')).not.toBeInTheDocument()
-    expect(fetchMock).toHaveBeenCalledWith('/api/v1/search?q=%E8%AE%A1%E5%88%92', expect.any(Object))
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/api/v1/search/assist?q=%E8%AE%A1%E5%88%92'), expect.any(Object))
     await user.click(screen.getByText('Python 入门'))
     expect(screen.getByTestId('location')).toHaveTextContent('/learning')
   })

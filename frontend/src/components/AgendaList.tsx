@@ -26,7 +26,7 @@ export function AgendaList({
   onEdit,
   onDelete,
   onClassify,
-  compact = false,
+  compact = false, highlightId,
 }: {
   items: AgendaItem[]
   onToggleComplete?: (item: AgendaItem) => void
@@ -36,6 +36,7 @@ export function AgendaList({
   onDelete?: (item: AgendaItem) => void
   onClassify?: (item: AgendaItem) => void
   compact?: boolean
+  highlightId?: string | null
 }) {
   if (!items.length) return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有计划事项" />
 
@@ -56,6 +57,7 @@ export function AgendaList({
         const link = sourceLink(item)
         return (
           <article
+            id={`agenda-${item.id}`} data-search-target={item.id === highlightId}
             className={`agenda-row ${item.status}`}
             key={item.id}
             draggable={Boolean(onReorder)}
