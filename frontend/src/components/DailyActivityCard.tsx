@@ -4,6 +4,7 @@ import { EditOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { apiRequest } from '../api/client'
 import type { ActivityCategory, DailyActivity } from '../types'
+import { useSearchHighlight } from '../hooks/useSearchHighlight'
 
 const EMPTY: DailyActivity[] = []
 const categories: Record<ActivityCategory, string> = {
@@ -12,10 +13,11 @@ const categories: Record<ActivityCategory, string> = {
 type NarrationResult = { items: DailyActivity[]; skipped: string[]; created: boolean }
 const errorText = (reason: unknown, fallback: string) => reason instanceof Error ? reason.message : fallback
 
-export function DailyActivityCard({ initialDate, initialItems = EMPTY }: { initialDate: string; initialItems?: DailyActivity[] }) {
+export function DailyActivityCard({ initialDate, initialItems = EMPTY, loadInitial = false, highlightId }: { initialDate: string; initialItems?: DailyActivity[]; loadInitial?: boolean; highlightId?: string | null }) {
   const today = dayjs().format('YYYY-MM-DD')
   const [date, setDate] = useState(initialDate)
   const [items, setItems] = useState(initialItems)
+  useSearchHighlight(highlightId ? `activity-${highlightId}` : null, items.some((item) => item.id === highlightId))
   const [drafts, setDrafts] = useState<Record<string, string>>({})
   const [skipped, setSkipped] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
@@ -38,7 +40,7 @@ export function DailyActivityCard({ initialDate, initialItems = EMPTY }: { initi
   }, [initialItems, initialDate]) // Parent reloads provide a fresh snapshot of today.
 
   useEffect(() => {
-    if (firstLoad.current) { firstLoad.current = false; return }
+    if (firstLoad.current) { firstLoad.current = false; if (!loadInitial) return }
     const controller = new AbortController()
     setItems([])
     setLoading(true)
@@ -130,7 +132,7 @@ export function DailyActivityCard({ initialDate, initialItems = EMPTY }: { initi
           {groupedItems.map((group) => <section className="daily-activity-group" aria-label={`${group.label}记录`} key={group.category}>
             <div className="daily-activity-group-heading"><Typography.Title level={5}>{group.label}</Typography.Title><Tag>{group.rows.length} 条</Tag></div>
             <ol className="daily-activity-list" aria-label={`${group.label}事项`}>
-          {group.rows.map((item) => <li key={item.id}>
+          {group.rows.map((item) => <li key={item.id} id={`activity-${item.id}`} data-search-target={item.id === highlightId}>
             <div className="daily-activity-content"><Typography.Text>{item.content}</Typography.Text>
               <details><summary>查看原始描述</summary><p>{item.source_text}</p></details>
             </div>

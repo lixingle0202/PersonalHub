@@ -16,6 +16,7 @@
 - `POST /api/v1/local-session/verify`
 - `GET /api/v1/home`
 - `GET /api/v1/search?q=`
+- `GET /api/v1/search/assist?q=&today=&offset_minutes=`：自然语言条件查询与计划实际对照，返回识别条件、结果、统计及来源。支持修改日期、类别、状态和关键词；统计区分未记录与零，手动学习记录不与专注计时相加。完整参数与口径见[自然语言搜索说明](natural-language-search.md)。
 - `GET /api/v1/settings`
 - `PATCH /api/v1/settings`
 

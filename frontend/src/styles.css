@@ -427,3 +427,4 @@ body.dark-mode .ant-tag.ant-tag-red:not(.ant-tag-disabled):is(.ant-tag-filled, .
 .public-auth-card .brand { margin-bottom: 26px; }
 .public-auth-card h2 { margin-bottom: 8px; }
 .public-auth-card .ant-btn-link { margin-top: 12px; padding-left: 0; }
+:where([data-search-target="true"]) { outline: 2px solid var(--primary-color, #806398); outline-offset: 4px; scroll-margin-block: 100px; }
