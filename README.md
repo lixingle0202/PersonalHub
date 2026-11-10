@@ -125,3 +125,7 @@ React + TypeScript + Ant Design · FastAPI + SQLAlchemy + SQLite · Ollama
 - [数据模型](docs/DATA_MODEL.md) · [接口说明](docs/API.md)
 - [测试用例](docs/TEST_CASES.md) · [热量估算说明](docs/calorie-estimates.md)
 - [v0.1.2 完整软件包验收](docs/releases/v0.1.2.md)
+
+## 许可证
+
+本项目原创部分采用 [MIT License](LICENSE)。第三方组件、Ollama 及模型文件保留各自的版权与许可，具体以其原始许可和分发包内附带的声明为准。
