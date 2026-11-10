@@ -2,6 +2,8 @@
 
 本文包含源码启动、AI 配置、测试和打包说明。产品功能概览见 [项目首页](../README.md)。
 
+开发依赖安装后，执行 `.\scripts\setup-dev-hooks.ps1` 启用提交前 Ruff、Prettier 与空白检查；安装方法、修正后重新暂存及 GitHub 检查说明见[自动格式化指南](code-style.md)。
+
 ## 完整本机版：登录与内置 AI
 
 分发 `PersonalHub.zip`，使用者完整解压后双击 `PersonalHub/PersonalHub.exe`，首次在登录页创建本机账号。包内包含 Ollama CPU 运行环境及 `qwen2.5:1.5b` 模型，学习与饮食 AI 均可离线使用，无需另装 Python、Node.js、Ollama 或下载模型。

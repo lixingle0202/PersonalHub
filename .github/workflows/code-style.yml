@@ -1,0 +1,54 @@
+name: Code style
+
+on:
+  pull_request:
+  push:
+    branches: [main, diet, learning, miniprogram]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: code-style-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changed-files:
+    name: Format changed files
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22.23.4'
+      - name: Install hook runner
+        run: python -m pip install pre-commit==4.7.0
+      - name: Select revision range
+        id: revisions
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          if [ "$EVENT_NAME" = pull_request ]; then
+            base="$PR_BASE"
+          elif [ -n "$PUSH_BEFORE" ] && [ "$PUSH_BEFORE" != 0000000000000000000000000000000000000000 ]; then
+            base="$PUSH_BEFORE"
+          else
+            base="$(git rev-parse HEAD^)"
+          fi
+          printf 'base=%s\n' "$base" >> "$GITHUB_OUTPUT"
+      - name: Check changed files
+        env:
+          BASE_REF: ${{ steps.revisions.outputs.base }}
+        run: python -m pre_commit run --from-ref "$BASE_REF" --to-ref HEAD --show-diff-on-failure
+      - name: Verify real commit behavior
+        run: python scripts/test-format-hooks.py
