@@ -1,0 +1,41 @@
+minimum_pre_commit_version: '4.7.0'
+default_install_hook_types: [pre-commit]
+exclude: |
+  (?x)(
+    (^|/)(node_modules|\.venv|dist|build|__pycache__)/
+    | ^(\.test-runtime|\.local-ai|\.public-hub-data|\.public-runtime|output|_auto|_src|_tmpapi|_tools)/
+    | ^backend/app/services/food_catalog_data\.py$
+    | (^|/)(pnpm-lock\.yaml|package-lock\.json)$
+    | ^docs/third-party/
+  )
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-merge-conflict
+      - id: check-json
+      - id: check-toml
+      - id: check-yaml
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+      - id: mixed-line-ending
+        args: [--fix=lf]
+        exclude: '\.(cmd|bat|ps1)$'
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.17.4
+    hooks:
+      - id: ruff-format
+        types_or: [python, pyi]
+
+  - repo: local
+    hooks:
+      - id: prettier
+        name: Prettier
+        language: node
+        language_version: '22.23.4'
+        additional_dependencies: [prettier@3.9.10]
+        entry: prettier --write --ignore-unknown
+        files: '\.([cm]?js|jsx|ts|tsx|json|css|scss|wxss|html|md|ya?ml)$'

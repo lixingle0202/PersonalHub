@@ -121,6 +121,7 @@ React + TypeScript + Ant Design · FastAPI + SQLAlchemy + SQLite · Ollama
 
 - [开发、运行与测试](docs/DEVELOPMENT.md)
 - [开发与提交规范](CONTRIBUTING.md)
+- [提交前自动格式化](docs/code-style.md)
 - [完整本机版使用说明](docs/FullDesktopGuide.txt)
 - [数据模型](docs/DATA_MODEL.md) · [接口说明](docs/API.md)
 - [测试用例](docs/TEST_CASES.md) · [热量估算说明](docs/calorie-estimates.md)

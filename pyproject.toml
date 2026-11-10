@@ -5,3 +5,13 @@ addopts = "-ra"
 
 [tool.coverage.run]
 source = ["backend/app"]
+
+[tool.ruff]
+required-version = "==0.17.4"
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
