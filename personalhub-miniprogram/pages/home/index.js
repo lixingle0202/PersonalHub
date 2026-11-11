@@ -40,6 +40,7 @@ Page({
       journalDate: d
     })
     this._journalLoaded = ''
+    this._offline = util.offlineTracker(this)
   },
 
   onShow() {
@@ -82,10 +83,18 @@ Page({
       .get('/home', { date: this.data.date })
       .then((d) => {
         util.cacheSet(cacheKey, d)
+        if (this._offline) this._offline.clear('home')
         this.applyHome(d)
       })
       .catch((e) => {
-        this.setData({ loading: false, error: (e && e.message) || '读取失败' })
+        // 连不上服务时回落到缓存，让用户至少能看今天有什么事
+        const cached = util.cacheGetStale(cacheKey)
+        if (cached) {
+          this.applyHome(cached, true)
+          if (this._offline) this._offline.mark('home', util.cacheStamp(cacheKey))
+        } else {
+          this.setData({ loading: false, error: (e && e.message) || '读取失败' })
+        }
       })
   },
 
@@ -379,6 +388,11 @@ Page({
           .catch((err) => util.toast(err.message || '删除失败'))
       }
     })
+  },
+
+  /** 离线横幅点击：跳到「数据与设置」改服务地址（换隧道域名时用） */
+  goServer() {
+    wx.switchTab({ url: '/pages/settings/index' })
   },
 
   retry() {

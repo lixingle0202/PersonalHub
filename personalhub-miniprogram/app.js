@@ -1,5 +1,6 @@
 const api = require('./utils/api')
 const util = require('./utils/util')
+const remind = require('./utils/remind')
 
 App({
   globalData: {
@@ -18,6 +19,12 @@ App({
     }
     const user = api.getUser()
     if (user) this.globalData.username = user.username || ''
+  },
+
+  /** 每次回到前台：先把当前登录账号同步给电脑端，再检查额度、不够就悄悄补 */
+  onShow() {
+    remind.syncAccount()
+    remind.autoTopup()
   },
 
   /** 拉取并缓存设置，同步主题 */

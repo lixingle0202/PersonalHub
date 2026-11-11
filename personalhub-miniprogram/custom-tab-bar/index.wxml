@@ -9,9 +9,12 @@
     data-index="{{index}}"
     bindtap="onTap"
   >
-    <view
-      class="tab-ic ic ic-{{item.icon}}-{{selected === index ? colorKey : (dark ? 'darkmuted' : 'muted')}}"
-    ></view>
+    <view class="tab-ic-wrap">
+      <view
+        class="tab-ic ic ic-{{item.icon}}-{{selected === index ? colorKey : (dark ? 'darkmuted' : 'muted')}}"
+      ></view>
+      <view wx:if="{{badges[index] > 0}}" class="tab-badge">{{badges[index]}}</view>
+    </view>
     <text
       class="tab-text"
       style="color:{{selected === index ? colorHex : (dark ? '#98a1b8' : '#7b8398')}}"

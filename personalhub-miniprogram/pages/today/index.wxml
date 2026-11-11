@@ -47,6 +47,13 @@
   </view>
 
   <block wx:else>
+    <view wx:if="{{offline}}" class="banner offline-banner" bindtap="goServer">
+      <text>{{offlineText}}（连不上服务，先看缓存）</text>
+      <text class="offline-fix">改服务地址</text>
+    </view>
+    <view wx:if="{{lateTip}}" class="banner due-banner">
+      <text>{{lateTip}}</text>
+    </view>
     <view wx:if="{{error}}" class="banner banner-danger error-inline" bindtap="retry">
       <text>{{error}}</text>
       <text class="error-retry">重试</text>

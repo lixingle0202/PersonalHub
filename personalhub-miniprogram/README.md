@@ -1,59 +1,58 @@
 # PersonalHub 微信小程序
 
-把网页版 PersonalHub（`https://visible-the-onto-officers.trycloudflare.com`）迁移成原生微信小程序。
-**与网页版共用同一个后端、同一账号、同一份数据**。
+把网页版 PersonalHub 迁移成原生微信小程序。
+**与网页版共用同一个后端、同一账号、同一份数据**，不是套壳 WebView，而是原生 WXML/WXSS 实现。
 
 ---
 
 ## 一、快速开始
 
 1. 打开「微信开发者工具」→ 导入项目 → 目录选择 `personalhub-miniprogram`
-2. 在微信开发者工具中填写自己的 AppID，或根据工具提供的测试模式导入。项目的 AppID 配置位于 `project.config.json`。
-3. 首次运行会进入登录页，输入你在网页版使用的账号密码即可
+2. 把 `project.config.json` 里的 `appid` 改成**你自己的**小程序 AppID（还没有就选「测试号」）
+3. 先按下面第二节把后端和接口地址配好，再点编译
+4. 首次运行会进入登录页，输入该后端上的账号密码（没有就点「没有账号？创建个人空间」注册）
 
-> 如果你没有账号，在登录页点「没有账号？创建个人空间」直接注册。
-
-接口地址以 `config.js` 的 `baseUrl` 为准。临时隧道地址可能失效，运行前请配置为自己的服务。本文保留原开发记录，本次分支上传只进行了语法和文件完整性检查，未重新完成真机与跨设备同步测试。
-
-请使用自己的测试账号注册或登录，不在公开仓库提供账号密码。
+> 数据存在**你自己的后端**里，与他人互不影响。仓库里不包含任何账号、密码或数据。
 
 ---
 
-## 二、接口地址与上线前必读
+## 二、接口地址配置
 
-接口地址在 `config.js`：
+后端地址在 `config.js`，也可以在**小程序内「数据与设置 → 服务地址」**里改（会存到本地，优先级高于 `config.js`）：
 
 ```js
 module.exports = {
-  baseUrl: 'http://127.0.0.1:8786',   // 本机联调（走代理）
+  baseUrl: 'http://127.0.0.1:8771',   // 本机联调
   debug: true,
   themeColors: [...]
 }
 ```
 
-| 场景 | baseUrl 怎么填 |
+| 场景 | 怎么填 |
 | --- | --- |
-| 本机联调（推荐） | 先启动后端（默认 `127.0.0.1:8765`），再 `node _tools/proxy.js`，`baseUrl` 保持 `http://127.0.0.1:8786` |
-| 线上 / 隧道 | 直接写 `https://你的域名`，不需要代理 |
+| 本机联调（推荐） | 起后端（`127.0.0.1:8770`）→ 起推送代理 `node _tools/wechat-notifier.js`（`8771`）→ `baseUrl` 保持 `http://127.0.0.1:8771` |
+| 只要业务功能、不要提醒 | 起后端（`8770`）→ `TARGET=http://127.0.0.1:8770 node _tools/proxy.js`（`8786`）→ `baseUrl` 填 `http://127.0.0.1:8786` |
+| 线上 / 隧道 | 直接写 `https://你的域名`，不需要本地代理 |
 | 正式发布 | **必须**是**已备案的 HTTPS 域名**，并在小程序后台「开发管理 → 服务器域名 → request 合法域名」中加入该域名 |
 
 ### 为什么本机要加一层代理
 
 开发者工具里 `wx.request` 会自动带 `Origin: https://servicewechat.com`，
-网页版后端的安全中间件把它判定为跨站请求，直接返回 `403 跨站请求被拒绝`
+后端的安全中间件把它判定为跨站请求，直接返回 `403 跨站请求被拒绝`
 （真机不会带这个头，所以只有模拟器需要这层代理）。
 
-`_tools/proxy.js` 只做一件事：删掉 `Origin` / `Referer` 再转发给后端，其余原样透传（含 `Set-Cookie`）。
+两个脚本都能解决，任选其一：
 
 ```bash
-# 终端 1：后端（网页版同一套程序）
-# 终端 2：代理
-node _tools/proxy.js
-# 需要转发到别的地址时
-TARGET=https://your-domain.com node _tools/proxy.js
+# 推荐：推送服务自带反向代理（会改回 Host、去掉 Origin），同时提供 /api/v1/wx/* 提醒接口
+node _tools/wechat-notifier.js          # 监听 8771 → 转发到 8770
+
+# 或者：只做纯代理，不含提醒功能
+node _tools/proxy.js                    # 监听 8786 → 转发到 8765（可用 TARGET/PORT 覆盖）
+TARGET=http://127.0.0.1:8770 PORT=8786 node _tools/proxy.js
 ```
 
-> 注意：`trycloudflare.com` 是临时隧道，域名会随机失效（本次联调期间就失效过一次），
+> 注意：`trycloudflare.com` 是临时隧道，域名每次重启都会变，
 > 不能写进小程序白名单，**能跑通不代表能发布**。上线只要后端落到自己的备案域名，改 `baseUrl` 一处即可。
 
 ### 登录态是怎么保持的
@@ -77,10 +76,11 @@ personalhub-miniprogram/
 ├── project.config.json              已关闭域名校验，导入即用
 ├── styles/icons.wxss                全部图标（SVG → base64，无图片文件）
 ├── utils/
-│   ├── api.js                       请求封装：Cookie 会话、写令牌、401 跳登录
-│   ├── util.js                      日期、月历网格、颜色、枚举
+│   ├── api.js                       请求封装：Cookie 会话、写令牌、bootstrap 令牌刷新
+│   ├── remind.js                    订阅消息：额度查询、授权、账号绑定、自动补充
+│   ├── util.js                      日期、月历网格、颜色、枚举、tabBar 显隐
 │   └── theme.js                     主题色/深色模式的读写
-├── custom-tab-bar/                  自定义底部导航
+├── custom-tab-bar/                  自定义底部导航（5 个入口，图标随主题色变化）
 └── pages/
     ├── login/                       登录 / 注册
     ├── home/                        首页总览
@@ -130,8 +130,10 @@ personalhub-miniprogram/
 
 - 所有请求都走 `utils/api.js` 的 `get/post/patch/put/del`，返回 Promise，失败抛 `Error`（消息已是后端返回的中文提示）。
 - 新增页面时记得在 `onShow` 里调用 `this.getTabBar().init(index, theme.current())` 同步导航高亮。
-- 图标如需新增：编辑 `_src/generate_icons.py` 里的 SVG path 重新生成 `styles/icons.wxss`，或在 wxss 里手写 `.ic-xxx` 类。
+- 图标如需新增：直接在 `styles/icons.wxss` 里手写 `.ic-xxx` 类（图标是内联 SVG 的 base64，不依赖图片文件）。
 - 列表项操作统一用 `wx.showActionSheet` / `wx.showModal`，弹层表单用 `.sheet` + `.mask` 组合。
+- 弹层打开时若在 tab 页，记得 `util.setTabBarHidden(true)`，关闭后 `setTabBarHidden(false)`：
+  自定义 tabBar 的层级高于页面内 fixed 元素，不隐藏会盖住弹层底部按钮。
 
 ---
 
@@ -140,4 +142,8 @@ personalhub-miniprogram/
 - 所有页面与接口参数已对着真实后端跑通（登录、议程增删改、完成/重开/顺延、结束今日、备忘增删改与转计划、设置、饮水、身体资料、购物清单生成、备份、学习目标与进度）。
 - **已在微信开发者工具（v2.02.2608080）里真机模拟器渲染验证**，并用 `miniprogram-automator` 自动走了一遍：登录 → 首页 → 今日计划 → 学习计划 → 饮食计划 → 数据与设置 → 换主题色 / 开深色模式 → 保存 → 回首页 → 打开新增弹层 → 恢复默认，逐屏截图确认。
 - 期间修掉的问题：状态栏与胶囊按钮压住自定义导航、标题换行、首页已完成项混排、深色模式正文不可见、深色+换色保存后不生效。
+- **未做**：真机（iOS/Android）验证与 iPhone 刘海/灵动岛适配实测（导航高度按 `statusBarHeight` + 胶囊位置计算，机型差异已考虑）。
 
+> 自定义导航（`navigationStyle: custom`）高度不写死，由 `utils/util.js` 的 `navMetrics()` 计算
+> `--sb`（状态栏）/ `--nav-h`（导航栏）/ `--cap`（胶囊避让宽度），随 `themeStyle` 一起注入页面根节点。
+> 新增页面若用 `.topbar`，直接用这三个变量即可，不要再用 `env(safe-area-inset-top)`（模拟器与不少机型上恒为 0）。

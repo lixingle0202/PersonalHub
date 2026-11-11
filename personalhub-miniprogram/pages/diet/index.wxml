@@ -36,6 +36,10 @@
   </view>
 
   <block wx:else>
+    <view wx:if="{{offline}}" class="banner offline-banner" bindtap="goServer">
+      <text>{{offlineText}}（连不上服务，先看缓存）</text>
+      <text class="offline-fix">改服务地址</text>
+    </view>
     <!-- 饮食日历 -->
     <block wx:if="{{tab === 'calendar'}}">
       <view class="card calendar-card">
@@ -428,7 +432,7 @@
     </scroll-view>
     <view class="sheet-foot">
       <view wx:if="{{mealForm.id}}" class="btn btn-danger" bindtap="deleteMeal">删除这餐</view>
-      <view class="btn btn-primary" bindtap="saveMeal">{{saving ? '保存中…' : '保存'}}</view>
+      <view class="btn btn-primary" bindtap="saveMeal">{{saving ? '保存中…' : (mealAppend ? '加进这一餐' : (mealForm.id ? '保存修改' : '保存这一顿'))}}</view>
     </view>
   </view>
 

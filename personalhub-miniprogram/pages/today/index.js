@@ -51,6 +51,7 @@ Page({
   onLoad() {
     const d = util.today()
     this.setData({ date: d, dateText: util.shortDate(d), isToday: true })
+    this._offline = util.offlineTracker(this)
   },
 
   onShow() {
@@ -80,9 +81,18 @@ Page({
       .get('/agenda', { date: this.data.date })
       .then((list) => {
         util.cacheSet(cacheKey, list || [])
+        if (this._offline) this._offline.clear('agenda')
         this.applyList(list)
       })
-      .catch((e) => this.setData({ loading: false, error: (e && e.message) || '读取失败' }))
+      .catch((e) => {
+        const cached = util.cacheGetStale(cacheKey)
+        if (cached) {
+          this.applyList(cached)
+          if (this._offline) this._offline.mark('agenda', util.cacheStamp(cacheKey))
+        } else {
+          this.setData({ loading: false, error: (e && e.message) || '读取失败' })
+        }
+      })
   },
 
   applyList(list) {
@@ -103,12 +113,23 @@ Page({
       const rows = items.filter((x) => (g.key === 'completed' ? x.done : x.bucket === g.key && !x.done))
       return { key: g.key, label: g.label, items: rows, count: rows.length }
     })
+    const remaining = items.filter((x) => !x.done).length
+    // 「今日计划」tab 角标 = 未完成项数；晚上 8 点后还没做完就在页面上提醒一句
+    try {
+      wx.setStorageSync('ph_badge_today', remaining)
+    } catch (e) {
+      /* 存不下就算了 */
+    }
+    const tb = typeof this.getTabBar === 'function' ? this.getTabBar() : null
+    if (tb && tb.setBadge) tb.setBadge(1, remaining)
+    const hour = new Date().getHours()
     this.setData({
       loading: false,
       error: '',
       groups: groups,
       total: items.length,
-      completed: items.filter((x) => x.done).length
+      completed: items.filter((x) => x.done).length,
+      lateTip: remaining > 0 && hour >= 20 ? '今天还有 ' + remaining + ' 项没完成，趁早收尾吧' : ''
     })
   },
 
@@ -392,6 +413,11 @@ Page({
   },
 
   noop() {},
+
+  /** 离线横幅点击：跳到「数据与设置」改服务地址（换隧道域名时用） */
+  goServer() {
+    wx.switchTab({ url: '/pages/settings/index' })
+  },
 
   retry() {
     this.load()

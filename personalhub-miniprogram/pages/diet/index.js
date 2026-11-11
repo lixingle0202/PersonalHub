@@ -90,6 +90,7 @@ Page({
       'shoppingForm.start_date': t,
       'shoppingForm.end_date': util.addDays(t, 7)
     })
+    this._offline = util.offlineTracker(this)
   },
 
   onShow() {
@@ -126,15 +127,24 @@ Page({
     const grid = util.monthGrid(this.data.year, this.data.month, 1)
     const start = grid.cells[0].date
     const end = grid.cells[grid.cells.length - 1].date
+    const cacheKey = 'diet_meals_' + start + '_' + end
     return api
       .get('/diet/meals', { start_date: start, end_date: end })
       .then((list) => {
         this._meals = list || []
+        util.cacheSet(cacheKey, this._meals)
+        if (this._offline) this._offline.clear('meals')
         this.setData({ title: grid.title })
         this.renderCalendar(grid.cells)
       })
       .catch((e) => {
-        this.setData({ error: (e && e.message) || '读取失败' })
+        const cached = util.cacheGetStale(cacheKey)
+        if (cached) {
+          this._meals = cached
+          if (this._offline) this._offline.mark('meals', util.cacheStamp(cacheKey))
+        } else {
+          this.setData({ error: (e && e.message) || '读取失败' })
+        }
         this.renderCalendar(grid.cells)
       })
   },
@@ -704,8 +714,18 @@ Page({
   loadDishes() {
     return api
       .get('/diet/dishes')
-      .then((list) => this.setData({ dishes: list || [] }))
-      .catch(() => {})
+      .then((list) => {
+        util.cacheSet('diet_dishes', list || [])
+        if (this._offline) this._offline.clear('dishes')
+        this.setData({ dishes: list || [] })
+      })
+      .catch(() => {
+        const cached = util.cacheGetStale('diet_dishes')
+        if (cached) {
+          this.setData({ dishes: cached })
+          if (this._offline) this._offline.mark('dishes', util.cacheStamp('diet_dishes'))
+        }
+      })
   },
 
   openDish() {
@@ -859,18 +879,31 @@ Page({
   /* ---------------- 每日记录 ---------------- */
   loadHealth(date) {
     if (!date) return Promise.resolve()
+    const cacheKey = 'diet_health_' + date
     return api
       .get('/diet/health/' + date)
-      .then((h) =>
-        this.setData({
-          health: {
-            water_ml: (h && h.water_ml) || 0,
-            weight_kg: h && h.weight_kg ? h.weight_kg : '',
-            feeling: (h && h.feeling) || ''
-          }
-        })
-      )
-      .catch(() => {})
+      .then((h) => {
+        util.cacheSet(cacheKey, h || {})
+        if (this._offline) this._offline.clear('health')
+        this.applyHealth(h)
+      })
+      .catch(() => {
+        const cached = util.cacheGetStale(cacheKey)
+        if (cached) {
+          this.applyHealth(cached)
+          if (this._offline) this._offline.mark('health', util.cacheStamp(cacheKey))
+        }
+      })
+  },
+
+  applyHealth(h) {
+    this.setData({
+      health: {
+        water_ml: (h && h.water_ml) || 0,
+        weight_kg: h && h.weight_kg ? h.weight_kg : '',
+        feeling: (h && h.feeling) || ''
+      }
+    })
   },
 
   loadProfile() {
@@ -937,27 +970,39 @@ Page({
     return api
       .get('/diet/shopping-lists')
       .then((list) => {
-        const lists = (list || []).map((l) => ({
-          id: l.id,
-          name: l.name,
-          start_date: l.start_date,
-          end_date: l.end_date,
-          items: (l.items || []).map((it) => ({
-            id: it.id,
-            name: it.ingredient_name,
-            quantity: it.quantity_text,
-            done: !!it.is_completed
-          }))
-        }))
-        // 正在编辑的物品若已被删掉，退出编辑态
-        let editId = this.data.itemEditId
-        if (editId) {
-          const still = lists.some((l) => (l.items || []).some((it) => it.id === editId))
-          if (!still) editId = ''
-        }
-        this.setData({ shoppingLists: lists, itemEditId: editId })
+        util.cacheSet('diet_shopping', list || [])
+        if (this._offline) this._offline.clear('shopping')
+        this.applyShopping(list)
       })
-      .catch(() => {})
+      .catch(() => {
+        const cached = util.cacheGetStale('diet_shopping')
+        if (cached) {
+          this.applyShopping(cached)
+          if (this._offline) this._offline.mark('shopping', util.cacheStamp('diet_shopping'))
+        }
+      })
+  },
+
+  applyShopping(list) {
+    const lists = (list || []).map((l) => ({
+      id: l.id,
+      name: l.name,
+      start_date: l.start_date,
+      end_date: l.end_date,
+      items: (l.items || []).map((it) => ({
+        id: it.id,
+        name: it.ingredient_name,
+        quantity: it.quantity_text,
+        done: !!it.is_completed
+      }))
+    }))
+    // 正在编辑的物品若已被删掉，退出编辑态
+    let editId = this.data.itemEditId
+    if (editId) {
+      const still = lists.some((l) => (l.items || []).some((it) => it.id === editId))
+      if (!still) editId = ''
+    }
+    this.setData({ shoppingLists: lists, itemEditId: editId })
   },
 
   openShopping() {
@@ -1251,6 +1296,11 @@ Page({
     this.setData({ tab: tab })
     if (tab === 'shopping') this.loadShopping()
     if (tab === 'health') this.loadHealth(this.data.selectedDate)
+  },
+
+  /** 离线横幅点击：跳到「数据与设置」改服务地址（换隧道域名时用） */
+  goServer() {
+    wx.switchTab({ url: '/pages/settings/index' })
   },
 
   retry() {

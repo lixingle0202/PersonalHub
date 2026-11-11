@@ -12,7 +12,8 @@ Page({
       error: '',
       loading: false,
       showPwd: false,
-      agreed: false
+      agreed: false,
+      serverUrl: ''
     },
     theme.data()
   ),
@@ -26,8 +27,13 @@ Page({
   },
 
   onShow() {
-    this.setData(theme.data())
+    this.setData(Object.assign({ serverUrl: api.getBaseUrl() }, theme.data()))
     theme.applyNav(theme.current())
+  },
+
+  /** 连不上服务时从登录页也能改地址 */
+  goServer() {
+    wx.switchTab({ url: '/pages/settings/index' })
   },
 
   onInput(e) {
@@ -99,6 +105,10 @@ Page({
     auth
       .then(() => {
         const app = getApp()
+        // 登录后马上把「这个微信号在用哪个账号」同步给电脑端，提醒才不会推成别人的数据
+        try {
+          require('../../utils/remind').syncAccount(true)
+        } catch (e) {}
         return app.syncSettings().catch(() => null)
       })
       .then(() => {

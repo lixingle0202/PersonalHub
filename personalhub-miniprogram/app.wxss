@@ -371,6 +371,7 @@ view, text, scroll-view, input, textarea, button { box-sizing: border-box; }
   max-height: 88vh;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
   box-shadow: 0 -12rpx 60rpx rgba(16, 22, 38, 0.18);
 }
 .sheet-head {
@@ -381,8 +382,25 @@ view, text, scroll-view, input, textarea, button { box-sizing: border-box; }
   padding-bottom: 18rpx;
 }
 .sheet-title { font-size: 32rpx; font-weight: 650; letter-spacing: -0.6rpx; }
-.sheet-body { overflow-y: auto; display: flex; flex-direction: column; gap: 20rpx; padding: 4rpx 0 8rpx; }
-.sheet-foot { display: flex; gap: 16rpx; padding-top: 20rpx; }
+.sheet-body {
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+  padding: 4rpx 0 8rpx;
+  /* 关键：scroll-view 作为 flex 子项必须能收缩，否则内容一多会把底部按钮挤出屏幕 */
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.sheet-foot {
+  display: flex;
+  gap: 16rpx;
+  padding-top: 20rpx;
+  margin-top: 4rpx;
+  flex: 0 0 auto;
+  border-top: 1rpx solid var(--line);
+  background: var(--surface);
+}
 .sheet-foot .btn { flex: 1; }
 
 /* 分段控制 */
@@ -427,4 +445,31 @@ view, text, scroll-view, input, textarea, button { box-sizing: border-box; }
   border-color: var(--primary-tint);
   color: var(--primary-readable);
   font-weight: 600;
+}
+
+/* 离线兜底横幅：琥珀色（.banner 默认色），与内容留出间距 */
+.offline-banner {
+  margin-bottom: 20rpx;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12rpx;
+}
+
+/* 横幅右侧的「改服务地址」动作 */
+.offline-fix {
+  flex-shrink: 0;
+  padding: 4rpx 14rpx;
+  border-radius: 999rpx;
+  background: rgba(0, 0, 0, 0.06);
+  font-size: 22rpx;
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+/* 到期/未完成提醒横幅：醒目但非报错 */
+.due-banner {
+  margin-bottom: 20rpx;
+  flex-shrink: 0;
 }

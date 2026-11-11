@@ -17,6 +17,7 @@ Component({
     hidden: false,
     colorHex: '#5b6cff',
     colorKey: 't-blue',
+    badges: {},
     list: [
       { path: '/pages/home/index', text: '首页总览', icon: 'home' },
       { path: '/pages/today/index', text: '今日计划', icon: 'clock' },
@@ -29,13 +30,32 @@ Component({
   methods: {
     init(selected, theme) {
       const color = (theme && theme.color) || '#5b6cff'
+      // 每个页面都有独立的 tabBar 实例，角标统一从本地存储恢复
+      let badges = {}
+      try {
+        const learning = Number(wx.getStorageSync('ph_badge_learning') || 0)
+        const todayN = Number(wx.getStorageSync('ph_badge_today') || 0)
+        if (learning > 0) badges['2'] = learning
+        if (todayN > 0) badges['1'] = todayN
+      } catch (e) {
+        /* 读不到就没有角标 */
+      }
       this.setData({
         selected: selected || 0,
         dark: !!theme && theme.mode === 'dark',
         hidden: false,
         colorHex: color,
-        colorKey: COLOR_KEYS[String(color).toLowerCase()] || 't-blue'
+        colorKey: COLOR_KEYS[String(color).toLowerCase()] || 't-blue',
+        badges: badges
       })
+    },
+
+    /** 某个 tab 显示红色角标数字（index 从 0 起，0 表示隐藏） */
+    setBadge(index, count) {
+      const n = Math.max(0, Number(count) || 0)
+      const patch = {}
+      patch['badges[' + index + ']'] = n > 0 ? (n > 99 ? '99+' : n) : 0
+      this.setData(patch)
     },
 
     /**

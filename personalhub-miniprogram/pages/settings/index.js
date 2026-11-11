@@ -1,6 +1,7 @@
 const api = require('../../utils/api')
 const util = require('../../utils/util')
 const theme = require('../../utils/theme')
+const remind = require('../../utils/remind')
 const config = require('../../config')
 
 /* ---------- 颜色换算（色环用） ---------- */
@@ -95,7 +96,7 @@ Page({
       loading: true,
       saving: false,
       username: '',
-      baseUrl: config.baseUrl,
+      baseUrl: api.getBaseUrl(),
       version: '0.1.0',
 
       settings: {
@@ -111,7 +112,18 @@ Page({
       showWheel: false,
       wheelCursor: null,
       backups: [],
-      backingUp: false
+      backingUp: false,
+
+      /* 服务地址（换隧道域名时直接在手机上改，不用重新上传版本） */
+      serverUrl: '',
+      serverDefault: '',
+      serverCustom: false,
+      serverTesting: false,
+      serverHint: '',
+      // 微信提醒：本机是否已授权 + 剩余可收条数
+      remindOn: remind.isOn(),
+      quotaLeft: 0,
+      needLogin: false
     },
     theme.data()
   ),
@@ -121,12 +133,25 @@ Page({
     theme.applyNav(theme.current())
     const tb = typeof this.getTabBar === 'function' ? this.getTabBar() : null
     if (tb) tb.init(4, theme.current())
+
+    const user = api.getUser() || {}
+    this.setData({
+      username: user.username || '',
+      version: user.version || '0.1.0',
+      serverUrl: api.getBaseUrl(),
+      serverDefault: api.normalizeBase(config.baseUrl),
+      serverCustom: api.isCustomBaseUrl(),
+      baseUrl: api.getBaseUrl()
+    })
+
+    // 未登录（或服务连不上被踢回登录页）：只展示「服务地址」卡，不强行跳走，
+    // 否则连不上服务时用户没法改地址，直接卡死。
     if (!api.isLoggedIn()) {
-      wx.reLaunch({ url: '/pages/login/index' })
+      this.setData({ loading: false, needLogin: true })
       return
     }
-    const user = api.getUser() || {}
-    this.setData({ username: user.username || '', version: user.version || '0.1.0' })
+    this.setData({ needLogin: false, remindOn: remind.isOn() })
+    if (remind.isOn()) remind.quota().then((n) => this.setData({ quotaLeft: n }))
     this.load()
     if (this.data.showWheel) {
       wx.nextTick(() => this.measureWheel())
@@ -338,6 +363,115 @@ Page({
         this.setData({ saving: false })
         util.toast(e.message || '保存失败')
       })
+  },
+
+  /** 未登录时的「去登录」 */
+  goLogin() {
+    wx.reLaunch({ url: '/pages/login/index' })
+  },
+
+  /* ---------------- 消息提醒 ---------------- */
+
+  /** 开启/补充微信提醒（与学习页常驻条同一流程） */
+  openRemind() {
+    remind.subscribe().then((ok) => {
+      this.setData({ remindOn: remind.isOn() })
+      if (ok) remind.quota().then((n) => this.setData({ quotaLeft: n }))
+    })
+  },
+
+  /* ---------------- 服务地址 ---------------- */
+  onServerInput(e) {
+    this.setData({ serverUrl: e.detail.value, serverHint: '' })
+  },
+
+  /** 只测试不保存 */
+  testServer() {
+    if (this.data.serverTesting) return
+    const url = api.normalizeBase(this.data.serverUrl || this.data.serverDefault)
+    if (!url) {
+      util.toast('请先填写地址')
+      return
+    }
+    this.setData({ serverTesting: true, serverHint: '正在连接 ' + url })
+    api.probe(url).then((r) => {
+      if (r.ok) {
+        this.setData({
+          serverTesting: false,
+          serverHint: '连接成功（' + r.status + '，' + r.ms + 'ms）'
+        })
+        util.toast('连得上，可以保存', 'success')
+      } else {
+        this.setData({ serverTesting: false, serverHint: '连不上：' + (r.reason || '未知原因') })
+        util.toast('连不上，换一个地址试试')
+      }
+    })
+  },
+
+  /** 保存并切换：先探测，探不通给二次确认 */
+  saveServer() {
+    if (this.data.serverTesting) return
+    const url = api.normalizeBase(this.data.serverUrl)
+    const doSave = () => {
+      const applied = api.setBaseUrl(url)
+      // 换了地址之后会话可能失效：试拉一次 bootstrap，401 会自己跳登录页
+      api
+        .bootstrap()
+        .then(() => {
+          this.setData({
+            serverUrl: applied,
+            serverCustom: api.isCustomBaseUrl(),
+            baseUrl: applied,
+            serverHint: applied === this.data.serverDefault ? '已恢复默认地址' : '已切换到 ' + applied
+          })
+          util.toast('服务地址已切换', 'success')
+          wx.reLaunch({ url: '/pages/home/index' })
+        })
+        .catch((e) => {
+          this.setData({
+            serverUrl: applied,
+            serverCustom: api.isCustomBaseUrl(),
+            baseUrl: applied
+          })
+          if (e && e.unauthorized) {
+            util.toast('地址通，但会话失效，请重新登录')
+            api.clearAuth()
+            wx.reLaunch({ url: '/pages/login/index' })
+          } else {
+            util.toast(e.message || '切换后连接失败')
+          }
+        })
+    }
+
+    if (!url) {
+      this.resetServer()
+      return
+    }
+    this.setData({ serverTesting: true, serverHint: '正在连接 ' + url })
+    api.probe(url).then((r) => {
+      this.setData({ serverTesting: false })
+      if (r.ok) {
+        doSave()
+        return
+      }
+      wx.showModal({
+        title: '这个地址连不上',
+        content: (r.reason || '请求失败') + '\n仍然保存吗？保存后可能打不开数据。',
+        confirmText: '仍然保存',
+        cancelText: '取消',
+        confirmColor: '#c9455a',
+        success: (m) => {
+          if (m.confirm) doSave()
+          else this.setData({ serverHint: '已取消，当前地址未改变' })
+        }
+      })
+    })
+  },
+
+  resetServer() {
+    const def = api.resetBaseUrl()
+    this.setData({ serverUrl: def, serverCustom: false, baseUrl: def, serverHint: '已恢复为内置默认地址（无需重启）' })
+    util.toast('已恢复默认地址', 'success')
   },
 
   /* ---------------- 备份 ---------------- */

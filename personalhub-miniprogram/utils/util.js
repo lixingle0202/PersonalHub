@@ -228,6 +228,56 @@ function cacheGet(key, ttl) {
   }
 }
 
+/** 无视过期时间读缓存：断网兜底时用（宁可给旧数据，也不给白屏+报错） */
+function cacheGetStale(key) {
+  try {
+    const box = wx.getStorageSync(CACHE_PREFIX + key)
+    if (!box || !box.t) return null
+    return box.v
+  } catch (e) {
+    return null
+  }
+}
+
+/** 缓存写入时间文案，如「11-07 21:30」；没有缓存返回空串 */
+function cacheStamp(key) {
+  try {
+    const box = wx.getStorageSync(CACHE_PREFIX + key)
+    if (!box || !box.t) return ''
+    const d = new Date(box.t)
+    return pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes())
+  } catch (e) {
+    return ''
+  }
+}
+
+/**
+ * 页面离线状态汇总：某块数据回落到缓存就 mark，拉到最新就 clear。
+ * 任一块处于离线态时，页面顶部横幅显示「离线数据 · 更新于 最早的那次缓存时间」。
+ */
+function offlineTracker(page) {
+  const marks = {}
+  const sync = () => {
+    const stamps = Object.keys(marks)
+      .map((k) => marks[k])
+      .sort()
+    page.setData({
+      offline: stamps.length > 0,
+      offlineText: stamps.length ? '离线数据 · 更新于 ' + stamps[0] : ''
+    })
+  }
+  return {
+    mark(key, stamp) {
+      marks[key] = stamp || '上次使用'
+      sync()
+    },
+    clear(key) {
+      delete marks[key]
+      sync()
+    }
+  }
+}
+
 /** 打开弹层时收起自定义 tabBar（它的层级高于弹层，会盖住底部按钮） */
 function setTabBarHidden(hidden) {
   const pages = typeof getCurrentPages === 'function' ? getCurrentPages() : []
@@ -256,6 +306,9 @@ module.exports = {
   uuid,
   cacheSet,
   cacheGet,
+  cacheGetStale,
+  cacheStamp,
+  offlineTracker,
   setTabBarHidden,
   BUCKETS,
   PRIORITIES,

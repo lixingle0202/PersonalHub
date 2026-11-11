@@ -70,6 +70,7 @@
 
     <view class="login-foot">
       <text class="tiny">与电脑版共用同一账号与数据</text>
+      <text class="tiny login-server" catchtap="goServer">服务地址：{{serverUrl}}</text>
       <text class="tiny">© PersonalHub</text>
     </view>
   </view>

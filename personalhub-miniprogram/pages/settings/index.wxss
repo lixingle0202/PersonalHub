@@ -203,6 +203,31 @@
   height: 88rpx;
 }
 
+/* ---------- 服务地址 ---------- */
+.server-flag {
+  padding: 4rpx 12rpx;
+  border-radius: 999rpx;
+  background: rgba(91, 108, 255, 0.12);
+  color: var(--primary, #5b6cff);
+}
+
+.server-hint {
+  display: block;
+  margin: 6rpx 0;
+  color: var(--primary, #5b6cff);
+  word-break: break-all;
+}
+
+.server-actions {
+  margin-top: 16rpx;
+  flex-wrap: wrap;
+}
+
+.server-actions .btn {
+  flex: 1;
+  justify-content: center;
+}
+
 .foot-note {
   display: flex;
   justify-content: center;

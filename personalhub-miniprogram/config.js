@@ -12,13 +12,16 @@
  *    （去掉 Origin/Referer 再转发），即下面的 8786 端口。
  */
 module.exports = {
-  // 后端地址，末尾不要带斜杠
-  // 本机联调：先 `node _tools/proxy.js`（转发到 127.0.0.1:8765），此处保持 8786
-  // 线上/隧道：直接写 https://你的域名，并注释掉代理这一步
-  baseUrl: 'https://requires-spam-payments-sustainability.trycloudflare.com',
+  // 后端地址，末尾不要带斜杠。请改成你自己的地址：
+  //   本机联调：http://127.0.0.1:8771（先启动 _tools/wechat-notifier.js）
+  //   线上/隧道：https://你的域名（已备案的 HTTPS 域名）
+  baseUrl: 'http://127.0.0.1:8771',
 
   // 是否在小程序里打印接口日志，便于排查
   debug: true,
+
+  // 订阅消息模板 id（到期提醒推送用）。留空则由电脑端推送服务自动发现。
+  wechatTmplId: '',
 
   // 主题色预设（与网页版一致）
   themeColors: [

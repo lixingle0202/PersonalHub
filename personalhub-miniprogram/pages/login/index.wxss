@@ -131,3 +131,9 @@
   text-align: center;
   word-break: break-all;
 }
+
+.login-server {
+  text-decoration: underline;
+  opacity: 0.85;
+  max-width: 100%;
+}

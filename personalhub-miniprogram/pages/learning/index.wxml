@@ -44,6 +44,24 @@
   </view>
 
   <block wx:else>
+    <view wx:if="{{offline}}" class="banner offline-banner" bindtap="goServer">
+      <text>{{offlineText}}（连不上服务，先看缓存）</text>
+      <text class="offline-fix">改服务地址</text>
+    </view>
+    <view wx:if="{{dueBanner}}" class="banner banner-danger due-banner">
+      <view class="due-row">
+        <text class="due-text">{{dueBanner}}</text>
+        <view class="btn btn-sm due-subscribe" bindtap="subscribeDueRemind">{{remindOn ? '补充额度' : '微信提醒我'}}</view>
+      </view>
+    </view>
+    <!-- 没有临期计划时也给个常驻入口：不必等到最后两天才能授权 -->
+    <view wx:if="{{!dueBanner && goals.length}}" class="remind-tip" bindtap="subscribeDueRemind">
+      <view class="remind-main">
+        <text class="remind-title">{{remindOn ? '微信提醒已开启' : '开启微信提醒'}}</text>
+        <text class="tiny">{{remindOn ? '计划和今日任务都会单独提醒' + (quotaLeft ? '，还可收 ' + quotaLeft + ' 条' : '') : '授权一次，全部计划和今日任务自动提醒'}}</text>
+      </view>
+      <view class="remind-btn">{{remindOn ? '补充额度' : '开启'}}</view>
+    </view>
     <scroll-view wx:if="{{goals.length}}" scroll-x class="hscroll goal-scroll">
       <view
         wx:for="{{goals}}"
@@ -154,9 +172,15 @@
             <view class="task-main">
               <text class="task-title">{{task.title}}</text>
               <text wx:if="{{task.details}}" class="tiny task-details">{{task.details}}</text>
-              <text wx:if="{{task.minutes}}" class="tiny">预计 {{task.minutes}} 分钟</text>
+              <view class="task-meta-line">
+                <text wx:if="{{task.time_text}}" class="time-chip">{{task.time_text}}</text>
+                <text wx:if="{{task.minutes}}" class="tiny">预计 {{task.minutes}} 分钟</text>
+              </view>
             </view>
-            <view class="task-del" data-id="{{task.id}}" bindtap="deleteTask">
+            <view class="task-edit" data-id="{{task.id}}" catchtap="editTask">
+              <view class="ic ic-edit-muted ic-xs"></view>
+            </view>
+            <view class="task-del" data-id="{{task.id}}" catchtap="deleteTask">
               <view class="ic ic-trash-muted ic-xs"></view>
             </view>
           </view>
@@ -256,7 +280,7 @@
   <view wx:if="{{sheet === 'task'}}" class="mask" bindtap="closeSheet"></view>
   <view wx:if="{{sheet === 'task'}}" class="sheet" catchtap="noop">
     <view class="sheet-head">
-      <text class="sheet-title">添加学习任务</text>
+      <text class="sheet-title">{{taskForm.id ? '编辑学习任务' : '添加学习任务'}}</text>
       <view class="ic ic-close-muted ic-sm" bindtap="closeSheet"></view>
     </view>
     <scroll-view scroll-y class="sheet-body">
@@ -280,7 +304,28 @@
           <input class="input" type="number" value="{{taskForm.estimated_minutes}}" data-key="estimated_minutes" bindinput="onTaskInput" />
         </view>
       </view>
-      <view class="field">
+      <view class="field-row">
+        <view class="field grow">
+          <text class="field-label">开始时间</text>
+          <view class="picker-box time-box">
+            <picker mode="time" value="{{taskForm.start_time || '09:00'}}" data-form="taskForm" data-key="start_time" bindchange="pickField">
+              <view class="time-val {{taskForm.start_time ? '' : 'time-empty'}}">{{taskForm.start_time || '未设置'}}</view>
+            </picker>
+            <text wx:if="{{taskForm.start_time}}" class="time-clear" data-key="start_time" catchtap="clearTaskTime">清除</text>
+          </view>
+        </view>
+        <view class="field grow">
+          <text class="field-label">结束时间</text>
+          <view class="picker-box time-box">
+            <picker mode="time" value="{{taskForm.end_time || '18:00'}}" data-form="taskForm" data-key="end_time" bindchange="pickField">
+              <view class="time-val {{taskForm.end_time ? '' : 'time-empty'}}">{{taskForm.end_time || '未设置'}}</view>
+            </picker>
+            <text wx:if="{{taskForm.end_time}}" class="time-clear" data-key="end_time" catchtap="clearTaskTime">清除</text>
+          </view>
+        </view>
+      </view>
+      <text class="tiny">填了时间就按这个时间提醒：开始时间弹「开始」，结束前 30 分钟弹「快到期」；不填则按「数据与设置」里的默认工作时间。</text>
+      <view wx:if="{{!taskForm.id}}" class="field">
         <text class="field-label">优先级</text>
         <view class="chip-row">
           <view
@@ -292,11 +337,11 @@
           >{{item.label}}</view>
         </view>
       </view>
-      <text class="tiny">添加后会自动出现在「今日计划」里，并从今日计划同步完成状态。</text>
+      <text class="tiny">{{taskForm.id ? '改完后「今日计划」里的同一条任务会同步更新。' : '添加后会自动出现在「今日计划」里，并从今日计划同步完成状态。'}}</text>
     </scroll-view>
     <view class="sheet-foot">
       <view class="btn btn-ghost" bindtap="closeSheet">取消</view>
-      <view class="btn btn-primary" bindtap="submitSheet">{{saving ? '保存中…' : '添加任务'}}</view>
+      <view class="btn btn-primary" bindtap="submitSheet">{{saving ? '保存中…' : (taskForm.id ? '保存修改' : '添加任务')}}</view>
     </view>
   </view>
 

@@ -214,6 +214,17 @@
   line-height: 1.6;
 }
 
+.task-edit {
+  width: 44rpx;
+  height: 44rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.6;
+  flex: none;
+  margin-right: 10rpx;
+}
+
 .task-del {
   width: 44rpx;
   height: 44rpx;
@@ -276,6 +287,22 @@
 .notes-input { min-height: 110rpx; }
 
 .field-row { display: flex; gap: 16rpx; }
+
+/* 开始/结束时间：picker 撑满左侧，右侧留一个「清除」 */
+.time-box { gap: 10rpx; }
+.time-box picker { flex: 1 1 auto; min-width: 0; }
+.time-val { font-size: 27rpx; color: var(--text); }
+.time-empty { color: var(--text-3); }
+.time-clear { flex: none; font-size: 22rpx; color: var(--text-3); padding: 4rpx 8rpx; }
+
+.task-meta-line { display: flex; align-items: center; flex-wrap: wrap; gap: 12rpx; }
+.time-chip {
+  font-size: 21rpx;
+  color: var(--primary, #2f9c74);
+  background: rgba(47, 156, 116, 0.12);
+  border-radius: 8rpx;
+  padding: 2rpx 10rpx;
+}
 
 .chip-row {
   display: flex;
@@ -504,4 +531,59 @@
   margin-top: 14rpx;
   line-height: 1.6;
   opacity: 0.8;
+}
+
+/* 到期横幅：文案 + 「微信提醒我」按钮一行放下 */
+.due-row {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  width: 100%;
+}
+
+.due-text {
+  flex: 1;
+  line-height: 1.5;
+}
+
+.due-subscribe {
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.22);
+  color: inherit;
+  font-size: 22rpx;
+  padding: 8rpx 18rpx;
+}
+
+/* 到期提醒常驻入口（没有临期计划时显示） */
+.remind-tip {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  padding: 18rpx 22rpx;
+  border-radius: 20rpx;
+  background: rgba(47, 107, 255, 0.06);
+  border: 1rpx solid rgba(47, 107, 255, 0.16);
+}
+
+.remind-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4rpx;
+  min-width: 0;
+}
+
+.remind-title {
+  font-size: 26rpx;
+  font-weight: 600;
+}
+
+.remind-btn {
+  flex-shrink: 0;
+  font-size: 24rpx;
+  color: #2f6bff;
+  font-weight: 600;
+  padding: 8rpx 20rpx;
+  border-radius: 999rpx;
+  background: rgba(47, 107, 255, 0.1);
 }

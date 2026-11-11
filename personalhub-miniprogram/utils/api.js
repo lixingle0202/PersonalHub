@@ -9,7 +9,8 @@ const KEYS = {
   session: 'ph_session',
   token: 'ph_token',
   user: 'ph_user',
-  settings: 'ph_settings'
+  settings: 'ph_settings',
+  baseUrl: 'ph_base_url'
 }
 
 const COOKIE_NAME = 'personalhub_public_session'
@@ -17,8 +18,46 @@ const COOKIE_NAME = 'personalhub_public_session'
 let mem = { session: '', token: '' }
 let reloginLock = false
 
+/** 规范化地址：补 https://、去空格和末尾斜杠 */
+function normalizeBase(url) {
+  let v = String(url || '').trim()
+  if (!v) return ''
+  if (!/^https?:\/\//i.test(v)) v = 'https://' + v
+  return v.replace(/\/+$/, '')
+}
+
+/** 当前生效的服务地址：本地设置优先，其次 config.js 里的默认值 */
+function getBaseUrl() {
+  let saved = ''
+  try {
+    saved = wx.getStorageSync(KEYS.baseUrl) || ''
+  } catch (e) {
+    saved = ''
+  }
+  return normalizeBase(saved) || normalizeBase(config.baseUrl)
+}
+
+function setBaseUrl(url) {
+  const v = normalizeBase(url)
+  if (!v) wx.removeStorageSync(KEYS.baseUrl)
+  else wx.setStorageSync(KEYS.baseUrl, v)
+  return v
+}
+
+function resetBaseUrl() {
+  try {
+    wx.removeStorageSync(KEYS.baseUrl)
+  } catch (e) {}
+  return normalizeBase(config.baseUrl)
+}
+
+/** 是否用了自定义地址（与 config.js 默认值不同） */
+function isCustomBaseUrl() {
+  return getBaseUrl() !== normalizeBase(config.baseUrl)
+}
+
 function base() {
-  return String(config.baseUrl || '').replace(/\/+$/, '')
+  return getBaseUrl()
 }
 
 function log() {
@@ -332,6 +371,31 @@ function saveSettings(s) {
   wx.setStorageSync(KEYS.settings, s || {})
 }
 
+/** 探测某个地址是否连得上：能收到任何 HTTP 响应就算通（401/404 也算通） */
+function probe(url, timeout) {
+  const target = normalizeBase(url)
+  return new Promise((resolve) => {
+    if (!target) {
+      resolve({ ok: false, reason: '地址为空' })
+      return
+    }
+    const started = Date.now()
+    wx.request({
+      url: target + '/api/v1/public/bootstrap',
+      method: 'GET',
+      header: { Accept: 'application/json' },
+      timeout: timeout || 12000,
+      success: (res) => {
+        resolve({ ok: true, status: res.statusCode, ms: Date.now() - started, url: target })
+      },
+      fail: (e) => {
+        const msg = e && e.errMsg ? e.errMsg.replace(/^request:fail\s*/, '') : '连接失败'
+        resolve({ ok: false, reason: msg, url: target })
+      }
+    })
+  })
+}
+
 module.exports = {
   request,
   get,
@@ -345,8 +409,16 @@ module.exports = {
   logout,
   isLoggedIn,
   getUser,
+  getSession,
+  getToken,
   clearAuth,
   cachedSettings,
   saveSettings,
+  getBaseUrl,
+  setBaseUrl,
+  resetBaseUrl,
+  isCustomBaseUrl,
+  normalizeBase,
+  probe,
   KEYS
 }

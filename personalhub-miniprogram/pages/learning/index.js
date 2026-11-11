@@ -1,6 +1,7 @@
 const api = require('../../utils/api')
 const util = require('../../utils/util')
 const theme = require('../../utils/theme')
+const remind = require('../../utils/remind')
 
 const PRIORITIES = util.PRIORITIES
 
@@ -20,6 +21,9 @@ Page({
       goals: [],
       selectedId: '',
       goal: null,
+      // 微信提醒：remindOn 是本机是否已授权过，quotaLeft 是还能收几条
+      remindOn: remind.isOn(),
+      quotaLeft: 0,
       tab: 'plan',
       days: [],
       notices: [],
@@ -29,7 +33,20 @@ Page({
 
       sheet: '',
       goalForm: { name: '', goal: '', start_date: '', target_date: '', estimated_minutes: 30 },
-      taskForm: { title: '', details: '', plan_date: '', priority: 'normal', estimated_minutes: 30, section_id: '' },
+      taskForm: {
+        id: '',
+        title: '',
+        details: '',
+        plan_date: '',
+        priority: 'normal',
+        estimated_minutes: 30,
+        section_id: '',
+        agenda_id: '',
+        start_time: '',
+        end_time: '',
+        orig_start: '',
+        orig_end: ''
+      },
       sessionForm: { studied_on: '', actual_minutes: 45, notes: '', problems: '', next_step: '' },
       resourceForm: { name: '', link: '', notes: '' },
 
@@ -90,6 +107,7 @@ Page({
       'sessionForm.studied_on': d,
       'aiLearnForm.start_date': util.addDays(d, 1)
     })
+    this._offline = util.offlineTracker(this)
   },
 
   onShow() {
@@ -102,6 +120,10 @@ Page({
       return
     }
     this.loadAll()
+    if (remind.isOn()) {
+      // 额度不够就先静默补一批（内部有 15 分钟节流，不会每次进页面都发请求）
+      remind.autoTopup().then(() => this.refreshQuota())
+    }
     // 从后台切回来时按时间戳补算剩余时间
     if (this.data.pomoRunning && this._pomoEnd) {
       const left = Math.round((this._pomoEnd - Date.now()) / 1000)
@@ -143,42 +165,164 @@ Page({
     return api
       .get('/learning/goals')
       .then((list) => {
-        const goals = (list || []).filter((g) => !g.deleted_at)
-        // 当前选中的目标可能刚被删掉，回落到第一个
-        const keep = goals.some((g) => g.id === this.data.selectedId)
-        const selected = keep ? this.data.selectedId : (goals[0] && goals[0].id) || ''
-        this.setData({ goals: goals, selectedId: selected, loading: false, error: '' })
-        if (selected) return this.loadGoal(selected)
-        this.setData({
-          goal: null,
-          days: [],
-          taskCount: 0,
-          doneCount: 0,
-          autoProgress: 0,
-          progressDraft: 0,
-          progressDirty: false
-        })
+        util.cacheSet('learning_goals', list || [])
+        if (this._offline) this._offline.clear('goals')
+        this.applyGoals((list || []).filter((g) => !g.deleted_at))
       })
-      .catch((e) => this.setData({ loading: false, error: (e && e.message) || '读取失败' }))
+      .catch((e) => {
+        const cached = util.cacheGetStale('learning_goals')
+        if (cached) {
+          this.applyGoals((cached || []).filter((g) => !g.deleted_at))
+          if (this._offline) this._offline.mark('goals', util.cacheStamp('learning_goals'))
+        } else {
+          this.setData({ loading: false, error: (e && e.message) || '读取失败' })
+        }
+      })
+  },
+
+  applyGoals(goals) {
+    // 当前选中的目标可能刚被删掉，回落到第一个
+    const keep = goals.some((g) => g.id === this.data.selectedId)
+    const selected = keep ? this.data.selectedId : (goals[0] && goals[0].id) || ''
+    this.setData({ goals: goals, selectedId: selected, loading: false, error: '' })
+    this.syncDueBadge(goals)
+    if (selected) return this.loadGoal(selected)
+    this.setData({
+      goal: null,
+      days: [],
+      taskCount: 0,
+      doneCount: 0,
+      autoProgress: 0,
+      progressDraft: 0,
+      progressDirty: false
+    })
+  },
+
+  /**
+   * 临期未完成检测：目标 progress < 100 且 target_date 在 2 天内（含已过期）。
+   * 结果驱动两样东西：页面横幅 + 「学习计划」tab 的红色角标。
+   */
+  syncDueBadge(goals) {
+    const t = util.today()
+    const dueGoals = []
+    ;(goals || []).forEach((g) => {
+      if (!g.target_date || (g.progress || 0) >= 100) return
+      const left = util.diffDays(g.target_date, t)
+      if (left > 2) return
+      dueGoals.push({ id: g.id, name: g.name, left: left, text: this.dueText(left) })
+    })
+    try {
+      wx.setStorageSync('ph_badge_learning', dueGoals.length)
+    } catch (e) {
+      /* 存不下就算了 */
+    }
+    const tb = typeof this.getTabBar === 'function' ? this.getTabBar() : null
+    if (tb && tb.setBadge) tb.setBadge(2, dueGoals.length)
+    this.setData({ dueGoals: dueGoals, dueCount: dueGoals.length })
+    return dueGoals
+  },
+
+  dueText(left) {
+    if (left < 0) return '已过期 ' + -left + ' 天'
+    if (left === 0) return '今天到期'
+    return '还剩 ' + left + ' 天'
+  },
+
+  /**
+   * 开启「微信提醒」：一次授权就覆盖所有计划（开始前 / 到期前各提醒一次），
+   * 不需要对每个计划单独开开关。具体流程在 utils/remind.js，设置页用的是同一份。
+   */
+  subscribeDueRemind() {
+    remind.subscribe().then((ok) => {
+      this.setData({ remindOn: remind.isOn() })
+      if (ok) this.refreshQuota()
+    })
+  },
+
+  refreshQuota() {
+    remind.quota().then((n) => this.setData({ quotaLeft: n }))
   },
 
   loadGoal(id) {
     return api
       .get('/learning/goals/' + id)
       .then((g) => {
-        const tasks = (g.tasks || []).filter((t) => !t.archived_at)
-        const stats = this.progressStats(tasks)
-        this.setData({
-          goal: Object.assign({}, g, { tasks: tasks }),
-          progressDraft: g.progress || 0,
-          progressDirty: false,
-          autoProgress: stats.percent,
-          doneCount: stats.done,
-          taskCount: stats.total,
-          days: this.groupTasks(tasks)
+        util.cacheSet('learning_goal_' + id, g)
+        if (this._offline) this._offline.clear('goal')
+        this.applyGoal(g)
+      })
+      .catch((e) => {
+        const cached = util.cacheGetStale('learning_goal_' + id)
+        if (cached) {
+          this.applyGoal(cached)
+          if (this._offline) this._offline.mark('goal', util.cacheStamp('learning_goal_' + id))
+        } else {
+          util.toast(e.message || '读取学习目标失败')
+        }
+      })
+  },
+
+  applyGoal(g) {
+    const tasks = (g.tasks || []).filter((t) => !t.archived_at)
+    const stats = this.progressStats(tasks)
+    // 选中目标临期且有任务没做完 → 顶部横幅提醒
+    let dueBanner = ''
+    if (g.target_date && stats.total > 0 && stats.done < stats.total) {
+      const left = util.diffDays(g.target_date, util.today())
+      if (left <= 2) {
+        dueBanner = '「' + (g.name || '学习计划') + '」' + this.dueText(left) + '，还有 ' + (stats.total - stats.done) + ' 项任务没完成'
+      }
+    }
+    this.setData({
+      goal: Object.assign({}, g, { tasks: tasks }),
+      progressDraft: g.progress || 0,
+      progressDirty: false,
+      autoProgress: stats.percent,
+      doneCount: stats.done,
+      taskCount: stats.total,
+      days: this.groupTasks(tasks),
+      dueBanner: dueBanner
+    })
+    this.enrichTaskTimes()
+  },
+
+  /**
+   * 任务本身不存开始/结束时间，时间存在对应的「今日计划」条目上。
+   * 这里按 agenda_id 把时间取回来，列表里就能显示 09:00–10:00，编辑时也能回填。
+   */
+  enrichTaskTimes() {
+    const days = this.data.days || []
+    const dates = []
+    days.forEach((d) => {
+      if (d.key && d.key !== 'none' && dates.indexOf(d.key) < 0) dates.push(d.key)
+    })
+    if (!dates.length) return
+    const want = dates.slice(0, 14)
+    Promise.all(want.map((d) => api.get('/agenda', { date: d }).catch(() => []))).then((lists) => {
+      const map = {}
+      lists.forEach((list) => {
+        const arr = Array.isArray(list) ? list : (list && list.items) || []
+        arr.forEach((it) => {
+          if (!it || !it.id) return
+          if (it.start_time || it.end_time) map[it.id] = { s: it.start_time || '', e: it.end_time || '' }
         })
       })
-      .catch((e) => util.toast(e.message || '读取学习目标失败'))
+      const next = (this.data.days || []).map((d) =>
+        Object.assign({}, d, {
+          items: (d.items || []).map((t) => {
+            const hit = map[t.agenda_id]
+            const st = hit ? hit.s : ''
+            const et = hit ? hit.e : ''
+            return Object.assign({}, t, {
+              start_time: st,
+              end_time: et,
+              time_text: st || et ? (st || '未设') + '–' + (et || '未设') : ''
+            })
+          })
+        })
+      )
+      this.setData({ days: next })
+    })
   },
 
   /** 按任务完成情况算出的「真实进度」，只统计有标题且未归档的任务 */
@@ -228,6 +372,10 @@ Page({
         agenda_id: t.agenda_id,
         plan_date: t.plan_date,
         minutes: t.estimated_minutes,
+        section_id: t.section_id || '',
+        start_time: t.start_time || '',
+        end_time: t.end_time || '',
+        time_text: t.time_text || '',
         done: t.status === 'completed'
       })
     })
@@ -369,17 +517,76 @@ Page({
 
   openTask(e) {
     const dayKey = e.currentTarget.dataset.day
+    // 弹层会盖住 tabBar，先把它收起来，否则底部的保存按钮会被压在下面
+    util.setTabBarHidden(true)
     this.setData({
       sheet: 'task',
       taskForm: {
+        id: '',
         title: '',
         details: '',
         plan_date: dayKey && dayKey !== 'none' ? dayKey : util.today(),
         priority: 'normal',
         estimated_minutes: 30,
-        section_id: ''
+        section_id: '',
+        agenda_id: '',
+        start_time: '',
+        end_time: '',
+        orig_start: '',
+        orig_end: ''
       }
     })
+  },
+
+  /** 编辑已有任务：点铅笔按钮，回填表单后复用同一个弹层 */
+  editTask(e) {
+    const id = e.currentTarget.dataset.id
+    const days = this.data.days || []
+    let hit = null
+    days.forEach((d) => {
+      (d.items || []).forEach((t) => {
+        if (t.id === id) hit = t
+      })
+    })
+    if (!hit) return
+    util.setTabBarHidden(true)
+    const st = hit.start_time || ''
+    const et = hit.end_time || ''
+    this.setData({
+      sheet: 'task',
+      taskForm: {
+        id: hit.id,
+        title: hit.title || '',
+        details: hit.details || '',
+        plan_date: hit.plan_date || util.today(),
+        priority: 'normal',
+        estimated_minutes: Number(hit.minutes) || 30,
+        section_id: hit.section_id || '',
+        agenda_id: hit.agenda_id || '',
+        start_time: st,
+        end_time: et,
+        orig_start: st,
+        orig_end: et
+      }
+    })
+    // 任务列表里没带时间时，单独问一次它对应的日程条目（后端时间存在 agenda 上）
+    if (!st && !et && hit.agenda_id) {
+      api
+        .get('/agenda/' + hit.agenda_id)
+        .then((it) => {
+          if (!it || this.data.sheet !== 'task' || this.data.taskForm.id !== hit.id) return
+          const s2 = it.start_time || ''
+          const e2 = it.end_time || ''
+          if (!s2 && !e2) return
+          this.setData({
+            'taskForm.start_time': s2,
+            'taskForm.end_time': e2,
+            'taskForm.orig_start': s2,
+            'taskForm.orig_end': e2
+          })
+        })
+        .catch(() => {})
+    }
   },
 
   deleteTask(e) {
@@ -974,6 +1181,14 @@ Page({
     this.setData({ 'taskForm.priority': e.currentTarget.dataset.value })
   },
 
+  /** 清掉开始/结束时间（不填就按「数据与设置」里的默认工作时间提醒） */
+  clearTaskTime(e) {
+    const key = e.currentTarget.dataset.key
+    const patch = {}
+    patch['taskForm.' + key] = ''
+    this.setData(patch)
+  },
+
   submitSheet() {
     if (this.data.saving) return
     const kind = this.data.sheet
@@ -1002,13 +1217,29 @@ Page({
         util.toast('请填写任务标题')
         return
       }
-      task = api.post('/learning/goals/' + g.id + '/tasks', {
+      const payload = {
         title: f.title.trim(),
         details: f.details || '',
         plan_date: f.plan_date || null,
-        priority: f.priority,
         estimated_minutes: Number(f.estimated_minutes) || null
-      })
+      }
+      const st = (f.start_time || '').trim()
+      const et = (f.end_time || '').trim()
+      if (st && et && st >= et) {
+        this.setData({ saving: false })
+        util.toast('结束时间要晚于开始时间')
+        return
+      }
+      // 时间存在对应的「今日计划」条目上，等任务建好/改好后单独同步
+      this._pendingTimes = {
+        st: st,
+        et: et,
+        changed: st !== (f.orig_start || '') || et !== (f.orig_end || '')
+      }
+      // 有 id = 编辑已有任务（后端 PATCH 不支持优先级）；没有 = 新增
+      task = f.id
+        ? api.patch('/learning/tasks/' + f.id, payload)
+        : api.post('/learning/goals/' + g.id + '/tasks', Object.assign({ priority: f.priority }, payload))
     } else if (kind === 'session') {
       const f = this.data.sessionForm
       if (!g) return
@@ -1043,6 +1274,23 @@ Page({
         this.setData({ saving: false, sheet: '' })
         util.setTabBarHidden(false)
         util.toast('已保存', 'success')
+        if (kind === 'task') {
+          const pend = this._pendingTimes || {}
+          this._pendingTimes = null
+          const agendaId = (res && res.agenda_id) || this.data.taskForm.agenda_id
+          if (agendaId && pend.changed) {
+            return api
+              .patch('/agenda/' + agendaId, {
+                start_time: pend.st || null,
+                end_time: pend.et || null
+              })
+              .then(() => this.loadGoal(this.data.selectedId))
+              .catch((e) => {
+                util.toast(e.message || '时间段没保存成功')
+                return this.loadGoal(this.data.selectedId)
+              })
+          }
+        }
         if (kind === 'goal' && res && res.id) {
           this.setData({ selectedId: res.id })
           return this.loadGoals(true)
@@ -1257,6 +1505,11 @@ Page({
           .catch((err) => util.toast(err.message || '记录失败'))
       }
     })
+  },
+
+  /** 离线横幅点击：跳到「数据与设置」改服务地址（换隧道域名时用） */
+  goServer() {
+    wx.switchTab({ url: '/pages/settings/index' })
   },
 
   retry() {

@@ -1,3 +1,38 @@
+<!-- 服务地址卡（登录/未登录都要能看到，换隧道域名时靠它改） -->
+<template name="serverCard">
+  <view class="card">
+    <view class="card-head">
+      <view class="card-title">
+        <view class="ic ic-note-muted"></view>
+        <text>服务地址</text>
+      </view>
+      <text wx:if="{{serverCustom}}" class="tiny server-flag">已自定义</text>
+    </view>
+
+    <view class="field">
+      <text class="field-label">后端地址</text>
+      <input
+        class="input"
+        value="{{serverUrl}}"
+        placeholder="{{serverDefault}}"
+        placeholder-class="placeholder"
+        bindinput="onServerInput"
+        confirm-type="done"
+      />
+    </view>
+
+    <text wx:if="{{serverHint}}" class="tiny server-hint">{{serverHint}}</text>
+    <text class="tiny">电脑重启隧道后地址会变：把新地址粘到这里点「保存」就行，不用重新上传版本。</text>
+    <text class="tiny">默认地址：{{serverDefault}}</text>
+
+    <view class="row gap8 server-actions">
+      <view class="btn btn-sm btn-soft" bindtap="testServer">{{serverTesting ? '检测中…' : '测试连接'}}</view>
+      <view class="btn btn-sm btn-soft" bindtap="resetServer">恢复默认</view>
+      <view class="btn btn-sm btn-primary" bindtap="saveServer">保存</view>
+    </view>
+  </view>
+</template>
+
 <view class="app {{themeMode === 'dark' ? 'theme-dark' : ''}}" style="{{themeStyle}}">
   <view class="topbar">
     <view class="brand-mark mark-sm">P</view>
@@ -7,7 +42,14 @@
     </view>
   </view>
 
-  <view wx:if="{{loading}}" class="loading-block">
+  <!-- 未登录时：只给「服务地址」，否则连不上服务就没法修 -->
+  <block wx:if="{{needLogin}}">
+    <template is="serverCard" data="{{serverUrl, serverDefault, serverCustom, serverTesting, serverHint}}" />
+    <view class="btn btn-primary btn-block" bindtap="goLogin">去登录</view>
+    <view class="foot-note"><text class="tiny">连不上服务时，先把地址改成电脑上新的隧道地址</text></view>
+  </block>
+
+  <view wx:elif="{{loading}}" class="loading-block">
     <view class="spinner"></view>
     <text>正在加载</text>
   </view>
@@ -144,6 +186,23 @@
       </view>
       <view wx:else class="empty empty-dashed backup-empty">还没有备份记录</view>
     </view>
+
+    <!-- 消息提醒 -->
+    <view class="card">
+      <view class="card-head">
+        <view class="card-title">
+          <view class="ic ic-calendar-muted"></view>
+          <text>消息提醒</text>
+        </view>
+        <text class="tiny server-flag">{{remindOn ? '已开启' : '未开启'}}</text>
+      </view>
+      <text class="tiny">每个项目单独提醒：计划开始/到期各一条，当天「今日计划」里每个未完成任务也各发一条，都写具体名字（需要电脑端服务在线）。</text>
+      <text class="tiny">{{remindOn ? (quotaLeft ? '当前还可收 ' + quotaLeft + ' 条提醒，用完后打开小程序会自动补。' : '额度已用完，下次打开小程序会自动补充。') : '只需授权一次：弹窗里勾上「总是保持以上选择」，以后所有计划都会自动提醒，不用再点。'}}</text>
+      <view class="btn btn-primary btn-block" bindtap="openRemind">{{remindOn ? '补充提醒额度' : '微信提醒我'}}</view>
+    </view>
+
+    <!-- 服务地址 -->
+    <template is="serverCard" data="{{serverUrl, serverDefault, serverCustom, serverTesting, serverHint}}" />
 
     <!-- 关于 -->
     <view class="card">
