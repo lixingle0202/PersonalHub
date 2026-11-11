@@ -1,10 +1,4 @@
 # PersonalHub 微信小程序
-
-把网页版 PersonalHub 迁移成原生微信小程序。
-**与网页版共用同一个后端、同一账号、同一份数据**，不是套壳 WebView，而是原生 WXML/WXSS 实现。
-
----
-
 ## 一、快速开始
 
 1. 打开「微信开发者工具」→ 导入项目 → 目录选择 `personalhub-miniprogram`
@@ -39,7 +33,6 @@ module.exports = {
 
 开发者工具里 `wx.request` 会自动带 `Origin: https://servicewechat.com`，
 后端的安全中间件把它判定为跨站请求，直接返回 `403 跨站请求被拒绝`
-（真机不会带这个头，所以只有模拟器需要这层代理）。
 
 两个脚本都能解决，任选其一：
 
