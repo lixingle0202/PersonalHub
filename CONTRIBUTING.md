@@ -10,7 +10,7 @@
 | `backend/app/api/`         | HTTP 接口、参数校验与响应        | 保持接口职责清晰，复用业务服务              |
 | `backend/app/services/`    | 学习、饮食、统计、模型等业务逻辑 | 共用规则集中维护，避免各页面分别实现        |
 | `backend/tests/`、`tests/` | 接口、业务及文档契约测试         | 测试数据与真实用户数据隔离                  |
-| `personalhub-miniprogram/` | 小程序页面、样式与请求封装       | 位于 `miniprogram` 分支，复用后端接口       |
+| `personalhub-miniprogram/` | 小程序页面、样式与请求封装       | 已整合到 `main`，`miniprogram` 保留开发入口 |
 | `scripts/`、`deploy/`      | 启动、构建、验收与部署           | 使用相对路径、脚本所在目录或显式配置        |
 | `docs/`                    | 使用、接口、设计与验收说明       | 与本次行为变更同步，区分示例和实测结果      |
 

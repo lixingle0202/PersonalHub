@@ -1,0 +1,617 @@
+.mark-sm {
+  width: 64rpx;
+  height: 64rpx;
+  font-size: 36rpx;
+  border-radius: 20rpx;
+}
+
+.retry-btn {
+  margin-top: 20rpx;
+}
+
+.notice {
+  flex-direction: column;
+  gap: 10rpx;
+  margin-bottom: 18rpx;
+}
+
+.notice-title {
+  font-size: 26rpx;
+  font-weight: 600;
+  display: block;
+  margin-bottom: 6rpx;
+}
+
+.notice-body {
+  font-size: 23rpx;
+  line-height: 1.65;
+}
+
+.notice-btn {
+  align-self: flex-end;
+  border-color: rgba(149, 97, 18, 0.28);
+  color: var(--amber);
+}
+
+/* 目标选择 */
+.goal-scroll {
+  padding: 4rpx 0 20rpx;
+  white-space: nowrap;
+}
+
+.chip-sub {
+  font-size: 20rpx;
+  opacity: 0.7;
+  margin-left: 6rpx;
+}
+
+/* 目标卡 */
+.goal-card {
+  display: flex;
+  flex-direction: column;
+  gap: 18rpx;
+}
+
+.goal-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12rpx;
+}
+
+.goal-name {
+  font-size: 34rpx;
+  font-weight: 650;
+  letter-spacing: -0.8rpx;
+  display: block;
+  margin-bottom: 4rpx;
+}
+
+.goal-pct {
+  font-size: 40rpx;
+  font-weight: 650;
+  letter-spacing: -1.6rpx;
+  color: var(--primary-readable);
+}
+
+.bar {
+  height: 12rpx;
+  border-radius: 999rpx;
+  background: var(--surface-subtle);
+  overflow: hidden;
+}
+
+.bar-fill {
+  height: 100%;
+  border-radius: 999rpx;
+  transition: width 0.3s ease;
+}
+
+.goal-text {
+  font-size: 26rpx;
+  line-height: 1.65;
+  color: var(--text-2);
+}
+
+.goal-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+}
+
+.goal-meta-row .btn {
+  flex: none;
+}
+
+.goal-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4rpx;
+}
+
+.progress-editor {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  background: var(--surface-subtle);
+  border-radius: 18rpx;
+  padding: 8rpx 20rpx 8rpx 4rpx;
+}
+
+.slider {
+  flex: 1;
+  margin: 0 12rpx;
+}
+
+.progress-auto {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  margin-top: 16rpx;
+  padding: 12rpx 16rpx;
+  border-radius: 16rpx;
+  background: var(--surface-subtle);
+}
+
+.progress-auto .grow {
+  display: flex;
+  flex-direction: column;
+  gap: 2rpx;
+  min-width: 0;
+}
+
+.progress-diff {
+  color: var(--primary-readable);
+}
+
+.progress-foot {
+  display: block;
+  margin-top: 8rpx;
+  line-height: 1.6;
+}
+
+.tabs {
+  margin-top: 4rpx;
+}
+
+/* 学习计划 */
+.day-block {
+  margin-top: 22rpx;
+}
+
+.day-head {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  padding: 0 4rpx 12rpx;
+}
+
+.day-date {
+  font-size: 25rpx;
+  font-weight: 600;
+}
+
+.day-add {
+  width: 48rpx;
+  height: 48rpx;
+  border-radius: 14rpx;
+  background: var(--primary-soft);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.task-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 14rpx;
+  padding: 20rpx 16rpx;
+  border-radius: 16rpx;
+  border: 1rpx solid transparent;
+}
+
+.task-row:active {
+  background: var(--primary-soft);
+}
+
+.task-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
+}
+
+.task-title {
+  font-size: 27rpx;
+  line-height: 1.5;
+  display: block;
+}
+
+.task-row.done .task-title {
+  color: var(--text-3);
+  text-decoration: line-through;
+}
+
+.task-details {
+  line-height: 1.6;
+}
+
+.task-edit {
+  width: 44rpx;
+  height: 44rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.6;
+  flex: none;
+  margin-right: 10rpx;
+}
+
+.task-del {
+  width: 44rpx;
+  height: 44rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.6;
+  flex: none;
+}
+
+.day-empty {
+  padding: 24rpx;
+}
+
+/* 记录 / 资料 */
+.tab-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12rpx;
+  padding: 18rpx 0 6rpx;
+}
+
+.session-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
+  padding: 20rpx 22rpx;
+  margin-top: 14rpx;
+  border-radius: 18rpx;
+  background: var(--surface-subtle);
+}
+
+.session-title {
+  font-size: 26rpx;
+  font-weight: 600;
+}
+
+.resource-row {
+  display: flex;
+  gap: 12rpx;
+  padding: 20rpx 0;
+  border-bottom: 1rpx solid var(--line);
+}
+
+.resource-row:last-child {
+  border-bottom: none;
+}
+
+.link-text {
+  color: var(--primary-readable);
+  word-break: break-all;
+}
+
+.big-empty {
+  margin-top: 30rpx;
+  gap: 16rpx;
+}
+
+.notes-input {
+  min-height: 110rpx;
+}
+
+.field-row {
+  display: flex;
+  gap: 16rpx;
+}
+
+/* 开始/结束时间：picker 撑满左侧，右侧留一个「清除」 */
+.time-box {
+  gap: 10rpx;
+}
+.time-box picker {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.time-val {
+  font-size: 27rpx;
+  color: var(--text);
+}
+.time-empty {
+  color: var(--text-3);
+}
+.time-clear {
+  flex: none;
+  font-size: 22rpx;
+  color: var(--text-3);
+  padding: 4rpx 8rpx;
+}
+
+.task-meta-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12rpx;
+}
+.time-chip {
+  font-size: 21rpx;
+  color: var(--primary, #2f9c74);
+  background: rgba(47, 156, 116, 0.12);
+  border-radius: 8rpx;
+  padding: 2rpx 10rpx;
+}
+
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+}
+
+.chip-row .chip {
+  margin-right: 0;
+}
+
+/* AI 生成学习计划 */
+.ai-plan-head {
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
+  padding: 4rpx 4rpx 12rpx;
+}
+
+.ai-plan-name {
+  font-size: 30rpx;
+  font-weight: 650;
+}
+
+.ai-plan-meta {
+  color: var(--text-2);
+}
+
+.ai-edit-hint {
+  padding: 0 4rpx 10rpx;
+  color: var(--text-2);
+}
+
+.ai-plan-topic {
+  color: var(--primary-readable);
+}
+
+.ai-task-editable {
+  align-self: flex-start;
+  border-bottom: 1rpx dashed rgba(120, 130, 160, 0.55);
+  padding-bottom: 2rpx;
+}
+
+.ai-task-input {
+  width: 100%;
+  font-size: 26rpx;
+  padding: 10rpx 14rpx;
+}
+
+/* 预览里的目标说明不用占太高 */
+.ai-goal-input {
+  min-height: 96rpx;
+  height: 96rpx;
+}
+
+.ai-day {
+  display: flex;
+  flex-direction: column;
+  gap: 10rpx;
+  padding: 16rpx 0;
+  border-top: 1rpx solid var(--line, #e4e8f2);
+}
+
+.ai-day-date {
+  font-size: 24rpx;
+  font-weight: 600;
+  color: var(--primary-readable);
+}
+
+.ai-task {
+  display: flex;
+  flex-direction: column;
+  gap: 4rpx;
+  background: rgba(120, 130, 160, 0.07);
+  border-radius: 14rpx;
+  padding: 14rpx 18rpx;
+}
+
+.ai-task-title {
+  font-size: 26rpx;
+  font-weight: 550;
+}
+
+.ai-task-min {
+  color: var(--text-2);
+}
+
+.ai-task-notes {
+  color: var(--text-2);
+  line-height: 1.5;
+}
+
+/* 番茄钟 */
+.pomo-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8rpx;
+  padding: 22rpx 0 14rpx;
+}
+
+.pomo-time {
+  font-size: 96rpx;
+  font-weight: 700;
+  letter-spacing: -3rpx;
+  line-height: 1.1;
+  color: var(--primary-readable);
+}
+
+.pomo-hint {
+  font-size: 22rpx;
+  color: var(--text-3);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pomo-bar {
+  width: 100%;
+  height: 10rpx;
+  border-radius: 999rpx;
+  background: var(--surface-subtle);
+  overflow: hidden;
+  margin-top: 12rpx;
+}
+
+.pomo-bar-fill {
+  height: 100%;
+  border-radius: 999rpx;
+  background: var(--primary);
+  transition: width 0.45s linear;
+}
+
+.pomo-actions {
+  display: flex;
+  gap: 14rpx;
+  margin-top: 18rpx;
+}
+
+.pomo-actions .btn {
+  flex: 1;
+}
+
+.pomo-foot {
+  line-height: 1.6;
+  margin-top: 6rpx;
+}
+
+.pomo-custom {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  margin-top: 14rpx;
+}
+
+.pomo-step {
+  width: 76rpx;
+  height: 64rpx;
+  line-height: 64rpx;
+  text-align: center;
+  border-radius: 16rpx;
+  background: var(--surface-subtle);
+  color: var(--text-2);
+  font-size: 26rpx;
+  font-weight: 600;
+}
+
+.pomo-custom-input {
+  flex: 1;
+  height: 64rpx;
+  min-height: 64rpx;
+  text-align: center;
+}
+
+.pomo-custom-tip {
+  display: block;
+  margin-top: 8rpx;
+}
+
+/* AI 分段生成：进度条 */
+.ai-progress-box {
+  display: block;
+  background: var(--primary-soft);
+  color: var(--primary-readable);
+}
+
+.ai-progress-time {
+  opacity: 0.75;
+  margin-left: 12rpx;
+  flex-shrink: 0;
+}
+
+.ai-progress {
+  height: 10rpx;
+  border-radius: 999rpx;
+  background: rgba(255, 255, 255, 0.55);
+  margin: 14rpx 0 10rpx;
+  overflow: hidden;
+}
+
+.ai-progress-bar {
+  height: 100%;
+  border-radius: 999rpx;
+  background: var(--primary);
+  transition: width 0.35s ease;
+}
+
+.ai-progress-tip {
+  display: block;
+  opacity: 0.75;
+  line-height: 1.5;
+}
+
+.ai-resume-btn {
+  margin-top: 0;
+}
+
+/* 钉在面板顶部的进度/报错 */
+.ai-pinned {
+  margin-bottom: 16rpx;
+  flex-shrink: 0;
+}
+
+.ai-partial-tip {
+  display: block;
+  margin-top: 14rpx;
+  line-height: 1.6;
+  opacity: 0.8;
+}
+
+/* 到期横幅：文案 + 「微信提醒我」按钮一行放下 */
+.due-row {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  width: 100%;
+}
+
+.due-text {
+  flex: 1;
+  line-height: 1.5;
+}
+
+.due-subscribe {
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.22);
+  color: inherit;
+  font-size: 22rpx;
+  padding: 8rpx 18rpx;
+}
+
+/* 到期提醒常驻入口（没有临期计划时显示） */
+.remind-tip {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  padding: 18rpx 22rpx;
+  border-radius: 20rpx;
+  background: rgba(47, 107, 255, 0.06);
+  border: 1rpx solid rgba(47, 107, 255, 0.16);
+}
+
+.remind-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4rpx;
+  min-width: 0;
+}
+
+.remind-title {
+  font-size: 26rpx;
+  font-weight: 600;
+}
+
+.remind-btn {
+  flex-shrink: 0;
+  font-size: 24rpx;
+  color: #2f6bff;
+  font-weight: 600;
+  padding: 8rpx 20rpx;
+  border-radius: 999rpx;
+  background: rgba(47, 107, 255, 0.1);
+}

@@ -1,0 +1,110 @@
+<view class="app {{themeMode === 'dark' ? 'theme-dark' : ''}}" style="{{themeStyle}}">
+  <view class="topbar">
+    <view class="btn btn-icon btn-ghost back-btn" bindtap="goBack">
+      <text class="back-ic">←</text>
+    </view>
+    <view class="grow">
+      <view class="topbar-title">监督群</view>
+      <view class="topbar-desc">和朋友互相盯着，别偷懒</view>
+    </view>
+  </view>
+
+  <!-- 云开发没开通 / 云函数没部署：给出可执行的步骤，而不是一个转不动的页面 -->
+  <view wx:if="{{status !== 'ok' || showGuide}}" class="card">
+    <view class="card-head">
+      <view class="card-title">还差两步：开通云开发 + 部署云函数</view>
+    </view>
+    <text class="muted">群里要看到彼此的完成情况，需要一个双方都能访问的地方存数据。手机本地存储做不到这件事。</text>
+    <view class="banner banner-danger guide-err" wx:if="{{err}}"><text>{{err}}</text></view>
+    <view class="cloud-tip" wx:if="{{status === 'no-support'}}">
+      <text>当前微信版本不支持云开发，请把微信升级到最新版再试。</text>
+    </view>
+    <view class="cloud-steps">
+      <text class="step">1. 开发者工具右上角工具栏点「云开发」图标 → 开通（个人版开发期免费，找不到就点工具栏最右的「⋯」→ 功能模块里勾选）</text>
+      <text class="step">2. 左侧文件树右键 cloudfunctions/phgroup → 上传并部署 → 云端安装依赖</text>
+    </view>
+    <text class="tiny">不需要建集合、不需要设权限，也不需要填环境 ID（只有一个云开发环境时用默认的即可）。</text>
+    <view class="btn btn-soft btn-block retry-btn" bindtap="retry">做好了，重新检测</view>
+  </view>
+
+  <block wx:else>
+    <!-- 群昵称 -->
+    <view wx:if="{{!myName}}" class="card">
+      <view class="card-head">
+        <view class="card-title">先起个群里的名字</view>
+      </view>
+      <text class="muted">群友靠这个名字认出你，随便起，不用和微信昵称一样。</text>
+      <view class="name-row">
+        <input class="input grow" value="{{nameDraft}}" maxlength="12" placeholder="比如：阿泽" placeholder-class="placeholder" bindinput="onNameInput" />
+        <view class="btn btn-primary btn-sm" bindtap="saveName">保存</view>
+      </view>
+    </view>
+
+    <!-- 我的群 -->
+    <view wx:if="{{myName}}" class="card">
+      <view class="card-head">
+        <view class="card-title">我的群</view>
+        <text class="tiny">{{groups.length}} 个</text>
+      </view>
+
+      <view wx:if="{{loading}}" class="group-loading">
+        <view class="spinner"></view>
+        <text class="tiny">正在读取</text>
+      </view>
+      <text wx:elif="{{!groups.length}}" class="muted">还没有群。建一个，把邀请码发到微信群，朋友输入就能进来。</text>
+
+      <view wx:for="{{groups}}" wx:key="id" class="group-row" data-id="{{item.id}}" bindtap="openGroup">
+        <view class="group-avatar">
+          <image wx:if="{{item.avatarUrl}}" class="group-avatar-img" src="{{item.avatarUrl}}" mode="aspectFill" />
+          <text wx:else>{{item.initial}}</text>
+        </view>
+        <view class="grow">
+          <text class="group-name">{{item.name}}</text>
+          <text class="tiny">邀请码 {{item.code}} · {{item.memberCount}} 人{{item.owner ? ' · 我建的' : ''}}</text>
+        </view>
+        <text class="group-arrow">›</text>
+      </view>
+    </view>
+
+    <view wx:if="{{err}}" class="banner banner-danger"><text>{{err}}</text></view>
+
+    <view wx:if="{{myName}}" class="group-actions">
+      <view class="btn btn-primary grow" bindtap="openCreate">创建群</view>
+      <view class="btn btn-soft grow" bindtap="openJoin">输入邀请码加入</view>
+    </view>
+  </block>
+
+  <!-- 创建群 -->
+  <view wx:if="{{createSheet}}" class="mask" bindtap="closeCreate"></view>
+  <view wx:if="{{createSheet}}" class="sheet">
+    <view class="sheet-head">
+      <text class="sheet-title">创建监督群</text>
+      <view class="ic ic-close-muted ic-sm" bindtap="closeCreate"></view>
+    </view>
+    <view class="sheet-body">
+      <input class="input" value="{{nameInput}}" maxlength="16" placeholder="群名，比如：考研三人组" placeholder-class="placeholder" bindinput="onNameDraft" />
+      <text class="tiny">创建后会生成 6 位邀请码，朋友输入即可加入；你也可以直接把群分享到微信群。</text>
+    </view>
+    <view class="sheet-foot">
+      <view class="btn btn-ghost" bindtap="closeCreate">取消</view>
+      <view class="btn btn-primary" bindtap="doCreate">{{saving ? '创建中…' : '创建'}}</view>
+    </view>
+  </view>
+
+  <!-- 加入群 -->
+  <view wx:if="{{joinSheet}}" class="mask" bindtap="closeJoin"></view>
+  <view wx:if="{{joinSheet}}" class="sheet">
+    <view class="sheet-head">
+      <text class="sheet-title">加入监督群</text>
+      <view class="ic ic-close-muted ic-sm" bindtap="closeJoin"></view>
+    </view>
+    <view class="sheet-body">
+      <input class="input code-input" value="{{codeInput}}" maxlength="6" placeholder="6 位邀请码" placeholder-class="placeholder" bindinput="onCodeDraft" />
+      <text class="tiny">向群主或已经在群里的人要邀请码，6 位大写字母和数字。</text>
+    </view>
+    <view class="sheet-foot">
+      <view class="btn btn-ghost" bindtap="closeJoin">取消</view>
+      <view class="btn btn-primary" bindtap="doJoin">{{saving ? '加入中…' : '加入'}}</view>
+    </view>
+  </view>
+</view>

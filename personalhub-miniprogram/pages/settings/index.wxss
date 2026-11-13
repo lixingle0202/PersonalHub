@@ -1,0 +1,265 @@
+.mark-sm {
+  width: 64rpx;
+  height: 64rpx;
+  font-size: 36rpx;
+  border-radius: 20rpx;
+}
+
+.card {
+  margin-bottom: 24rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 4rpx;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 10rpx;
+  margin-bottom: 20rpx;
+}
+
+.field-row {
+  display: flex;
+  gap: 16rpx;
+}
+
+.swatches {
+  display: flex;
+  gap: 18rpx;
+  padding: 4rpx 0;
+}
+
+.swatch {
+  width: 68rpx;
+  height: 68rpx;
+  border-radius: 22rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 6rpx 16rpx rgba(30, 42, 74, 0.16);
+}
+
+.swatch.on {
+  outline: 4rpx solid rgba(91, 108, 255, 0.28);
+  outline-offset: 2rpx;
+}
+
+/* 色环 */
+.wheel-toggle {
+  color: var(--primary-readable);
+  text-decoration: underline;
+  text-decoration-color: rgba(120, 130, 160, 0.5);
+}
+
+.wheel-wrap {
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+  margin-top: 18rpx;
+  padding: 18rpx;
+  border-radius: 20rpx;
+  background: var(--surface-subtle, rgba(120, 130, 160, 0.08));
+}
+
+.wheel-canvas-wrap {
+  position: relative;
+  width: 220rpx;
+  height: 220rpx;
+  flex: none;
+}
+
+.wheel {
+  width: 220rpx;
+  height: 220rpx;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1rpx rgba(120, 130, 160, 0.18);
+  /* 中心偏白、边缘饱和的色相盘；radial 一层做饱和度，conic 一层做色相 */
+  background-color: #cfd6ea;
+  background-image:
+    radial-gradient(
+      circle at 50% 50%,
+      rgba(255, 255, 255, 0.96) 0%,
+      rgba(255, 255, 255, 0.86) 16%,
+      rgba(255, 255, 255, 0.34) 46%,
+      rgba(255, 255, 255, 0) 78%
+    ),
+    conic-gradient(
+      from 90deg,
+      #ff0000,
+      #ff8000,
+      #ffff00,
+      #80ff00,
+      #00ff00,
+      #00ff80,
+      #00ffff,
+      #0080ff,
+      #0000ff,
+      #8000ff,
+      #ff00ff,
+      #ff0080,
+      #ff0000
+    );
+}
+
+.wheel-cursor {
+  position: absolute;
+  width: 26rpx;
+  height: 26rpx;
+  margin-left: -13rpx;
+  margin-top: -13rpx;
+  border-radius: 50%;
+  border: 5rpx solid #ffffff;
+  background: transparent;
+  box-shadow: 0 2rpx 10rpx rgba(20, 28, 50, 0.45);
+  pointer-events: none;
+}
+
+.wheel-side {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10rpx;
+  align-items: flex-start;
+}
+
+.wheel-preview {
+  width: 100%;
+  height: 56rpx;
+  border-radius: 14rpx;
+  box-shadow: inset 0 0 0 1rpx rgba(120, 130, 160, 0.25);
+}
+
+.wheel-tip {
+  line-height: 1.5;
+}
+
+.switch-row {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  padding: 8rpx 0 24rpx;
+}
+
+.row-label {
+  font-size: 27rpx;
+  display: block;
+  margin-bottom: 4rpx;
+}
+
+.backup-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.backup-row {
+  display: flex;
+  align-items: center;
+  padding: 18rpx 0;
+  border-bottom: 1rpx solid var(--line);
+}
+
+.backup-row:last-child {
+  border-bottom: none;
+}
+
+.backup-name {
+  font-size: 25rpx;
+  display: block;
+  margin-bottom: 4rpx;
+  word-break: break-all;
+}
+
+.backup-empty {
+  padding: 32rpx 0;
+}
+
+.about-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  padding: 14rpx 0;
+  border-bottom: 1rpx solid var(--line);
+}
+
+.about-row:last-child {
+  border-bottom: none;
+}
+
+.about-url {
+  align-items: flex-start;
+}
+
+.url-text {
+  text-align: right;
+  word-break: break-all;
+  flex: 1;
+  min-width: 0;
+}
+
+.logout-btn {
+  margin-top: 6rpx;
+  height: 88rpx;
+}
+
+/* ---------- 服务地址 ---------- */
+.server-flag {
+  padding: 4rpx 12rpx;
+  border-radius: 999rpx;
+  background: rgba(91, 108, 255, 0.12);
+  color: var(--primary, #5b6cff);
+}
+
+.server-hint {
+  display: block;
+  margin: 6rpx 0;
+  color: var(--primary, #5b6cff);
+  word-break: break-all;
+}
+
+.server-actions {
+  margin-top: 16rpx;
+  flex-wrap: wrap;
+}
+
+.server-actions .btn {
+  flex: 1;
+  justify-content: center;
+}
+
+.foot-note {
+  display: flex;
+  justify-content: center;
+  padding: 34rpx 0 10rpx;
+  opacity: 0.6;
+}
+
+/* ============ 扩展提醒偏好 ============ */
+.prefs-block {
+  margin-top: 24rpx;
+  padding-top: 8rpx;
+  border-top: 1rpx solid var(--line);
+}
+
+.water-times {
+  display: flex;
+  gap: 14rpx;
+  padding: 4rpx 0 10rpx;
+}
+
+.time-chip {
+  min-width: 150rpx;
+  justify-content: center;
+  gap: 8rpx;
+}
+
+.switch-row-last {
+  border-bottom: none;
+}
+
+.prefs-hint {
+  display: block;
+  margin-top: 14rpx;
+}

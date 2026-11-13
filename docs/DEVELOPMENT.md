@@ -75,6 +75,14 @@ v0.1.2 加入[学习趋势](learning-trends.md)和[饮食 AI 任务及草稿恢�
 - **源码运行**：按“从源码启动”准备环境，并准备好本地 Ollama 与模型后，运行 `Start-PersonalHub-With-AI.cmd`；仅启动模型服务可运行 `Start-LocalAI.cmd`。
 - **切换模型**：进入“数据与设置 → 大模型”，选择内置模型，或刷新并选择其他已下载的本机模型，再保存切换。
 
+## 微信小程序开发
+
+小程序与网页源码现已同时保存在 main；开发者工具应导入 `personalhub-miniprogram`，不要导入仓库根目录。个人业务访问现有后端；好友监督群通过独立的微信云函数访问云数据库。
+
+完整启动、提醒与云函数配置见[小程序说明](../personalhub-miniprogram/README.md)和[部署说明](../DEPLOY.md)。本机代理、提醒服务位于 `_tools/`，不随小程序前端上传；私有凭据及提醒运行数据存放在被 Git 忽略的 `_tmpapi/`。
+
+离线检查运行 `node --test scripts/test-miniprogram.mjs`；它覆盖工程入口、相对依赖、WXML 事件、群成员权限和提醒接口隔离。云开发真机、消息投递和多设备同步需在自己的 AppID、环境和测试账号下验收，不把离线检查视为真机测试。
+
 ## 数据、备份和恢复
 
 - 正式数据库：`%LOCALAPPDATA%\PersonalHub\data\personal_data.db`

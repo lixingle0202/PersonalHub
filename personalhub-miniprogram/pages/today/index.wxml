@@ -1,0 +1,241 @@
+<view class="app {{themeMode === 'dark' ? 'theme-dark' : ''}}" style="{{themeStyle}}">
+  <view class="topbar topbar-two">
+    <view class="topbar-head">
+      <view class="brand-mark mark-sm">P</view>
+      <view class="grow">
+        <view class="topbar-title">今日计划</view>
+        <view class="topbar-desc">留出时间，专注当下</view>
+      </view>
+    </view>
+    <view class="topbar-actions">
+      <view class="btn btn-sm btn-ghost" bindtap="openEndDay">结束今日</view>
+      <view class="btn btn-sm btn-primary" bindtap="openCreate">
+        <view class="ic ic-plus-white ic-xs"></view>
+        <text>新增计划</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 日期切换 -->
+  <view class="date-bar card card-tight">
+    <view class="date-nav" bindtap="shiftDate" data-delta="-1">
+      <view class="ic ic-chevron-muted date-arrow flip"></view>
+    </view>
+    <picker mode="date" value="{{date}}" bindchange="onPickDate">
+      <view class="date-center">
+        <text class="date-text">{{dateText}}</text>
+        <text class="tiny">{{isToday ? '今天' : '非今天'}} · 共 {{total}} 项 · 已完成 {{completed}} 项</text>
+      </view>
+    </picker>
+    <view class="date-nav" bindtap="shiftDate" data-delta="1">
+      <view class="ic ic-chevron-muted date-arrow"></view>
+    </view>
+  </view>
+
+  <view wx:if="{{!isToday}}" class="back-today" bindtap="shiftDate" data-delta="0">
+    <text class="tiny">回到今天</text>
+  </view>
+
+  <view wx:if="{{loading}}" class="loading-block">
+    <view class="spinner"></view>
+    <text>正在加载</text>
+  </view>
+
+  <view wx:elif="{{error && !total}}" class="card">
+    <view class="banner banner-danger"><text>{{error}}</text></view>
+    <view class="btn btn-soft btn-block retry-btn" bindtap="retry">重新加载</view>
+  </view>
+
+  <block wx:else>
+    <view wx:if="{{offline}}" class="banner offline-banner" bindtap="goServer">
+      <text>{{offlineText}}（连不上服务，先看缓存）</text>
+      <text class="offline-fix">改服务地址</text>
+    </view>
+    <view wx:if="{{lateTip}}" class="banner due-banner">
+      <text>{{lateTip}}</text>
+    </view>
+    <view wx:if="{{error}}" class="banner banner-danger error-inline" bindtap="retry">
+      <text>{{error}}</text>
+      <text class="error-retry">重试</text>
+    </view>
+    <view wx:for="{{groups}}" wx:key="key" wx:if="{{item.count}}" class="group">
+      <view class="group-head">
+        <view class="dot dot-{{item.key}}"></view>
+        <text class="group-label">{{item.label}}</text>
+        <text class="group-count">{{item.count}}</text>
+      </view>
+
+      <view class="card group-card">
+        <view
+          wx:for="{{item.items}}"
+          wx:for-item="row"
+          wx:key="id"
+          class="agenda-row"
+        >
+          <view
+            class="checkbox {{row.done ? 'checked' : ''}}"
+            catchtap="toggle"
+            data-id="{{row.id}}"
+            data-done="{{row.done}}"
+          >
+            <view wx:if="{{row.done}}" class="ic ic-check-white"></view>
+          </view>
+
+          <view class="agenda-main" catchtap="openActions" data-id="{{row.id}}">
+            <view class="agenda-line">
+              <text class="agenda-title {{row.done ? 'done' : ''}}">{{row.title}}</text>
+              <text wx:if="{{row.tag}}" class="tag {{row.tag === '紧急' ? 'tag-danger' : 'tag-amber'}} row-tag">{{row.tag}}</text>
+            </view>
+            <view class="agenda-sub">
+              <text wx:if="{{row.timeText}}" class="tiny">{{row.timeText}}</text>
+              <text wx:if="{{row.moduleLabel}}" class="tag tag-primary tiny-tag">{{row.moduleLabel}}</text>
+              <text wx:if="{{row.notes}}" class="tiny notes-text">{{row.notes}}</text>
+            </view>
+          </view>
+
+          <view class="row-more" catchtap="openActions" data-id="{{row.id}}">
+            <view class="ic ic-chevron-muted ic-xs"></view>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <view wx:if="{{!total}}" class="empty empty-dashed big-empty">
+      <view class="ic ic-calendar-muted ic-lg"></view>
+      <text>这一天还没有计划</text>
+      <view class="btn btn-sm btn-soft" bindtap="openCreate">新增一条</view>
+    </view>
+  </block>
+
+  <!-- 新增 / 编辑计划 -->
+  <view wx:if="{{editing}}" class="mask" bindtap="closeEditor"></view>
+  <view wx:if="{{editing}}" class="sheet" catchtap="noop">
+    <view class="sheet-head">
+      <text class="sheet-title">{{form.id ? '编辑计划' : '新增计划'}}</text>
+      <view class="ic ic-close-muted ic-sm" bindtap="closeEditor"></view>
+    </view>
+    <scroll-view scroll-y class="sheet-body">
+      <view class="field">
+        <text class="field-label">计划内容</text>
+        <input
+          class="input {{formError ? 'input-error' : ''}}"
+          value="{{form.title}}"
+          placeholder="例如：读完《深度工作》第二章"
+          placeholder-class="placeholder"
+          data-key="title"
+          bindinput="onFormInput"
+          maxlength="300"
+          cursor-spacing="24"
+        />
+        <text wx:if="{{formError}}" class="field-error">{{formError}}</text>
+      </view>
+
+      <view class="field">
+        <text class="field-label">计划日期</text>
+        <picker mode="date" value="{{form.plan_date}}" bindchange="pickFormDate">
+          <view class="picker-box">
+            <text>{{form.plan_date}}</text>
+            <view class="ic ic-calendar-muted ic-xs"></view>
+          </view>
+        </picker>
+      </view>
+
+      <view class="field">
+        <text class="field-label">分组</text>
+        <view class="segment">
+          <view
+            wx:for="{{buckets}}"
+            wx:key="value"
+            class="segment-item {{form.bucket === item.value ? 'on' : ''}}"
+            data-value="{{item.value}}"
+            bindtap="setBucket"
+          >{{item.label}}</view>
+        </view>
+      </view>
+
+      <view class="field">
+        <text class="field-label">优先级</text>
+        <view class="chip-row">
+          <view
+            wx:for="{{priorities}}"
+            wx:key="value"
+            class="chip {{form.priority === item.value ? 'on' : ''}}"
+            data-value="{{item.value}}"
+            bindtap="setPriority"
+          >{{item.label}}</view>
+        </view>
+      </view>
+
+      <view class="field-row">
+        <view class="field grow">
+          <text class="field-label">开始时间</text>
+          <picker mode="time" value="{{form.start_time || '09:00'}}" bindchange="pickFormTime" data-key="start_time">
+            <view class="picker-box">
+              <text class="{{form.start_time ? '' : 'placeholder'}}">{{form.start_time || '未设置'}}</text>
+            </view>
+          </picker>
+        </view>
+        <view class="field grow">
+          <text class="field-label">结束时间</text>
+          <picker mode="time" value="{{form.end_time || '10:00'}}" bindchange="pickFormTime" data-key="end_time">
+            <view class="picker-box">
+              <text class="{{form.end_time ? '' : 'placeholder'}}">{{form.end_time || '未设置'}}</text>
+            </view>
+          </picker>
+        </view>
+      </view>
+
+      <view class="field">
+        <text class="field-label">备注</text>
+        <textarea
+          class="textarea notes-input"
+          value="{{form.notes}}"
+          placeholder="补充说明（可选）"
+          placeholder-class="placeholder"
+          data-key="notes"
+          bindinput="onFormInput"
+          maxlength="1000"
+        ></textarea>
+      </view>
+    </scroll-view>
+    <view class="sheet-foot">
+      <view class="btn btn-ghost" bindtap="closeEditor">取消</view>
+      <view class="btn btn-primary" bindtap="saveForm">{{saving ? '保存中…' : '保存'}}</view>
+    </view>
+  </view>
+
+  <!-- 结束今日 -->
+  <view wx:if="{{ending}}" class="mask" bindtap="closeEndDay"></view>
+  <view wx:if="{{ending}}" class="sheet" catchtap="noop">
+    <view class="sheet-head">
+      <text class="sheet-title">结束今日</text>
+      <view class="ic ic-close-muted ic-sm" bindtap="closeEndDay"></view>
+    </view>
+    <scroll-view scroll-y class="sheet-body">
+      <text class="muted">为每一条未完成的事项选择去向，再写下今天的小结。</text>
+      <view wx:for="{{endItems}}" wx:key="id" class="end-item">
+        <text class="end-title">{{item.title}}</text>
+        <view class="segment end-segment">
+          <view class="segment-item {{item.action === 'tomorrow' ? 'on' : ''}}" data-index="{{index}}" data-action="tomorrow" bindtap="setEndAction">顺延明天</view>
+          <view class="segment-item {{item.action === 'cancel' ? 'on' : ''}}" data-index="{{index}}" data-action="cancel" bindtap="setEndAction">取消</view>
+          <view class="segment-item {{item.action === 'keep' ? 'on' : ''}}" data-index="{{index}}" data-action="keep" bindtap="setEndAction">保留</view>
+        </view>
+      </view>
+      <view class="field">
+        <text class="field-label">今天的小结（可选）</text>
+        <textarea
+          class="textarea notes-input"
+          value="{{endSummary}}"
+          placeholder="今天完成了什么，明天想怎么安排"
+          placeholder-class="placeholder"
+          bindinput="onEndSummary"
+          maxlength="2000"
+        ></textarea>
+      </view>
+    </scroll-view>
+    <view class="sheet-foot">
+      <view class="btn btn-ghost" bindtap="closeEndDay">取消</view>
+      <view class="btn btn-primary" bindtap="submitEndDay">{{saving ? '处理中…' : '确认收尾'}}</view>
+    </view>
+  </view>
+</view>

@@ -1,0 +1,219 @@
+<view class="app {{themeMode === 'dark' ? 'theme-dark' : ''}}" style="{{themeStyle}}">
+  <view class="topbar">
+    <view class="btn btn-icon btn-ghost back-btn" bindtap="goBack">
+      <text class="back-ic">←</text>
+    </view>
+    <view class="g-avatar" bindtap="openEdit">
+      <image wx:if="{{avatarUrl}}" class="g-avatar-img" src="{{avatarUrl}}" mode="aspectFill" />
+      <text wx:else class="g-avatar-txt">{{groupInitial}}</text>
+    </view>
+    <view class="grow">
+      <view class="topbar-title" bindtap="openEdit">{{group.name || '监督群'}}</view>
+      <view class="topbar-desc">{{rows.length}} 人 · 今日看板<text wx:if="{{group.owner}}" class="g-edit"> · 编辑</text></view>
+    </view>
+    <view class="topbar-actions">
+      <button class="btn btn-icon btn-soft share-btn" open-type="share">
+        <text class="share-ic">＋</text>
+      </button>
+    </view>
+  </view>
+
+  <view wx:if="{{loading}}" class="loading-block">
+    <view class="spinner"></view>
+    <text>正在读取群数据</text>
+  </view>
+
+  <view wx:elif="{{err}}" class="card">
+    <view class="banner banner-danger"><text>{{err}}</text></view>
+    <view class="btn btn-soft btn-block retry-btn" bindtap="refresh">重试</view>
+  </view>
+
+  <block wx:else>
+    <!-- 收到的催办 -->
+    <view wx:if="{{nudges.length}}" class="card nudge-card">
+      <view class="card-head">
+        <view class="card-title">有人催你了</view>
+      </view>
+      <view wx:for="{{nudges}}" wx:key="id" class="nudge-row">
+        <text class="nudge-from">{{item.from}}</text>
+        <text class="nudge-text">{{item.text}}</text>
+      </view>
+      <view class="btn btn-soft btn-block nudge-ack" bindtap="ackNudges">知道了</view>
+    </view>
+
+    <!-- 催办通知（服务端配置了模板才显示） -->
+    <view wx:if="{{showSubscribe}}" class="card sub-card">
+      <view class="sub-main">
+        <text class="sub-title">开启催办通知</text>
+        <text class="muted">被队友催的时候，微信「服务通知」直接提醒你，不用打开小程序。</text>
+      </view>
+      <view class="btn btn-sm btn-primary sub-btn" bindtap="askSubscribe">开启</view>
+    </view>
+
+    <!-- 今日 / 本周切换 -->
+    <view class="seg">
+      <view class="seg-item {{tab === 'today' ? 'on' : ''}}" data-tab="today" bindtap="switchTab">今日</view>
+      <view class="seg-item {{tab === 'week' ? 'on' : ''}}" data-tab="week" bindtap="switchTab">本周</view>
+    </view>
+
+    <!-- 今日看板 -->
+    <view wx:if="{{tab === 'today'}}" class="card">
+      <view class="card-head">
+        <view class="card-title">今天各自完成得怎样</view>
+        <text class="tiny">{{posting ? '保存中…' : '下拉刷新'}}</text>
+      </view>
+
+      <view wx:for="{{rows}}" wx:key="openid" class="member-row">
+        <view class="member-top">
+          <text class="member-name">{{item.name}}<text wx:if="{{item.isMe}}" class="me-tag">我</text></text>
+          <text wx:if="{{item.hasCheck}}" class="member-count num">{{item.done}}/{{item.total}}</text>
+          <text wx:else class="member-count none">还没发计划</text>
+        </view>
+        <view class="bar-track">
+          <view class="bar-fill {{item.pct >= 100 ? 'full' : ''}}" style="width:{{item.pct}}%"></view>
+        </view>
+
+        <!-- 我自己的清单：能勾 -->
+        <block wx:if="{{item.isMe}}">
+          <view wx:if="{{item.items.length}}" class="my-items">
+            <view wx:for="{{item.items}}" wx:for-item="p" wx:for-index="pi" wx:key="text" class="my-item" data-index="{{pi}}" bindtap="toggleItem">
+              <view class="chk {{p.done ? 'on' : ''}}">
+                <text wx:if="{{p.done}}" class="chk-ic">✓</text>
+              </view>
+              <text class="my-item-text {{p.done ? 'done' : ''}}">{{p.text}}</text>
+            </view>
+          </view>
+          <view class="add-row">
+            <input class="add-input" value="{{draft}}" placeholder="加一项今日计划，如：背 50 个单词" maxlength="20" bindinput="onDraft" bindconfirm="addDraft" confirm-type="done" />
+            <view class="btn btn-sm btn-soft reuse-btn" bindtap="reuseYesterday">复用昨天</view>
+            <view class="btn btn-sm btn-primary add-btn" bindtap="addDraft">添加</view>
+          </view>
+          <text class="tiny my-tip">点一下前面的圆圈打勾，群友马上能看到进度。</text>
+        </block>
+
+        <!-- 群友的清单：只读 -->
+        <block wx:else>
+          <view wx:if="{{item.items.length}}" class="plan-chips">
+            <text wx:for="{{item.items}}" wx:for-item="p" wx:key="text" class="plan-chip {{p.done ? 'done' : ''}}">{{p.text}}</text>
+          </view>
+          <view class="member-foot">
+            <view class="btn btn-sm btn-soft" data-openid="{{item.openid}}" data-name="{{item.name}}" bindtap="openNudge">{{item.nudged ? '再催一次' : '催一下'}}</view>
+          </view>
+        </block>
+      </view>
+    </view>
+
+    <!-- 本周榜 -->
+    <view wx:elif="{{tab === 'week'}}" class="card">
+      <view class="card-head">
+        <view class="card-title">本周谁最能坚持</view>
+        <text class="tiny">{{weekDays[0]}} 起</text>
+      </view>
+
+      <view wx:if="{{weekLoading}}" class="loading-block">
+        <view class="spinner"></view>
+        <text>统计中…</text>
+      </view>
+
+      <block wx:else>
+        <view wx:for="{{weekRows}}" wx:key="openid" class="member-row">
+          <view class="member-top">
+            <text class="member-name">{{item.name}}<text wx:if="{{item.isMe}}" class="me-tag">我</text></text>
+            <view class="week-right">
+              <text wx:if="{{item.streak}}" class="streak-tag">🔥 {{item.streak}} 天</text>
+              <text class="member-count num">{{item.done}}/{{item.total}}</text>
+            </view>
+          </view>
+          <view class="bar-track">
+            <view class="bar-fill {{item.pct >= 100 ? 'full' : ''}}" style="width:{{item.pct}}%"></view>
+          </view>
+          <view class="trend">
+            <view wx:for="{{item.trend}}" wx:for-item="bar" wx:for-index="ti" class="trend-col">
+              <view class="trend-bar {{bar < 0 ? 'empty' : ''}}" style="height:{{bar < 0 ? 8 : (bar < 12 ? 12 : bar)}}%"></view>
+            </view>
+          </view>
+          <text class="tiny trend-tip">发过 {{item.daysPosted}} 天计划</text>
+        </view>
+        <text class="tiny week-note">柱子是每天的计划完成率，灰柱表示那天没发计划；连续打卡从最近往回数，今天还没打卡不断签。</text>
+      </block>
+    </view>
+
+    <!-- 邀请 -->
+    <view class="card invite-card">
+      <view class="card-head">
+        <view class="card-title">拉人进群</view>
+      </view>
+      <text class="muted">把小程序卡片发到微信群，点开就进群；也可以让对方手动输入邀请码。</text>
+      <view class="invite-code" bindtap="copyCode">
+        <text class="invite-code-val">{{group.code}}</text>
+        <text class="invite-code-tip">点一下复制</text>
+      </view>
+      <button class="btn btn-primary btn-block" open-type="share">分享到微信群</button>
+    </view>
+
+    <view class="btn btn-ghost btn-block leave-btn" bindtap="leaveGroup">退出这个群</view>
+    <text class="tiny foot-note">今日计划直接发在群里、存在微信云上，不需要连电脑。群里只同步计划清单和完成状态，不能发文字、图片或评论。</text>
+  </block>
+
+  <!-- 群资料：改名 / 换头像 -->
+  <view wx:if="{{editSheet}}" class="mask" bindtap="closeEdit"></view>
+  <view wx:if="{{editSheet}}" class="sheet">
+    <view class="sheet-head">
+      <text class="sheet-title">群资料</text>
+      <view class="ic ic-close-muted ic-sm" bindtap="closeEdit"></view>
+    </view>
+    <view class="sheet-body">
+      <view class="edit-avatar-wrap">
+        <view class="edit-avatar" bindtap="chooseAvatar">
+          <image wx:if="{{editAvatarUrl}}" class="edit-avatar-img" src="{{editAvatarUrl}}" mode="aspectFill" />
+          <text wx:else class="edit-avatar-txt">{{groupInitial}}</text>
+          <view class="edit-avatar-mask"><text class="edit-avatar-mask-ic">换</text></view>
+        </view>
+        <text class="tiny edit-avatar-tip">{{savingGroup ? '上传中…' : '点头像换一张'}}</text>
+        <text wx:if="{{editAvatar}}" class="tiny edit-avatar-del" bindtap="removeAvatar">移除头像</text>
+      </view>
+
+      <view class="field edit-name-field">
+        <text class="field-label">群名</text>
+        <input class="input" value="{{editName}}" maxlength="16" placeholder="给这个群起个名字" placeholder-class="placeholder" bindinput="onEditName" />
+      </view>
+
+      <view class="btn btn-primary btn-block" bindtap="saveGroup">{{savingGroup ? '保存中…' : '保存'}}</view>
+      <text class="tiny edit-tip">群名最多 16 字。头像会上传到微信云存储，群友下拉刷新就能看到。</text>
+    </view>
+  </view>
+
+  <!-- 催办短语 -->
+  <view wx:if="{{nudgeSheet}}" class="mask" bindtap="closeNudge"></view>
+  <view wx:if="{{nudgeSheet}}" class="sheet">
+    <view class="sheet-head">
+      <text class="sheet-title">催 {{nudgeTarget.name}} 一下</text>
+      <view class="ic ic-close-muted ic-sm" bindtap="closeNudge"></view>
+    </view>
+    <scroll-view scroll-y class="sheet-body">
+      <view wx:for="{{nudgeTexts}}" wx:key="*this" class="nudge-option" data-text="{{item}}" bindtap="pickNudge">
+        <text class="nudge-option-text">{{item}}</text>
+        <view class="nudge-del" data-text="{{item}}" catchtap="removeNudge">×</view>
+      </view>
+
+      <view class="nudge-write">
+        <input
+          class="nudge-input"
+          value="{{nudgeCustom}}"
+          maxlength="{{nudgeMax}}"
+          placeholder="自己写一句，40 字以内"
+          placeholder-class="nudge-ph"
+          confirm-type="send"
+          bindinput="onNudgeInput"
+          bindconfirm="sendNudgeCustom"
+        />
+        <view class="btn btn-primary btn-sm nudge-send" bindtap="sendNudgeCustom">发这句</view>
+      </view>
+
+      <view class="nudge-foot">
+        <text class="tiny">自己写的句子发出去后会存进上面的常用列表，下次直接点；点 × 可以删掉。</text>
+        <text wx:if="{{!nudgeDefault}}" class="tiny nudge-reset" bindtap="resetNudge">恢复默认</text>
+      </view>
+    </scroll-view>
+  </view>
+</view>
