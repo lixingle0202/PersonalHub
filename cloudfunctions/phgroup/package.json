@@ -1,0 +1,9 @@
+{
+  "name": "phgroup",
+  "version": "1.0.0",
+  "description": "监督群：群、成员、每日快照、催办",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

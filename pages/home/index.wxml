@@ -1,0 +1,323 @@
+<view class="app {{themeMode === 'dark' ? 'theme-dark' : ''}}" style="{{themeStyle}}">
+  <view class="topbar">
+    <view class="brand-mark mark-sm">P</view>
+    <view class="grow">
+      <view class="topbar-title">首页总览</view>
+      <view class="topbar-desc">让每一天，从容开始</view>
+    </view>
+    <view class="topbar-actions">
+      <view class="btn btn-icon btn-soft" bindtap="goToday">
+        <view class="ic ic-plus-t-blue"></view>
+      </view>
+    </view>
+  </view>
+
+  <view wx:if="{{loading}}" class="loading-block">
+    <view class="spinner"></view>
+    <text>正在加载</text>
+  </view>
+
+  <view wx:elif="{{error && !agenda.length}}" class="card">
+    <view class="banner banner-danger"><text>{{error}}</text></view>
+    <view class="btn btn-soft btn-block retry-btn" bindtap="retry">重新加载</view>
+  </view>
+
+  <block wx:else>
+    <view wx:if="{{offline}}" class="banner offline-banner" bindtap="goServer">
+      <text>{{offlineText}}（连不上服务，先看缓存）</text>
+      <text class="offline-fix">改服务地址</text>
+    </view>
+    <view wx:if="{{error}}" class="banner banner-danger error-inline" bindtap="retry">
+      <text>{{error}}</text>
+      <text class="error-retry">重试</text>
+    </view>
+    <!-- 今日问候 + 完成度 -->
+    <view class="welcome">
+      <view class="welcome-main">
+        <text class="eyebrow">每一天，都值得好好安排</text>
+        <text class="welcome-title">今天，专注最重要的事</text>
+        <view class="welcome-meta">
+          <text class="muted">{{dateText}}</text>
+          <text wx:if="{{streak > 0}}" class="streak-chip">🔥 连续 {{streak}} 天</text>
+        </view>
+      </view>
+      <view class="ring-wrap">
+        <canvas type="2d" id="ring" class="ring"></canvas>
+        <view class="ring-center">
+          <text class="ring-num num">{{stats.completion_rate}}%</text>
+          <text class="ring-cap">今日完成度</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 三个指标 -->
+    <view class="stats">
+      <view class="card stat">
+        <view class="stat-chip chip-blue"><view class="ic ic-calendar-t-blue"></view></view>
+        <view class="stat-val num">{{stats.total}}<text class="stat-unit">项</text></view>
+        <text class="stat-label">今日事项</text>
+      </view>
+      <view class="card stat">
+        <view class="stat-chip chip-green"><view class="ic ic-check-t-green"></view></view>
+        <view class="stat-val num">{{stats.completed}}<text class="stat-unit">项</text></view>
+        <text class="stat-label">已经完成</text>
+      </view>
+      <view class="card stat">
+        <view class="stat-chip chip-amber"><view class="ic ic-target-t-orange"></view></view>
+        <view class="stat-val num">{{stats.must}}<text class="stat-unit">项</text></view>
+        <text class="stat-label">必须完成</text>
+      </view>
+    </view>
+
+    <!-- 本周小结 -->
+    <view class="card week-card">
+      <view class="card-head">
+        <view class="card-title">
+          <view class="ic ic-chart-muted"></view>
+          <text>本周小结</text>
+        </view>
+        <text wx:if="{{week}}" class="tiny">{{week.start.slice(5)}} ~ {{week.end.slice(5)}}</text>
+      </view>
+
+      <block wx:if="{{week}}">
+        <view class="week-bars">
+          <view wx:for="{{week.bars}}" wx:key="date" class="week-bar-col">
+            <view class="week-bar-track">
+              <view class="week-bar {{item.h >= 100 ? 'full' : ''}}" style="height:{{item.h}}%"></view>
+            </view>
+            <text class="tiny">{{item.label}}</text>
+          </view>
+        </view>
+        <view class="week-stats">
+          <view class="week-stat">
+            <text class="week-num num">{{week.completed}}</text>
+            <text class="tiny">完成事项</text>
+          </view>
+          <view class="week-stat">
+            <text class="week-num num">{{week.rate}}%</text>
+            <text class="tiny">平均完成率</text>
+          </view>
+          <view class="week-stat">
+            <text class="week-num num">{{week.activeDays}}</text>
+            <text class="tiny">打卡天数</text>
+          </view>
+          <view class="week-stat">
+            <text class="week-num num">{{week.waterL}}</text>
+            <text class="tiny">饮水（L）</text>
+          </view>
+        </view>
+        <view wx:if="{{week.weightDelta !== 0}}" class="week-weight">
+          <text class="tiny">本周体重{{week.weightDelta > 0 ? '增加' : '减轻'}} {{week.weightDelta < 0 ? -week.weightDelta : week.weightDelta}} kg</text>
+        </view>
+        <button class="week-share" open-type="share">分享这份周报</button>
+      </block>
+      <view wx:elif="{{weekLoading}}" class="week-loading">
+        <view class="spinner"></view>
+        <text class="tiny">正在统计本周数据…</text>
+      </view>
+    </view>
+
+    <!-- 监督群入口 -->
+    <view class="card group-entry" bindtap="goGroups">
+      <view class="group-entry-avatar">群</view>
+      <view class="grow">
+        <text class="group-entry-title">监督群</text>
+        <text class="tiny">和朋友互相盯着，看看今天谁没完成</text>
+      </view>
+      <view class="ic ic-chevron-muted ic-xs"></view>
+    </view>
+
+    <!-- 今日计划 -->
+    <view class="card">
+      <view class="card-head">
+        <view class="card-title">
+          <view class="ic ic-calendar-muted"></view>
+          <text>今日计划</text>
+        </view>
+        <view class="link" bindtap="goToday">
+          <text>查看全部</text>
+          <view class="ic ic-chevron-muted ic-xs"></view>
+        </view>
+      </view>
+
+      <view class="overviews">
+        <view class="overview" bindtap="goLearning">
+          <view class="overview-head">
+            <view class="ic ic-book-t-blue ic-sm"></view>
+            <text class="overview-name">学习计划</text>
+            <view class="grow"></view>
+            <view class="ic ic-chevron-muted ic-xs"></view>
+          </view>
+          <text class="overview-title">{{summaries.learning.title || '暂无学习计划'}}</text>
+          <text class="overview-desc">{{summaries.learning.detail || '今日暂无学习任务'}}</text>
+        </view>
+
+        <view class="overview" bindtap="goDiet">
+          <view class="overview-head">
+            <view class="ic ic-bowl-t-blue ic-sm"></view>
+            <text class="overview-name">饮食计划</text>
+            <view class="grow"></view>
+            <view class="ic ic-chevron-muted ic-xs"></view>
+          </view>
+          <text class="overview-title">{{summaries.diet.title || '今日暂无饮食安排'}}</text>
+          <text class="overview-desc">{{summaries.diet.detail || '已饮水 0 ml'}}</text>
+        </view>
+      </view>
+
+      <view class="sub-title">今天要完成（{{pendingCount}} 项）</view>
+      <view wx:if="{{agenda.length}}" class="agenda-mini">
+        <view
+          wx:for="{{agenda}}"
+          wx:key="id"
+          class="list-row agenda-mini-row"
+          bindtap="toggleAgenda"
+          data-id="{{item.id}}"
+          data-done="{{item.done}}"
+        >
+          <view class="checkbox {{item.done ? 'checked' : ''}}">
+            <view wx:if="{{item.done}}" class="ic ic-check-white"></view>
+          </view>
+          <view class="grow">
+            <text class="agenda-title {{item.done ? 'done' : ''}}">{{item.title}}</text>
+            <view class="agenda-meta">
+              <text class="tiny">{{item.timeText}}</text>
+              <text wx:if="{{item.tag}}" class="tag tag-danger tiny-tag">{{item.tag}}</text>
+            </view>
+          </view>
+        </view>
+      </view>
+      <view wx:else class="empty empty-dashed">今天还没有计划，去「今日计划」添加一条</view>
+    </view>
+
+    <!-- 快速备忘 -->
+    <view class="card">
+      <view class="card-head">
+        <view class="card-title">
+          <view class="ic ic-note-muted"></view>
+          <text>快速备忘</text>
+        </view>
+      </view>
+      <text class="muted notes-caption">让灵感先落下来，稍后再慢慢安排。</text>
+
+      <view class="note-compose">
+        <input
+          class="input grow"
+          value="{{noteDraft}}"
+          placeholder="随手记下一件事"
+          placeholder-class="placeholder"
+          bindinput="onNoteInput"
+          bindconfirm="addNote"
+          confirm-type="done"
+          maxlength="300"
+        />
+        <view class="btn btn-primary" bindtap="addNote">记录</view>
+      </view>
+
+      <view wx:if="{{notes.length}}" class="note-list">
+        <view wx:for="{{notes}}" wx:key="id" class="note-row">
+          <block wx:if="{{noteEditing && noteEditing.id === item.id}}">
+            <input
+              class="input grow"
+              value="{{noteEditing.content}}"
+              focus="{{true}}"
+              bindinput="onEditNoteInput"
+              bindconfirm="saveNote"
+            />
+            <view class="btn btn-sm btn-primary" bindtap="saveNote">保存</view>
+            <view class="btn btn-sm btn-ghost" bindtap="cancelEditNote">取消</view>
+          </block>
+          <block wx:else>
+            <text class="note-text grow">{{item.content}}</text>
+            <view class="note-actions">
+              <view class="btn btn-sm btn-ghost" bindtap="startEditNote" data-id="{{item.id}}" data-content="{{item.content}}">修改</view>
+              <view class="btn btn-sm btn-danger" bindtap="deleteNote" data-id="{{item.id}}">删除</view>
+              <view class="btn btn-sm btn-soft" bindtap="convertNote" data-id="{{item.id}}">加入今天</view>
+            </view>
+          </block>
+        </view>
+      </view>
+      <view wx:else class="notes-empty">
+        <view class="ic ic-note-muted ic-lg"></view>
+        <text class="tiny">一个想法，一件小事</text>
+        <text class="tiny">都可以从这里开始</text>
+      </view>
+    </view>
+
+    <!-- 日常记录 -->
+    <view class="card">
+      <view class="card-head">
+        <view class="card-title">
+          <view class="ic ic-chart-muted"></view>
+          <text>日常记录</text>
+        </view>
+        <text class="tiny">{{journalDate === date ? '今天' : journalDate}} · {{activities.length}} 条</text>
+      </view>
+
+      <view class="journal-tools">
+        <picker mode="date" value="{{journalDate}}" end="{{date}}" bindchange="onJournalDate">
+          <view class="picker-box journal-date">
+            <text>{{journalDate}}</text>
+            <view class="ic ic-calendar-muted ic-xs"></view>
+          </view>
+        </picker>
+        <view class="journal-nav">
+          <view class="btn btn-sm btn-ghost" bindtap="shiftJournal" data-delta="-1">前一天</view>
+          <view class="btn btn-sm btn-ghost" bindtap="shiftJournal" data-delta="1">后一天</view>
+          <view class="btn btn-sm btn-ghost" bindtap="shiftJournal" data-delta="0">回到今天</view>
+        </view>
+      </view>
+
+      <textarea
+        class="textarea journal-input"
+        value="{{journalText}}"
+        placeholder="例如：上午学了英语一小时，中午吃了牛肉面，下午跑步30分钟，晚上去超市买了牛奶。"
+        placeholder-class="placeholder"
+        maxlength="5000"
+        auto-height
+        bindinput="onJournalInput"
+      ></textarea>
+      <view class="journal-submit">
+        <text class="tiny">记录到 {{journalDate}}</text>
+        <view class="btn btn-primary btn-sm" bindtap="submitJournal">整理并记录</view>
+      </view>
+
+      <view wx:if="{{journalSkipped.length}}" class="banner journal-warn">
+        <view class="grow">
+          <text>以下内容含未完成或计划表述，未记入已做事项：</text>
+          <text wx:for="{{journalSkipped}}" wx:key="*this" class="skip-item">{{item}}</text>
+        </view>
+      </view>
+
+      <view wx:if="{{journalLoading}}" class="journal-loading">
+        <view class="spinner"></view>
+        <text>正在读取这一天的记录</text>
+      </view>
+
+      <view wx:elif="{{activityGroups.length}}" class="activity-list">
+        <view wx:for="{{activityGroups}}" wx:key="key" class="activity-group">
+          <view class="activity-group-head">
+            <view class="tag tag-primary">{{item.label}}</view>
+            <text class="tiny">{{item.items.length}} 条</text>
+          </view>
+          <view
+            wx:for="{{item.items}}"
+            wx:for-item="a"
+            wx:for-index="ai"
+            wx:key="id"
+            class="activity-row"
+          >
+            <view class="activity-main">
+              <text class="activity-text">{{a.content}}</text>
+              <text class="tiny source-toggle" bindtap="toggleSource" data-id="{{a.id}}">
+                {{openSourceId === a.id ? '收起原始描述' : '查看原始描述'}}
+              </text>
+              <text wx:if="{{openSourceId === a.id}}" class="tiny source-text">{{a.source_text}}</text>
+            </view>
+            <view class="btn btn-sm btn-ghost" bindtap="deleteActivity" data-id="{{a.id}}">删除</view>
+          </view>
+        </view>
+      </view>
+      <view wx:else class="empty empty-dashed">这一天还没有日常记录</view>
+    </view>
+  </block>
+</view>

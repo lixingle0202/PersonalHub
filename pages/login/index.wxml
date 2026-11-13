@@ -1,0 +1,81 @@
+<view class="app login {{themeMode === 'dark' ? 'theme-dark' : ''}}" style="{{themeStyle}}">
+  <view class="login-wrap">
+    <view class="brand-row">
+      <view class="brand-mark">P</view>
+      <view class="brand-txt">
+        <text class="brand-name">PersonalHub</text>
+        <text class="brand-caption">生活，有条不紊</text>
+      </view>
+    </view>
+
+    <view class="card login-card">
+      <text class="h1">{{isRegister ? '创建个人空间' : '欢迎回来'}}</text>
+      <text class="muted intro">每个人的计划和记录独立保存。登录后即可在手机上继续查看今日、学习与饮食安排。</text>
+
+      <view wx:if="{{error}}" class="banner banner-danger login-error">
+        <text>{{error}}</text>
+      </view>
+
+      <view class="field">
+        <text class="field-label">用户名</text>
+        <input
+          class="input"
+          value="{{username}}"
+          placeholder="3 至 32 位英文字母、数字或下划线"
+          placeholder-class="placeholder"
+          data-key="username"
+          bindinput="onInput"
+          maxlength="32"
+          confirm-type="next"
+        />
+      </view>
+
+      <view class="field">
+        <text class="field-label">密码</text>
+        <view class="pwd-wrap">
+          <input
+            class="input pwd-input"
+            value="{{password}}"
+            password="{{!showPwd}}"
+            placeholder="密码至少 10 位"
+            placeholder-class="placeholder"
+            data-key="password"
+            bindinput="onInput"
+            maxlength="64"
+            confirm-type="done"
+            bindconfirm="submit"
+          />
+          <view class="pwd-eye" bindtap="togglePwd">
+            <text class="tiny">{{showPwd ? '隐藏' : '显示'}}</text>
+          </view>
+        </view>
+      </view>
+
+      <view class="agree-row" bindtap="toggleAgree">
+        <view class="agree-box {{agreed ? 'on' : ''}}">
+          <view wx:if="{{agreed}}" class="ic ic-check-white ic-xs"></view>
+        </view>
+        <text class="tiny agree-text">我已阅读并同意</text>
+        <text class="tiny agree-link" catchtap="goAgreement">《用户协议与隐私政策》</text>
+      </view>
+
+      <button class="btn btn-primary btn-block login-btn" loading="{{loading}}" bindtap="submit">
+        {{isRegister ? '注册并进入' : '登录'}}
+      </button>
+
+      <view class="switch-row" bindtap="toggleMode">
+        <text class="tiny">{{isRegister ? '已有账号？去登录' : '没有账号？创建个人空间'}}</text>
+      </view>
+
+      <view class="switch-row guest-row" bindtap="goGroups">
+        <text class="tiny guest-link">不用登录 · 直接进「监督群」</text>
+      </view>
+    </view>
+
+    <view class="login-foot">
+      <text class="tiny">与电脑版共用同一账号与数据</text>
+      <text class="tiny login-server" catchtap="goServer">服务地址：{{serverUrl}}</text>
+      <text class="tiny">© PersonalHub</text>
+    </view>
+  </view>
+</view>
