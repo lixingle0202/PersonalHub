@@ -73,7 +73,7 @@ test('JavaScript and JSON parse and all static WXML event handlers are defined',
 
 function client() {
   const storage = new Map([
-    ['ph_session', 'alice-token'],
+    ['ph_session', 'alice-session_s-token'],
     ['ph_token', 'alice-write'],
     ['ph_user', { username: 'Alice' }],
     ['ph_settings', { nickname: 'Alice' }],
@@ -92,13 +92,26 @@ function client() {
     },
   })
   vm.runInContext(read('utils/api.js'), context)
-  return { api: context.module.exports, storage }
+  return { api: context.module.exports, storage, pickCookie: context.pickCookie }
 }
+
+test('login cookie parsing preserves full URL-safe session tokens', () => {
+  const { pickCookie } = client()
+  for (const header of ['Set-Cookie', 'set-cookie', 'SET-COOKIE']) {
+    assert.equal(
+      pickCookie({
+        [header]: ['other=value', 'personalhub_public_session=abc_s-123; HttpOnly; SameSite=Lax'],
+      }),
+      'abc_s-123',
+    )
+  }
+  assert.equal(pickCookie({}), '')
+})
 
 test('changing or resetting the backend clears credentials and account settings', () => {
   const { api, storage } = client()
   api.setBaseUrl('http://127.0.0.1:8771/')
-  assert.equal(api.getSession(), 'alice-token')
+  assert.equal(api.getSession(), 'alice-session_s-token')
   api.setBaseUrl('https://new.example.test')
   assert.equal(api.getSession(), '')
   assert.equal(api.getToken(), '')
@@ -247,9 +260,9 @@ test('notifier never exposes another account and persists first-run state', asyn
     const cookie = req.headers.cookie || ''
     if (cookie.includes('operator-token')) operatorRequests++
     const name =
-      cookie === 'personalhub_public_session=alice-token'
+      cookie === 'personalhub_public_session=alice-session_s-token'
         ? 'Alice'
-        : cookie === 'personalhub_public_session=bob-token'
+        : cookie === 'personalhub_public_session=bob-session_s-token'
           ? 'Bob'
           : ''
     res.setHeader('Content-Type', 'application/json')
@@ -278,8 +291,8 @@ test('notifier never exposes another account and persists first-run state', asyn
   })
   notifier.writeJson(path.join(dir, 'wechat_subs.json'), {
     users: [
-      { openid: 'alice-id', username: 'Alice', session: 'alice-token', quota: 2 },
-      { openid: 'bob-id', username: 'Bob', session: 'bob-token', quota: 7 },
+      { openid: 'alice-id', username: 'Alice', session: 'alice-session_s-token', quota: 2 },
+      { openid: 'bob-id', username: 'Bob', session: 'bob-session_s-token', quota: 7 },
     ],
   })
   notifier.server.listen(0, '127.0.0.1')
@@ -291,7 +304,7 @@ test('notifier never exposes another account and persists first-run state', asyn
     for (const key of ['accounts', 'total_quota', 'conf_file'])
       assert.equal(key in anonymous, false)
     const mine = await fetch(url + '/api/v1/wx/subs/status', {
-      headers: { Cookie: 'personalhub_public_session=alice-token' },
+      headers: { Cookie: 'personalhub_public_session=alice-session_s-token' },
     }).then((r) => r.json())
     assert.equal(mine.quota, 2)
     assert.equal(mine.my_username, 'Alice')
@@ -299,7 +312,7 @@ test('notifier never exposes another account and persists first-run state', asyn
     assert.equal(
       (
         await fetch(url + '/api/v1/wx/events?openid=bob-id', {
-          headers: { Cookie: 'personalhub_public_session=alice-token' },
+          headers: { Cookie: 'personalhub_public_session=alice-session_s-token' },
         })
       ).status,
       403,
@@ -307,7 +320,7 @@ test('notifier never exposes another account and persists first-run state', asyn
     assert.equal(
       (
         await fetch(url + '/api/v1/wx/events', {
-          headers: { Cookie: 'personalhub_public_session=alice-token' },
+          headers: { Cookie: 'personalhub_public_session=alice-session_s-token' },
         })
       ).status,
       200,
