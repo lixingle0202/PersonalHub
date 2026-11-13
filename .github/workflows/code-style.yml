@@ -52,3 +52,5 @@ jobs:
         run: python -m pre_commit run --from-ref "$BASE_REF" --to-ref HEAD --show-diff-on-failure
       - name: Verify real commit behavior
         run: python scripts/test-format-hooks.py
+      - name: Verify mini-program integration
+        run: node --test scripts/test-miniprogram.mjs

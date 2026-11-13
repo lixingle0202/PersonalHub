@@ -1,0 +1,23 @@
+<view
+  class="tabbar {{hidden ? 'tabbar-hidden' : ''}}"
+  style="background:{{dark ? '#1f2434' : '#ffffff'}};border-top-color:{{dark ? '#2f374b' : '#e9edf6'}};"
+>
+  <view
+    wx:for="{{list}}"
+    wx:key="path"
+    class="tab {{selected === index ? 'on' : ''}}"
+    data-index="{{index}}"
+    bindtap="onTap"
+  >
+    <view class="tab-ic-wrap">
+      <view
+        class="tab-ic ic ic-{{item.icon}}-{{selected === index ? colorKey : (dark ? 'darkmuted' : 'muted')}}"
+      ></view>
+      <view wx:if="{{badges[index] > 0}}" class="tab-badge">{{badges[index]}}</view>
+    </view>
+    <text
+      class="tab-text"
+      style="color:{{selected === index ? colorHex : (dark ? '#98a1b8' : '#7b8398')}}"
+    >{{item.text}}</text>
+  </view>
+</view>

@@ -1,0 +1,5 @@
+{
+  "appid": "YOUR_WECHAT_APPID",
+  "secret": "YOUR_WECHAT_APPSECRET",
+  "tmpl_id": "YOUR_SUBSCRIBE_TEMPLATE_ID"
+}

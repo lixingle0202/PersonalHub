@@ -1,0 +1,623 @@
+<view class="app {{themeMode === 'dark' ? 'theme-dark' : ''}}" style="{{themeStyle}}">
+  <view class="topbar topbar-two">
+    <view class="topbar-head">
+      <view class="brand-mark mark-sm">P</view>
+      <view class="grow">
+        <view class="topbar-title">学习计划</view>
+        <view class="topbar-desc">每一点积累，都通向更好的自己</view>
+      </view>
+    </view>
+    <view class="topbar-actions">
+      <view class="btn btn-sm {{pomoRunning ? 'btn-primary' : 'btn-soft'}}" bindtap="openPomo">
+        <view class="ic {{pomoRunning ? 'ic-clock-white' : 'ic-clock-t-blue'}} ic-xs"></view>
+        <text>{{pomoRunning ? pomoLabel : '番茄钟'}}</text>
+      </view>
+      <view class="btn btn-sm btn-soft" data-kind="ailearn" bindtap="openSheet">
+        <text>AI 生成</text>
+      </view>
+      <view class="btn btn-sm btn-primary" data-kind="goal" bindtap="openSheet">
+        <view class="ic ic-plus-white ic-xs"></view>
+        <text>新建目标</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 逾期提醒 -->
+  <view wx:for="{{notices}}" wx:key="id" class="banner notice">
+    <view class="grow">
+      <text class="notice-title">「{{item.goal_name}}」已超时并自动顺延</text>
+      <text class="notice-body">连续 3 个自然日没有完成学习任务。未完成任务已顺延 {{item.shifted_days}} 天，最早一项从 {{item.previous_first_date}} 调整到 {{item.new_first_date}}；已完成任务保持不变。</text>
+    </view>
+    <view class="btn btn-sm btn-ghost notice-btn" data-id="{{item.id}}" bindtap="ackNotice">
+      {{acking === item.id ? '确认中…' : '我知道了'}}
+    </view>
+  </view>
+
+  <view wx:if="{{loading}}" class="loading-block">
+    <view class="spinner"></view>
+    <text>正在加载</text>
+  </view>
+
+  <view wx:elif="{{error}}" class="card">
+    <view class="banner banner-danger"><text>{{error}}</text></view>
+    <view class="btn btn-soft btn-block retry-btn" bindtap="retry">重新加载</view>
+  </view>
+
+  <block wx:else>
+    <view wx:if="{{offline}}" class="banner offline-banner" bindtap="goServer">
+      <text>{{offlineText}}（连不上服务，先看缓存）</text>
+      <text class="offline-fix">改服务地址</text>
+    </view>
+    <view wx:if="{{dueBanner}}" class="banner banner-danger due-banner">
+      <view class="due-row">
+        <text class="due-text">{{dueBanner}}</text>
+        <view class="btn btn-sm due-subscribe" bindtap="subscribeDueRemind">{{remindOn ? '补充额度' : '微信提醒我'}}</view>
+      </view>
+    </view>
+    <!-- 没有临期计划时也给个常驻入口：不必等到最后两天才能授权 -->
+    <view wx:if="{{!dueBanner && goals.length}}" class="remind-tip" bindtap="subscribeDueRemind">
+      <view class="remind-main">
+        <text class="remind-title">{{remindOn ? '微信提醒已开启' : '开启微信提醒'}}</text>
+        <text class="tiny">{{remindOn ? '计划和今日任务都会单独提醒' + (quotaLeft ? '，还可收 ' + quotaLeft + ' 条' : '') : '授权一次，全部计划和今日任务自动提醒'}}</text>
+      </view>
+      <view class="remind-btn">{{remindOn ? '补充额度' : '开启'}}</view>
+    </view>
+    <scroll-view wx:if="{{goals.length}}" scroll-x class="hscroll goal-scroll">
+      <view
+        wx:for="{{goals}}"
+        wx:key="id"
+        class="chip {{selectedId === item.id ? 'on' : ''}}"
+        data-id="{{item.id}}"
+        bindtap="selectGoal"
+      >
+        <text>{{item.name}}</text>
+        <text class="chip-sub">{{item.progress}}%</text>
+      </view>
+    </scroll-view>
+
+    <view wx:if="{{!goals.length}}" class="empty empty-dashed big-empty">
+      <view class="ic ic-book-muted ic-lg"></view>
+      <text>还没有学习目标</text>
+      <text class="tiny">从一个想学的方向开始，拆成每天的小任务</text>
+      <view class="btn btn-sm btn-soft" data-kind="goal" bindtap="openSheet">新建学习目标</view>
+    </view>
+
+    <view wx:if="{{goal}}" class="card goal-card">
+      <view class="goal-head">
+        <view class="grow">
+          <text class="goal-name">{{goal.name}}</text>
+          <text class="tiny">{{taskCount ? '已完成 ' + doneCount + '/' + taskCount + ' 项任务' : '手动进度'}}</text>
+        </view>
+        <text class="goal-pct num">{{goal.progress}}%</text>
+      </view>
+
+      <view class="bar">
+        <view class="bar-fill" style="width:{{goal.progress}}%;background:{{color}}"></view>
+      </view>
+
+      <text wx:if="{{goal.goal}}" class="goal-text">{{goal.goal}}</text>
+
+      <view class="goal-meta-row">
+        <view class="goal-meta grow">
+          <text class="tiny">计划：{{goal.start_date || '未设置'}} 至 {{goal.target_date || '未设置'}}</text>
+          <text class="tiny">预计投入 {{goal.estimated_minutes}} 分钟</text>
+        </view>
+        <view class="btn btn-sm btn-danger" bindtap="confirmDeleteGoal">
+          {{deletingGoal ? '删除中…' : '删除计划'}}
+        </view>
+      </view>
+
+      <view wx:if="{{taskCount}}" class="progress-auto">
+        <view class="grow">
+          <text class="tiny">按任务完成度算出来是 {{autoProgress}}%</text>
+          <text wx:if="{{autoProgress !== progressDraft}}" class="tiny progress-diff">和当前 {{progressDraft}}% 不一致</text>
+        </view>
+        <view wx:if="{{autoProgress !== progressDraft}}" class="btn btn-sm btn-soft" bindtap="syncProgressNow">
+          {{syncing ? '同步中…' : '同步为 ' + autoProgress + '%'}}
+        </view>
+      </view>
+
+      <view class="progress-editor">
+        <slider
+          class="slider"
+          min="0"
+          max="100"
+          value="{{progressDraft}}"
+          activeColor="{{color}}"
+          backgroundColor="{{themeMode === 'dark' ? '#3a4359' : '#e4e8f2'}}"
+          block-size="20"
+          bindchange="onProgressChange"
+          bindchanging="onProgressChange"
+        />
+        <view class="btn btn-sm {{progressDirty ? 'btn-primary' : 'btn-ghost'}}" bindtap="saveProgress">
+          {{progressDirty ? '保存 ' + progressDraft + '%' : '保存进度'}}
+        </view>
+      </view>
+      <text class="tiny progress-foot">勾选/取消任务后进度会自动同步，也可以拖滑块手动微调再保存。</text>
+
+      <view class="segment tabs">
+        <view class="segment-item {{tab === 'plan' ? 'on' : ''}}" data-tab="plan" bindtap="setTab">学习计划</view>
+        <view class="segment-item {{tab === 'sessions' ? 'on' : ''}}" data-tab="sessions" bindtap="setTab">学习记录</view>
+        <view class="segment-item {{tab === 'resources' ? 'on' : ''}}" data-tab="resources" bindtap="setTab">笔记与资料</view>
+      </view>
+
+      <!-- 学习计划 -->
+      <block wx:if="{{tab === 'plan'}}">
+        <view wx:for="{{days}}" wx:key="key" class="day-block">
+          <view class="day-head">
+            <view class="dot {{item.isToday ? 'dot-scheduled' : ''}}"></view>
+            <text class="day-date">{{item.date}}</text>
+            <text class="tiny">{{item.items.length}} 项</text>
+            <view class="grow"></view>
+            <view class="day-add" data-day="{{item.key}}" bindtap="openTask">
+              <view class="ic ic-plus-t-blue ic-xs"></view>
+            </view>
+          </view>
+
+          <view
+            wx:for="{{item.items}}"
+            wx:for-item="task"
+            wx:key="id"
+            class="task-row {{task.done ? 'done' : ''}}"
+          >
+            <view
+              class="checkbox {{task.done ? 'checked' : ''}}"
+              data-agenda="{{task.agenda_id}}"
+              data-done="{{task.done}}"
+              data-date="{{task.plan_date}}"
+              bindtap="toggleTask"
+            >
+              <view wx:if="{{task.done}}" class="ic ic-check-white"></view>
+            </view>
+            <view class="task-main">
+              <text class="task-title">{{task.title}}</text>
+              <text wx:if="{{task.details}}" class="tiny task-details">{{task.details}}</text>
+              <view class="task-meta-line">
+                <text wx:if="{{task.time_text}}" class="time-chip">{{task.time_text}}</text>
+                <text wx:if="{{task.minutes}}" class="tiny">预计 {{task.minutes}} 分钟</text>
+              </view>
+            </view>
+            <view class="task-edit" data-id="{{task.id}}" catchtap="editTask">
+              <view class="ic ic-edit-muted ic-xs"></view>
+            </view>
+            <view class="task-del" data-id="{{task.id}}" catchtap="deleteTask">
+              <view class="ic ic-trash-muted ic-xs"></view>
+            </view>
+          </view>
+
+          <view wx:if="{{!item.items.length}}" class="empty empty-dashed day-empty">
+            <text class="tiny">这一天还没有任务</text>
+          </view>
+        </view>
+
+        <view wx:if="{{!days.length}}" class="empty empty-dashed">
+          <text>还没有拆分任务</text>
+          <view class="btn btn-sm btn-soft" data-day="none" bindtap="openTask">添加第一个任务</view>
+        </view>
+      </block>
+
+      <!-- 学习记录 -->
+      <block wx:elif="{{tab === 'sessions'}}">
+        <view class="tab-action">
+          <text class="tiny">共 {{goal.sessions.length}} 次记录</text>
+          <view class="btn btn-sm btn-soft" data-kind="session" bindtap="openSheet">记录一次学习</view>
+        </view>
+
+        <view wx:for="{{goal.sessions}}" wx:key="id" class="session-card">
+          <view class="between">
+            <text class="session-title">{{item.studied_on}} · {{item.actual_minutes}} 分钟</text>
+          </view>
+          <text wx:if="{{item.notes}}" class="tiny">{{item.notes}}</text>
+          <text wx:if="{{item.problems}}" class="tiny">遇到的问题：{{item.problems}}</text>
+          <text class="tiny">下一步：{{item.next_step || '未填写'}}</text>
+        </view>
+
+        <view wx:if="{{!goal.sessions.length}}" class="empty empty-dashed">还没有学习记录</view>
+      </block>
+
+      <!-- 笔记与资料 -->
+      <block wx:else>
+        <view class="tab-action">
+          <text class="tiny">共 {{goal.resources.length}} 条资料</text>
+          <view class="btn btn-sm btn-soft" data-kind="resource" bindtap="openSheet">添加资料</view>
+        </view>
+
+        <view wx:for="{{goal.resources}}" wx:key="id" class="resource-row">
+          <view class="grow">
+            <text class="task-title">{{item.name}}</text>
+            <text wx:if="{{item.link}}" class="tiny link-text" user-select>{{item.link}}</text>
+            <text wx:if="{{item.notes}}" class="tiny">{{item.notes}}</text>
+          </view>
+        </view>
+
+        <view wx:if="{{!goal.resources.length}}" class="empty empty-dashed">还没有笔记或资料</view>
+      </block>
+    </view>
+  </block>
+
+  <!-- 新建目标 -->
+  <view wx:if="{{sheet === 'goal'}}" class="mask" bindtap="closeSheet"></view>
+  <view wx:if="{{sheet === 'goal'}}" class="sheet" catchtap="noop">
+    <view class="sheet-head">
+      <text class="sheet-title">新建学习目标</text>
+      <view class="ic ic-close-muted ic-sm" bindtap="closeSheet"></view>
+    </view>
+    <scroll-view scroll-y class="sheet-body">
+      <view class="field">
+        <text class="field-label">目标名称</text>
+        <input class="input" value="{{goalForm.name}}" placeholder="例如：英语口语" placeholder-class="placeholder" data-key="name" bindinput="onGoalInput" maxlength="200" />
+      </view>
+      <view class="field">
+        <text class="field-label">想达成什么</text>
+        <textarea class="textarea notes-input" value="{{goalForm.goal}}" placeholder="例如：三个月能流畅进行日常对话" placeholder-class="placeholder" data-key="goal" bindinput="onGoalInput" maxlength="2000" />
+      </view>
+      <view class="field-row">
+        <view class="field grow">
+          <text class="field-label">开始日期</text>
+          <picker mode="date" value="{{goalForm.start_date}}" data-form="goalForm" data-key="start_date" bindchange="pickField">
+            <view class="picker-box"><text>{{goalForm.start_date}}</text></view>
+          </picker>
+        </view>
+        <view class="field grow">
+          <text class="field-label">目标日期</text>
+          <picker mode="date" value="{{goalForm.target_date}}" data-form="goalForm" data-key="target_date" bindchange="pickField">
+            <view class="picker-box"><text>{{goalForm.target_date}}</text></view>
+          </picker>
+        </view>
+      </view>
+      <view class="field">
+        <text class="field-label">预计总投入（分钟）</text>
+        <input class="input" type="number" value="{{goalForm.estimated_minutes}}" data-key="estimated_minutes" bindinput="onGoalInput" />
+      </view>
+    </scroll-view>
+    <view class="sheet-foot">
+      <view class="btn btn-ghost" bindtap="closeSheet">取消</view>
+      <view class="btn btn-primary" bindtap="submitSheet">{{saving ? '保存中…' : '创建目标'}}</view>
+    </view>
+  </view>
+
+  <!-- 新增任务 -->
+  <view wx:if="{{sheet === 'task'}}" class="mask" bindtap="closeSheet"></view>
+  <view wx:if="{{sheet === 'task'}}" class="sheet" catchtap="noop">
+    <view class="sheet-head">
+      <text class="sheet-title">{{taskForm.id ? '编辑学习任务' : '添加学习任务'}}</text>
+      <view class="ic ic-close-muted ic-sm" bindtap="closeSheet"></view>
+    </view>
+    <scroll-view scroll-y class="sheet-body">
+      <view class="field">
+        <text class="field-label">任务标题</text>
+        <input class="input" value="{{taskForm.title}}" placeholder="例如：跟读一段日常对话" placeholder-class="placeholder" data-key="title" bindinput="onTaskInput" maxlength="300" />
+      </view>
+      <view class="field">
+        <text class="field-label">补充说明</text>
+        <textarea class="textarea notes-input" value="{{taskForm.details}}" placeholder="材料、章节或练习方式" placeholder-class="placeholder" data-key="details" bindinput="onTaskInput" maxlength="2000" />
+      </view>
+      <view class="field-row">
+        <view class="field grow">
+          <text class="field-label">计划日期</text>
+          <picker mode="date" value="{{taskForm.plan_date}}" data-form="taskForm" data-key="plan_date" bindchange="pickField">
+            <view class="picker-box"><text>{{taskForm.plan_date}}</text></view>
+          </picker>
+        </view>
+        <view class="field grow">
+          <text class="field-label">预计分钟</text>
+          <input class="input" type="number" value="{{taskForm.estimated_minutes}}" data-key="estimated_minutes" bindinput="onTaskInput" />
+        </view>
+      </view>
+      <view class="field-row">
+        <view class="field grow">
+          <text class="field-label">开始时间</text>
+          <view class="picker-box time-box">
+            <picker mode="time" value="{{taskForm.start_time || '09:00'}}" data-form="taskForm" data-key="start_time" bindchange="pickField">
+              <view class="time-val {{taskForm.start_time ? '' : 'time-empty'}}">{{taskForm.start_time || '未设置'}}</view>
+            </picker>
+            <text wx:if="{{taskForm.start_time}}" class="time-clear" data-key="start_time" catchtap="clearTaskTime">清除</text>
+          </view>
+        </view>
+        <view class="field grow">
+          <text class="field-label">结束时间</text>
+          <view class="picker-box time-box">
+            <picker mode="time" value="{{taskForm.end_time || '18:00'}}" data-form="taskForm" data-key="end_time" bindchange="pickField">
+              <view class="time-val {{taskForm.end_time ? '' : 'time-empty'}}">{{taskForm.end_time || '未设置'}}</view>
+            </picker>
+            <text wx:if="{{taskForm.end_time}}" class="time-clear" data-key="end_time" catchtap="clearTaskTime">清除</text>
+          </view>
+        </view>
+      </view>
+      <text class="tiny">填了时间就按这个时间提醒：开始时间弹「开始」，结束前 30 分钟弹「快到期」；不填则按「数据与设置」里的默认工作时间。</text>
+      <view wx:if="{{!taskForm.id}}" class="field">
+        <text class="field-label">优先级</text>
+        <view class="chip-row">
+          <view
+            wx:for="{{priorities}}"
+            wx:key="value"
+            class="chip {{taskForm.priority === item.value ? 'on' : ''}}"
+            data-value="{{item.value}}"
+            bindtap="setTaskPriority"
+          >{{item.label}}</view>
+        </view>
+      </view>
+      <text class="tiny">{{taskForm.id ? '改完后「今日计划」里的同一条任务会同步更新。' : '添加后会自动出现在「今日计划」里，并从今日计划同步完成状态。'}}</text>
+    </scroll-view>
+    <view class="sheet-foot">
+      <view class="btn btn-ghost" bindtap="closeSheet">取消</view>
+      <view class="btn btn-primary" bindtap="submitSheet">{{saving ? '保存中…' : (taskForm.id ? '保存修改' : '添加任务')}}</view>
+    </view>
+  </view>
+
+  <!-- 记录一次学习 -->
+  <view wx:if="{{sheet === 'session'}}" class="mask" bindtap="closeSheet"></view>
+  <view wx:if="{{sheet === 'session'}}" class="sheet" catchtap="noop">
+    <view class="sheet-head">
+      <text class="sheet-title">记录一次学习</text>
+      <view class="ic ic-close-muted ic-sm" bindtap="closeSheet"></view>
+    </view>
+    <scroll-view scroll-y class="sheet-body">
+      <view class="field-row">
+        <view class="field grow">
+          <text class="field-label">学习日期</text>
+          <picker mode="date" value="{{sessionForm.studied_on}}" data-form="sessionForm" data-key="studied_on" bindchange="pickField">
+            <view class="picker-box"><text>{{sessionForm.studied_on}}</text></view>
+          </picker>
+        </view>
+        <view class="field grow">
+          <text class="field-label">实际分钟</text>
+          <input class="input" type="number" value="{{sessionForm.actual_minutes}}" data-key="actual_minutes" bindinput="onSessionInput" />
+        </view>
+      </view>
+      <view class="field">
+        <text class="field-label">学了什么</text>
+        <textarea class="textarea notes-input" value="{{sessionForm.notes}}" placeholder="今天练习的内容和感受" placeholder-class="placeholder" data-key="notes" bindinput="onSessionInput" maxlength="2000" />
+      </view>
+      <view class="field">
+        <text class="field-label">遇到的问题</text>
+        <input class="input" value="{{sessionForm.problems}}" placeholder="可选" placeholder-class="placeholder" data-key="problems" bindinput="onSessionInput" />
+      </view>
+      <view class="field">
+        <text class="field-label">下一步</text>
+        <input class="input" value="{{sessionForm.next_step}}" placeholder="下次想接着做什么" placeholder-class="placeholder" data-key="next_step" bindinput="onSessionInput" />
+      </view>
+    </scroll-view>
+    <view class="sheet-foot">
+      <view class="btn btn-ghost" bindtap="closeSheet">取消</view>
+      <view class="btn btn-primary" bindtap="submitSheet">{{saving ? '保存中…' : '保存记录'}}</view>
+    </view>
+  </view>
+
+  <!-- 添加资料 -->
+  <view wx:if="{{sheet === 'resource'}}" class="mask" bindtap="closeSheet"></view>
+  <view wx:if="{{sheet === 'resource'}}" class="sheet" catchtap="noop">
+    <view class="sheet-head">
+      <text class="sheet-title">添加笔记与资料</text>
+      <view class="ic ic-close-muted ic-sm" bindtap="closeSheet"></view>
+    </view>
+    <scroll-view scroll-y class="sheet-body">
+      <view class="field">
+        <text class="field-label">名称</text>
+        <input class="input" value="{{resourceForm.name}}" placeholder="例如：BBC 6分钟英语" placeholder-class="placeholder" data-key="name" bindinput="onResourceInput" />
+      </view>
+      <view class="field">
+        <text class="field-label">链接</text>
+        <input class="input" value="{{resourceForm.link}}" placeholder="https://" placeholder-class="placeholder" data-key="link" bindinput="onResourceInput" />
+      </view>
+      <view class="field">
+        <text class="field-label">备注</text>
+        <textarea class="textarea notes-input" value="{{resourceForm.notes}}" placeholder="可选" placeholder-class="placeholder" data-key="notes" bindinput="onResourceInput" />
+      </view>
+    </scroll-view>
+    <view class="sheet-foot">
+      <view class="btn btn-ghost" bindtap="closeSheet">取消</view>
+      <view class="btn btn-primary" bindtap="submitSheet">{{saving ? '保存中…' : '添加'}}</view>
+    </view>
+  </view>
+
+  <!-- AI 生成学习计划 -->
+  <view wx:if="{{sheet === 'ailearn'}}" class="mask" bindtap="closeSheet"></view>
+  <view wx:if="{{sheet === 'ailearn'}}" class="sheet" catchtap="noop">
+    <view class="sheet-head">
+      <text class="sheet-title">AI 生成学习计划</text>
+      <view class="ic ic-close-muted ic-sm" bindtap="closeSheet"></view>
+    </view>
+
+    <!-- 生成进度 / 报错钉在顶部，表单滚到哪儿都看得见 -->
+    <view wx:if="{{aiGenerating}}" class="banner ai-progress-box ai-pinned">
+      <view class="between">
+        <text>{{aiProgressText || '正在生成…'}}</text>
+        <text class="tiny ai-progress-time">已用 {{aiElapsedText}}</text>
+      </view>
+      <view class="ai-progress"><view class="ai-progress-bar" style="width:{{aiProgress}}%"></view></view>
+      <text class="tiny ai-progress-tip">长计划按每段 2 天分批生成，某一段慢了也不会整份白跑。</text>
+    </view>
+    <view wx:if="{{aiError}}" class="banner banner-danger ai-pinned"><text>{{aiError}}</text></view>
+    <view wx:if="{{aiCanResume}}" class="btn btn-primary ai-pinned ai-resume-btn" bindtap="resumeAiGeneration">
+      继续生成剩余 {{aiResumeDays}} 天
+    </view>
+
+    <!-- 表单态 -->
+    <block wx:if="{{!aiDraft}}">
+      <scroll-view scroll-y class="sheet-body">
+        <view class="field">
+          <text class="field-label">想学什么</text>
+          <input class="input" value="{{aiLearnForm.topic}}" placeholder="例如：Python 编程、雅思口语" placeholder-class="placeholder" data-key="topic" bindinput="onAiLearnInput" maxlength="200" />
+        </view>
+        <view class="field">
+          <text class="field-label">学习目标</text>
+          <textarea class="textarea notes-input" value="{{aiLearnForm.objective}}" placeholder="想达到什么程度？目标越具体，AI 拆解越准确" placeholder-class="placeholder" data-key="objective" bindinput="onAiLearnInput" maxlength="2000" />
+        </view>
+        <view class="field">
+          <text class="field-label">当前水平</text>
+          <input class="input" value="{{aiLearnForm.current_level}}" placeholder="例如：零基础、有 C 语言基础" placeholder-class="placeholder" data-key="current_level" bindinput="onAiLearnInput" maxlength="1000" />
+        </view>
+        <view class="field">
+          <view class="between">
+            <text class="field-label">补充要求（可选）</text>
+            <text class="tiny field-hint">越具体越不跑题</text>
+          </view>
+          <textarea class="textarea notes-input" value="{{aiLearnForm.preferences}}" placeholder="例如：按教材第 1-3 章走；只备考背诵，不安排做题" placeholder-class="placeholder" data-key="preferences" bindinput="onAiLearnInput" maxlength="600" />
+        </view>
+        <view class="field-row">
+          <view class="field grow">
+            <text class="field-label">开始日期</text>
+            <picker mode="date" value="{{aiLearnForm.start_date}}" data-form="aiLearnForm" data-key="start_date" bindchange="pickField">
+              <view class="picker-box"><text>{{aiLearnForm.start_date}}</text></view>
+            </picker>
+          </view>
+          <view class="field grow">
+            <text class="field-label">计划天数（1-30）</text>
+            <input class="input" type="number" value="{{aiLearnForm.days}}" data-key="days" bindinput="onAiLearnInput" />
+          </view>
+        </view>
+        <view class="field">
+          <text class="field-label">每天学习分钟数</text>
+          <input class="input" type="number" value="{{aiLearnForm.daily_minutes}}" data-key="daily_minutes" bindinput="onAiLearnInput" />
+        </view>
+      </scroll-view>
+      <view class="sheet-foot">
+        <view class="btn btn-ghost" bindtap="closeSheet">{{aiGenerating ? '停止' : '取消'}}</view>
+        <view class="btn btn-primary" bindtap="generateLearning">{{aiGenerating ? '生成中…' : '开始生成'}}</view>
+      </view>
+    </block>
+
+    <!-- 预览态 -->
+    <block wx:else>
+      <scroll-view scroll-y class="sheet-body">
+        <view class="ai-plan-head">
+          <text class="tiny ai-plan-topic">本次主题：{{aiLearnForm.topic}}</text>
+          <view class="field">
+            <view class="between">
+              <text class="field-label">目标名称</text>
+              <text class="tiny field-hint">可以直接改</text>
+            </view>
+            <input
+              class="input"
+              value="{{aiDraft.plan.name}}"
+              placeholder="例如：毛概期末复习"
+              placeholder-class="placeholder"
+              data-key="name"
+              bindinput="onAiPlanInput"
+              maxlength="200"
+            />
+          </view>
+          <view class="field">
+            <text class="field-label">目标说明</text>
+            <textarea
+              class="textarea notes-input ai-goal-input"
+              value="{{aiDraft.plan.goal}}"
+              placeholder="想达到什么程度"
+              placeholder-class="placeholder"
+              data-key="goal"
+              bindinput="onAiPlanInput"
+              maxlength="2000"
+            />
+          </view>
+          <text class="tiny ai-plan-meta">{{aiDraft.plan.start_date}} ~ {{aiDraft.plan.target_date}} · 每天 {{aiDraft.plan.daily_minutes}} 分钟</text>
+        </view>
+        <view class="ai-edit-hint">
+          <text class="tiny">任务标题点一下就能改，改完再导入。</text>
+        </view>
+        <view wx:for="{{aiDraftDays}}" wx:for-index="gi" wx:key="key" class="ai-day">
+          <text class="ai-day-date">{{item.date}}</text>
+          <view wx:for="{{item.items}}" wx:for-item="t" wx:for-index="ti" wx:key="pi" class="ai-task">
+            <block wx:if="{{aiEditingTask === gi + '-' + ti}}">
+              <input
+                class="input ai-task-input"
+                value="{{t.title}}"
+                focus="{{true}}"
+                data-pi="{{t.pi}}"
+                data-gi="{{gi}}"
+                data-ti="{{ti}}"
+                bindinput="onAiTaskInput"
+                bindblur="doneAiTaskEdit"
+                bindconfirm="doneAiTaskEdit"
+                confirm-type="done"
+                maxlength="300"
+              />
+            </block>
+            <text wx:else class="ai-task-title ai-task-editable" data-gi="{{gi}}" data-ti="{{ti}}" bindtap="editAiTask">{{t.title}}</text>
+            <text wx:if="{{t.minutes}}" class="tiny ai-task-min">{{t.minutes}} 分钟</text>
+            <text wx:if="{{t.notes}}" class="tiny ai-task-notes">{{t.notes}}</text>
+          </view>
+        </view>
+        <view wx:if="{{aiCanResume}}" class="tiny ai-partial-tip">
+          也可以不改了，直接点下面的「导入为学习目标」，先导入已经生成的 {{aiDraft.plan.tasks.length}} 条任务。
+        </view>
+      </scroll-view>
+      <view class="sheet-foot">
+        <view class="btn btn-ghost" bindtap="regenerateLearning">重新生成</view>
+        <view class="btn btn-primary" bindtap="importLearning">{{aiImporting ? '导入中…' : '导入为学习目标'}}</view>
+      </view>
+    </block>
+  </view>
+
+  <!-- 番茄钟 -->
+  <view wx:if="{{pomoOpen}}" class="mask" bindtap="closePomo"></view>
+  <view wx:if="{{pomoOpen}}" class="sheet" catchtap="noop">
+    <view class="sheet-head">
+      <text class="sheet-title">番茄钟</text>
+      <view class="ic ic-close-muted ic-sm" bindtap="closePomo"></view>
+    </view>
+    <scroll-view scroll-y class="sheet-body">
+      <view class="pomo-card">
+        <text class="pomo-time num">{{pomoLabel}}</text>
+        <text class="pomo-hint">
+          {{pomoRunning ? (pomoTaskPick >= 0 ? '专注中 · ' + todayTasks[pomoTaskPick].title : '专注中，先别切走') : '准备好了就开始'}}
+        </text>
+        <view class="pomo-bar">
+          <view class="pomo-bar-fill" style="width:{{pomoPct}}%"></view>
+        </view>
+      </view>
+
+      <view wx:if="{{!pomoRunning}}" class="field">
+        <text class="field-label">专注时长</text>
+        <view class="chip-row">
+          <view
+            wx:for="{{pomoPresets}}"
+            wx:key="*this"
+            class="chip {{pomoMin === item ? 'on' : ''}}"
+            data-min="{{item}}"
+            bindtap="pickPomoMin"
+          >{{item}} 分钟</view>
+        </view>
+        <view class="pomo-custom">
+          <view class="pomo-step" data-step="-5" bindtap="stepPomoMin">-5</view>
+          <input
+            class="input pomo-custom-input"
+            type="number"
+            value="{{pomoCustom}}"
+            placeholder="自定义分钟"
+            maxlength="3"
+            confirm-type="done"
+            bindinput="onPomoCustomInput"
+            bindconfirm="applyPomoCustom"
+          />
+          <view class="pomo-step" data-step="5" bindtap="stepPomoMin">+5</view>
+          <view class="btn btn-sm btn-soft" bindtap="applyPomoCustom">应用</view>
+        </view>
+        <text class="tiny pomo-custom-tip">想专注多久都行，1~180 分钟；设过一次会记住，下次直接沿用。</text>
+      </view>
+
+      <view wx:if="{{todayTasks.length}}" class="field">
+        <text class="field-label">这次专注做哪件事（可选）</text>
+        <view class="chip-row">
+          <view class="chip {{pomoTaskPick === -1 ? 'on' : ''}}" data-idx="-1" bindtap="pickPomoTask">不关联任务</view>
+          <view
+            wx:for="{{todayTasks}}"
+            wx:key="id"
+            class="chip {{pomoTaskPick === index ? 'on' : ''}}"
+            data-idx="{{index}}"
+            bindtap="pickPomoTask"
+          >{{item.title}}</view>
+        </view>
+      </view>
+
+      <view class="pomo-actions">
+        <view class="btn btn-primary" bindtap="togglePomo">
+          {{pomoRunning ? '暂停' : (pomoLeft < pomoMin * 60 ? '继续专注' : '开始专注')}}
+        </view>
+        <view class="btn btn-ghost" bindtap="resetPomo">重置</view>
+      </view>
+
+      <text class="tiny pomo-foot">今天已完成 {{pomoToday}} 个番茄。响铃后会问你要不要记进「学习记录」，切到别的页面也会继续计时。</text>
+    </scroll-view>
+  </view>
+</view>

@@ -49,3 +49,7 @@ Thumbs.db
 desktop.ini
 /PersonalHub-开题报告_修改前备份.md
 /PersonalHub-开题报告.md
+
+# Mini-program notifier credentials, sessions, and local tool outputs.
+/_tmpapi/
+/_tools/tunnel_url.txt
